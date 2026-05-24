@@ -1,0 +1,1395 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MaternaAI - Safe Births, Healthy Beginnings</title>
+
+  <!-- Google Fonts: Montserrat (English) & Tiro Bangla (Bengali) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link
+    href="https://fonts.googleapis.com/css2?family=Montserrat:ital,wght@0,100..900;1,100..900&family=Tiro+Bangla:ital@0;1&display=swap"
+    rel="stylesheet">
+
+  <!-- Lucide Icons via CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/lucide/dist/umd/lucide.min.js"></script>
+
+  <!-- Chart.js via CDN for interactive vitals charts -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+  <!-- Custom Stylesheet -->
+  <link rel="stylesheet" href="styles.css">
+</head>
+
+<body>
+
+  <!-- JUDGES CONTROL PANEL -->
+  <div id="judges-control-panel">
+    <div class="control-header">
+      <div class="control-logo">
+        <svg class="m-logo-mini" viewBox="0 0 100 100">
+          <path d="M10,80 C10,30 35,30 40,55 C45,80 55,80 60,55 C65,30 90,30 90,80" stroke="#ab7397" stroke-width="12"
+            fill="none" stroke-linecap="round" />
+          <circle cx="20" cy="40" r="6" fill="#e1a4c4" />
+          <circle cx="80" cy="40" r="6" fill="#e1a4c4" />
+        </svg>
+        <span>MaternaAI Judges Portal</span>
+      </div>
+      <div class="scenario-buttons">
+        <button class="scenario-btn active" onclick="loadScenario('dashboard')">
+          <i data-lucide="layout-dashboard"></i> A: Vitals Graph
+        </button>
+        <button class="scenario-btn" onclick="loadScenario('chat')">
+          <i data-lucide="message-square"></i> B: Bangla Voice AI
+        </button>
+        <button class="scenario-btn" onclick="loadScenario('ppd')">
+          <i data-lucide="smile"></i> C: EPDS PPD Check
+        </button>
+        <button class="scenario-btn danger-btn" onclick="loadScenario('abuse')">
+          <i data-lucide="shield-alert"></i> D: STEALTH ABUSE SENTINEL
+        </button>
+        <button class="scenario-btn" onclick="loadScenario('birth')">
+          <i data-lucide="file-text"></i> E: Birth Plan Compiler
+        </button>
+        <button class="scenario-btn" onclick="loadScenario('groups')">
+          <i data-lucide="users"></i> F: Community Groups
+        </button>
+        <button class="scenario-btn" onclick="loadScenario('sms')">
+          <i data-lucide="smartphone"></i> G: Offline SMS Gateway
+        </button>
+        <button class="scenario-btn" onclick="loadScenario('dm')">
+          <i data-lucide="message-circle"></i> H: Direct Messages
+        </button>
+        <button class="scenario-btn emergency-btn animate-pulse" onclick="triggerSOS()">
+          <i data-lucide="alert-triangle"></i> EMERGENCY SOS
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MAIN PLATFORM LAYOUT -->
+  <main id="platform-layout">
+
+    <!-- LEFT PANEL: HIGH-FIDELITY WEB PORTAL (Dynamic Navigation Views) -->
+    <section id="web-portal">
+
+      <!-- Top Ribbon / Navbar -->
+      <header class="web-navbar">
+        <div class="logo-container" onclick="showWebPage('home')">
+          <svg class="m-logo-web" viewBox="0 0 100 100">
+            <path d="M10,80 C10,30 35,30 40,55 C45,80 55,80 60,55 C65,30 90,30 90,80" stroke="#ab7397" stroke-width="12"
+              fill="none" stroke-linecap="round" />
+            <circle cx="20" cy="40" r="6" fill="#e1a4c4" />
+            <circle cx="80" cy="40" r="6" fill="#e1a4c4" />
+          </svg>
+          <span class="logo-text">aterna<span class="logo-highlight">AI</span></span>
+        </div>
+        <nav class="web-nav-links">
+          <a href="#" id="nav-web-home" class="nav-link active" onclick="showWebPage('home')">HOME</a>
+          <a href="#" id="nav-web-clinician" class="nav-link" onclick="showWebPage('clinician')">CLINICIAN DASHBOARD</a>
+          <a href="#" id="nav-web-learning" class="nav-link" onclick="showWebPage('learning')">LEARNING HUB</a>
+          <a href="#" id="nav-web-contact" class="nav-link" onclick="showWebPage('contact')">CONTACT US</a>
+        </nav>
+        <button class="login-btn" onclick="showWebPage('clinician')">login</button>
+      </header>
+
+      <!-- VIEW 1: HOME PAGE (Figma Design Layout) -->
+      <div id="web-page-home" class="web-page-section active">
+        <!-- Hero Section -->
+        <section class="web-hero">
+          <div class="hero-bg-overlay"
+            style="background-image: url('https://images.unsplash.com/photo-1581594693702-fbdc51b2763b?auto=format&fit=crop&w=1200&q=80');">
+          </div>
+          <div class="hero-content">
+            <h1>SAFE BIRTHS,<br>HEALTHY BEGINNINGS</h1>
+            <p>Step a foot towards personalized care</p>
+            <button class="hero-learn-more" onclick="scrollToFeatures()">learn more</button>
+          </div>
+        </section>
+
+        <!-- Features Section -->
+        <section id="web-features" class="web-features-grid">
+          <div class="feature-card">
+            <div class="feature-image"
+              style="background-image: url('https://images.unsplash.com/photo-1531983412531-1f49a365ffed?auto=format&fit=crop&w=600&q=80');">
+            </div>
+            <div class="feature-body">
+              <h3>POST-PARTUM PEER SUPPORT GROUPS</h3>
+              <p>We provide a safe, non-judgmental space for new mothers to connect, share experiences, and navigate the
+                emotional challenges of early motherhood.</p>
+            </div>
+          </div>
+          <div class="feature-card">
+            <div class="feature-image"
+              style="background-image: url('https://images.unsplash.com/photo-1559839734-2b71ea197ec2?auto=format&fit=crop&w=600&q=80');">
+            </div>
+            <div class="feature-body">
+              <h3>HELP FROM VERIFIED PRACTITIONERS</h3>
+              <p>Get advice from the experts in the field of maternal care, verified by AI. We match a doctor for you
+                based on your previous health records and current progress in your journey, analyzed by AI.</p>
+            </div>
+          </div>
+          <div class="feature-card">
+            <div class="feature-image"
+              style="background-image: url('https://images.unsplash.com/photo-1505751172876-fa1923c5c528?auto=format&fit=crop&w=600&q=80');">
+            </div>
+            <div class="feature-body">
+              <h3>GET PERSONALIZED CARE</h3>
+              <p>Our service ensures for you, a carefully curated healthcare plan. We treat individuals based on their
+                unique strengths, values, and health needs rather than applying a one-size-fits-all approach.</p>
+            </div>
+          </div>
+        </section>
+
+        <!-- Clinical Information Section -->
+        <section class="web-clinical-info">
+          <div class="info-text-container">
+            <h2>GET THE HELP YOU WANT WITHOUT WAITING IN LINE</h2>
+            <p>At every stage of motherhood, compassionate care matters. With us, you don't have to wait to get the
+              support you need — our AI-powered maternal healthcare solutions provide personalized care plans, timely
+              guidance, and smarter monitoring to keep both mother and baby healthy, safe, and cared for throughout the
+              journey.</p>
+          </div>
+          <div class="info-image-container"
+            style="background-image: url('https://images.unsplash.com/photo-1576091160550-2173dba999ef?auto=format&fit=crop&w=1000&q=80');">
+          </div>
+        </section>
+
+        <!-- Highlights Section -->
+        <section class="web-highlights-section">
+          <div class="highlights-container">
+            <div class="highlight-left-pane">
+              <div class="highlight-card">
+                <h3>WE ARE ALSO AVAILABLE IN BENGALI</h3>
+                <p>To facilitate the maximum benefits for our rural audience, we provide support in Bengali.</p>
+                <button class="highlight-btn" onclick="demoBanglaSpeech()">LEARN MORE</button>
+              </div>
+              <div class="highlight-card">
+                <h3>OUR VOICE BASED AI-POWERED ASSISTANT IS ALWAYS THERE TO HELP</h3>
+                <p>Our voice-based AI-powered assistant is always there to help — providing instant support,
+                  personalized maternal care guidance, timely reminders, and answers whenever mothers need them,
+                  ensuring comfort and care at every step of the journey.</p>
+                <button class="highlight-btn" onclick="loadScenario('chat')">LEARN MORE</button>
+              </div>
+            </div>
+            <div class="highlight-center-circle">
+              <div class="circle-illustration">
+                <svg viewBox="0 0 200 200" class="stethoscope-svg">
+                  <circle cx="100" cy="100" r="95" fill="none" stroke="rgba(225, 164, 196, 0.15)" stroke-width="4"
+                    stroke-dasharray="10 5" />
+                  <circle cx="100" cy="100" r="85" fill="#ab7397" opacity="0.9" />
+                  <path
+                    d="M 60,60 C 60,110 140,110 140,60 M 100,105 L 100,140 M 100,140 C 85,150 85,170 100,170 C 115,170 115,150 100,140"
+                    stroke="#ffffff" stroke-width="8" stroke-linecap="round" fill="none" />
+                  <circle cx="60" cy="55" r="7" fill="#e1a4c4" />
+                  <circle cx="140" cy="55" r="7" fill="#e1a4c4" />
+                  <circle cx="150" cy="120" r="10" fill="#ffffff" class="pulsate-badge" />
+                  <circle cx="150" cy="120" r="6" fill="#ab7397" />
+                </svg>
+              </div>
+            </div>
+            <div class="highlight-right-pane">
+              <div class="highlight-card text-right">
+                <h3>OFFLINE SERVICE AVAILABLE VIA SMS</h3>
+                <p>We also provide service via SMS through trusted mobile network service providers.</p>
+                <button class="highlight-btn" onclick="loadScenario('sms')">LEARN MORE</button>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- Web Footer -->
+        <footer class="web-footer">
+          <div class="footer-columns">
+            <div class="footer-col">
+              <h4>GET TO KNOW US</h4>
+              <ul>
+                <li><a href="#">ABOUT US</a></li>
+                <li><a href="#">CAREER</a></li>
+                <li><a href="#">INVESTORS</a></li>
+                <li><a href="#">COMPANY VLOG</a></li>
+                <li><a href="#">PARTNERS</a></li>
+              </ul>
+            </div>
+            <div class="footer-col">
+              <h4>DO BUSINESS WITH US</h4>
+              <ul>
+                <li><a href="#">JOIN AS A MEMBER</a></li>
+                <li><a href="#">JOIN AS A MEDICAL INSTITUTION</a></li>
+                <li><a href="#">JOIN AS A PRACTITIONER</a></li>
+              </ul>
+            </div>
+            <div class="footer-col">
+              <h4>LET US HELP YOU</h4>
+              <ul>
+                <li><a href="#">CONTACT US</a></li>
+                <li><a href="#">RECOVER ACCOUNT</a></li>
+              </ul>
+            </div>
+          </div>
+          <div class="footer-bottom">
+            <div class="footer-logo">
+              <svg class="m-logo-footer" viewBox="0 0 100 100">
+                <path d="M10,80 C10,30 35,30 40,55 C45,80 55,80 60,55 C65,30 90,30 90,80" stroke="#ffffff"
+                  stroke-width="12" fill="none" stroke-linecap="round" />
+              </svg>
+              <span>maternaAl</span>
+            </div>
+            <div class="footer-links">
+              <a href="#">TERMS OF SERVICE</a>
+              <a href="#">PRIVACY</a>
+              <a href="#">DATA SELLING</a>
+            </div>
+          </div>
+        </footer>
+      </div>
+
+      <!-- VIEW 2: CLINICIAN DASHBOARD (Doctor Portal View) -->
+      <div id="web-page-clinician" class="web-page-section">
+        <div class="clinician-header">
+          <div class="clinician-title">
+            <h2>Maternal Health Clinician Portal</h2>
+            <p>Authorized Access - Dhaka Medical College Hub & Tea Gardens Remote Monitoring Gateway</p>
+          </div>
+          <div class="clinician-metrics-summary">
+            <div class="clin-stat">
+              <span class="num">142</span>
+              <span class="lbl">Total Patients</span>
+            </div>
+            <div class="clin-stat warning">
+              <span class="num">12</span>
+              <span class="lbl">Active Monitoring</span>
+            </div>
+            <div class="clin-stat critical" id="clinician-alerts-count">
+              <span class="num">0</span>
+              <span class="lbl">Critical Alerts</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="clinician-grid">
+
+          <!-- Column 1: Live Critical Warning Feed -->
+          <div class="clinician-pane-left">
+            <div class="pane-header">
+              <h3><i data-lucide="bell" class="pane-icon text-danger"></i> Patient Alert Dispatch Queue</h3>
+              <span class="pulse-red"></span>
+            </div>
+
+            <div class="alert-feed-box" id="clinician-alert-feed">
+              <div class="feed-empty-message" id="feed-empty-prompt">
+                <i data-lucide="shield-check" class="giant-icon-green"></i>
+                <p>No active critical clinical warnings at this time.</p>
+                <span>Trigger the mobile app's <strong>SOS</strong> or type a <strong>Stealth domestic abuse
+                    phrase</strong> in Chat to witness alert dispatches in real-time.</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Column 2: RAG Patient Analytics & Clinical Vitals -->
+          <div class="clinician-pane-right">
+            <div class="pane-header">
+              <h3><i data-lucide="activity" class="pane-icon"></i> Selected Patient Metrics (Log history)</h3>
+            </div>
+
+            <div class="patient-details-card">
+              <div class="patient-profile-header">
+                <div class="pat-avatar">👩‍🦰</div>
+                <div class="pat-meta">
+                  <h4>Rahima Begum</h4>
+                  <p>24 Years Old | Week 24 Gestation | Tea Garden Hub, Sreemangal</p>
+                </div>
+                <span class="status-indicator-badge normal" id="patient-safety-badge">Optimal Health</span>
+              </div>
+
+              <div class="clinician-vitals-analytics">
+                <div class="stat-mini">
+                  <span class="val">120/80</span>
+                  <span class="desc">BP (mmHg)</span>
+                </div>
+                <div class="stat-mini">
+                  <span class="val">5.4</span>
+                  <span class="desc">Blood Glucose (mmol/L)</span>
+                </div>
+                <div class="stat-mini">
+                  <span class="val">1.6 L</span>
+                  <span class="desc">Water Level Logged</span>
+                </div>
+                <div class="stat-mini">
+                  <span class="val">09 / 30</span>
+                  <span class="desc">EPDS Depression Score</span>
+                </div>
+              </div>
+
+              <!-- RAG Engine Details -->
+              <div class="rag-system-log">
+                <h5><i data-lucide="cpu" class="rag-icon"></i> AI Safety & RAG Reference Pipeline Log:</h5>
+                <pre class="rag-log-content">
+[RAG PIPELINE QUERY DATA BASE MATCH]
+- Patient ID: PAT-898-RAHIMA
+- Clinical Guidance Target: WHO Antenatal Care Recommendations for Positive Pregnancy (2016)
+- Calibrated Region Context: Sreemangal Rural Tea Gardens (High MMR hazard area)
+- AI Clinical Directives: Calibrate iron supplement dosage, prompt water alarms.
+                </pre>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- VIEW 3: LEARNING HUB & RESOURCES -->
+      <div id="web-page-learning" class="web-page-section">
+        <div class="learning-header">
+          <h2>Clinical Resource & Learning Hub</h2>
+          <p>Verified pregnancy guides and academic maternal clinical resources based on WHO & Bangladesh Health Surveys
+          </p>
+        </div>
+
+        <div class="learning-grid">
+
+          <div class="learning-article-card" onclick="openArticleModal('ppd-article')">
+            <div class="article-banner"
+              style="background-image: url('https://images.unsplash.com/photo-1531983412531-1f49a365ffed?auto=format&fit=crop&w=400&q=80');">
+            </div>
+            <div class="article-info">
+              <span class="tag mental">MENTAL WELLNESS</span>
+              <h3>Postpartum Depression (PPD) Realities in Bangladesh</h3>
+              <p>Studies show PPD prevalence is 29.9% in facility-delivered mothers in Dhaka. Explore social support and
+                triggers.</p>
+              <button class="read-btn">Read Article <i data-lucide="arrow-right"></i></button>
+            </div>
+          </div>
+
+          <div class="learning-article-card" onclick="openArticleModal('preeclampsia-article')">
+            <div class="article-banner"
+              style="background-image: url('https://images.unsplash.com/photo-1579684389782-64d84b5e905d?auto=format&fit=crop&w=400&q=80');">
+            </div>
+            <div class="article-info">
+              <span class="tag clinical">CLINICAL DANGER</span>
+              <h3>Understanding Preeclampsia & Hypertension</h3>
+              <p>Learn to detect sudden swelling, severe throbbing headaches, and visual disturbances to prevent severe
+                birth risks.</p>
+              <button class="read-btn">Read Article <i data-lucide="arrow-right"></i></button>
+            </div>
+          </div>
+
+          <div class="learning-article-card" onclick="openArticleModal('nutrition-article')">
+            <div class="article-banner"
+              style="background-image: url('https://images.unsplash.com/photo-1505751172876-fa1923c5c528?auto=format&fit=crop&w=400&q=80');">
+            </div>
+            <div class="article-info">
+              <span class="tag nutrition">NUTRITION</span>
+              <h3>Folate and Iron intake in Low-Resource Diets</h3>
+              <p>How to utilize affordable local foods (greens, mola mach, eggs) to satisfy calcium, folate, and iron
+                targets.</p>
+              <button class="read-btn">Read Article <i data-lucide="arrow-right"></i></button>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+      <!-- VIEW 4: CONTACT & SUPPORT DESK -->
+      <div id="web-page-contact" class="web-page-section">
+        <div class="contact-hub-header">
+          <h2>Schedule AI-Calibrated Consultations</h2>
+          <p>Book instant appointments with verified maternal practitioners and remote community midwives.</p>
+        </div>
+
+        <div class="contact-scheduler-box">
+          <div class="scheduler-inputs">
+            <h3>Book Appointment</h3>
+            <div class="form-group">
+              <label for="doctor-select">Choose Doctor / Practitioner:</label>
+              <select id="doctor-select">
+                <option value="dr-anwara">Dr. Anwara Begum (Senior Obstetrician, Dhaka Medical)</option>
+                <option value="midwife-shanti">Midwife Shanti Murmu (Tea Garden Sreemangal Clinic)</option>
+                <option value="dr-asif">Dr. Asif Chowdhury (Pediatric Specialist)</option>
+              </select>
+            </div>
+
+            <div class="form-group">
+              <label for="appt-date">Select Date:</label>
+              <input type="date" id="appt-date" value="2026-05-25">
+            </div>
+
+            <div class="form-group">
+              <label for="appt-time">Select Time Slot:</label>
+              <select id="appt-time">
+                <option value="10:00">10:00 AM - 10:30 AM</option>
+                <option value="11:30">11:30 AM - 12:00 PM</option>
+                <option value="02:30">02:30 PM - 03:00 PM</option>
+                <option value="04:00">04:00 PM - 04:30 PM</option>
+              </select>
+            </div>
+
+            <button class="book-appointment-btn" onclick="scheduleConsultation()">Confirm Appointment</button>
+          </div>
+
+          <div class="scheduler-graphic">
+            <i data-lucide="calendar" class="calendar-large-icon"></i>
+            <h4>Integrated AI Coordination</h4>
+            <p>Our routing layer matches clinical urgency with doctor availability, automatically syncing vitals history
+              with their EMR systems ahead of your visit.</p>
+          </div>
+        </div>
+      </div>
+
+    </section>
+
+    <!-- RIGHT PANEL: INTERACTIVE SMARTPHONE APP SIMULATOR -->
+    <section id="mobile-simulator">
+      <div class="phone-case">
+        <div class="phone-bezel">
+          <!-- Screen notch -->
+          <div class="phone-notch">
+            <span class="speaker-grill"></span>
+            <span class="camera-lens"></span>
+          </div>
+
+          <!-- Smartphone Screen Area -->
+          <div class="phone-screen">
+
+            <!-- Status Bar -->
+            <div class="phone-status-bar">
+              <span class="status-time">20:45</span>
+              <div class="status-icons">
+                <i data-lucide="signal" class="mini-icon"></i>
+                <i data-lucide="wifi" class="mini-icon"></i>
+                <i data-lucide="battery" class="mini-icon"></i>
+              </div>
+            </div>
+
+            <!-- App Title Bar -->
+            <div class="app-header">
+              <div class="app-logo" onclick="switchMobileTab('dashboard')">
+                <svg class="m-logo-app" viewBox="0 0 100 100" id="app-logo-trigger">
+                  <path d="M10,80 C10,30 35,30 40,55 C45,80 55,80 60,55 C65,30 90,30 90,80" stroke="#ab7397"
+                    stroke-width="15" fill="none" stroke-linecap="round" />
+                </svg>
+                <span>MaternaAI</span>
+              </div>
+              <div class="app-user-badge">
+                <span class="pulse-indicator"></span>
+                <span id="current-persona-badge">Pregnancy Mode</span>
+              </div>
+            </div>
+
+            <!-- Scrollable Mobile App Body -->
+            <div class="app-body">
+
+              <!-- SCREEN 1: DASHBOARD (Active by default) -->
+              <div id="screen-dashboard" class="app-screen active">
+                <div class="profile-card">
+                  <label for="persona-select">Select Patient State:</label>
+                  <select id="persona-select" onchange="switchPersona(this.value)">
+                    <option value="pregnant">1. Pregnant Woman (Danger Signs)</option>
+                    <option value="postpartum">2. New Mother 0-12m (PPD + Danger Signs)</option>
+                    <option value="recovery">3. Mothers in Recovery (Peer Network + SOS)</option>
+                  </select>
+                </div>
+
+                <!-- Growth Milestone Card -->
+                <div class="milestone-card" id="milestone-box">
+                  <div class="milestone-header">
+                    <span class="gestation-week" id="gestation-display">Week 24 (2nd Trimester)</span>
+                    <span class="countdown" id="countdown-display">112 Days to Birth</span>
+                  </div>
+                  <div class="milestone-visual">
+                    <div class="baby-size-avatar" id="baby-avatar">🍈</div>
+                    <div class="baby-size-text">
+                      <h4>Baby is the size of a <span id="size-name" class="highlight-text">Cantaloupe</span></h4>
+                      <p id="size-desc">Your baby weighs about 1.3 lbs (600g) and is developing lungs and taste buds!
+                      </p>
+                    </div>
+                  </div>
+                  <div class="progress-bar-container">
+                    <div class="progress-bar-fill" id="gestation-progress" style="width: 60%;"></div>
+                  </div>
+                </div>
+
+                <!-- SMS Offline Gate quick launch card -->
+                <div class="sms-launcher-card" onclick="switchMobileTab('sms')">
+                  <div class="sms-launch-content">
+                    <i data-lucide="radio" class="radio-signal-icon text-muted"></i>
+                    <div>
+                      <h5>Simulate Offline SMS Mode</h5>
+                      <p>Access clinics without internet in tea gardens</p>
+                    </div>
+                  </div>
+                  <i data-lucide="chevron-right" class="arrow-right-mini"></i>
+                </div>
+
+                <!-- Quick Vitals Logger Section -->
+                <div class="dashboard-section-title">
+                  <span>Maternal Vitals Log</span>
+                  <button class="add-log-btn" onclick="openLoggerModal()"><i data-lucide="plus" class="btn-icon"></i>
+                    Log</button>
+                </div>
+
+                <div class="vitals-quick-grid">
+                  <div class="vital-item bp">
+                    <div class="vital-header">
+                      <i data-lucide="heart" class="vital-icon pink"></i>
+                      <span>Blood Pressure</span>
+                    </div>
+                    <div class="vital-value" id="val-bp">120/80 <span class="unit">mmHg</span></div>
+                    <div class="vital-status normal" id="status-bp">Optimal</div>
+                  </div>
+
+                  <div class="vital-item glucose">
+                    <div class="vital-header">
+                      <i data-lucide="droplet" class="vital-icon blue"></i>
+                      <span>Blood Sugar</span>
+                    </div>
+                    <div class="vital-value" id="val-glucose">5.4 <span class="unit">mmol/L</span></div>
+                    <div class="vital-status normal" id="status-glucose">Fasting</div>
+                  </div>
+
+                  <div class="vital-item weight">
+                    <div class="vital-header">
+                      <i data-lucide="activity" class="vital-icon violet"></i>
+                      <span>Weight Gain</span>
+                    </div>
+                    <div class="vital-value" id="val-weight">+6.2 <span class="unit">kg</span></div>
+                    <div class="vital-status normal" id="status-weight">On Track</div>
+                  </div>
+
+                  <div class="vital-item hydration">
+                    <div class="vital-header">
+                      <i data-lucide="glass-water" class="vital-icon teal"></i>
+                      <span>Hydration</span>
+                    </div>
+                    <div class="vital-value" id="val-water">1.6 / 2.5 <span class="unit">L</span></div>
+                    <div class="vital-status warning" id="status-water">Low (64%)</div>
+                  </div>
+                </div>
+
+                <!-- Danger Symptoms Checker -->
+                <div class="danger-signs-card">
+                  <h4><i data-lucide="shield-alert" class="danger-red-icon"></i> Pregnancy Danger Signs Checklist</h4>
+                  <p class="subtitle">Select any symptoms you are experiencing right now:</p>
+                  <div class="symptom-checks">
+                    <label class="symptom-check-item">
+                      <input type="checkbox" value="bleeding" onchange="evaluateSymptoms()">
+                      <span>Severe Vaginal Bleeding</span>
+                    </label>
+                    <label class="symptom-check-item">
+                      <input type="checkbox" value="vision" onchange="evaluateSymptoms()">
+                      <span>Severe Headache / Blurry Vision</span>
+                    </label>
+                    <label class="symptom-check-item">
+                      <input type="checkbox" value="swelling" onchange="evaluateSymptoms()">
+                      <span>Extreme Swelling (Face/Hands)</span>
+                    </label>
+                    <label class="symptom-check-item">
+                      <input type="checkbox" value="fever" onchange="evaluateSymptoms()">
+                      <span>High Fever & Chills</span>
+                    </label>
+                  </div>
+                </div>
+
+                <!-- Daily AI Plan -->
+                <div class="ai-plan-card">
+                  <div class="card-title-icon">
+                    <i data-lucide="sparkles" class="gold-icon animate-pulse"></i>
+                    <h4>AI-Generated Daily Plan</h4>
+                  </div>
+                  <ul class="plan-list" id="ai-plan-list">
+                    <li><i data-lucide="check-circle" class="green-check"></i> Take Prenatal Vitamin (Iron + Folate) at
+                      8:00 AM</li>
+                    <li><i data-lucide="check-circle" class="green-check"></i> Hydrate: Drink at least 3 more glasses of
+                      water</li>
+                    <li><i data-lucide="check-circle" class="green-check"></i> Diet: Include iron-rich spinach and
+                      lentils for lunch</li>
+                    <li><i data-lucide="check-circle" class="green-check"></i> Safe Exercise: 15-minute gentle pelvic
+                      stretching</li>
+                  </ul>
+                </div>
+
+                <!-- Fetal Kick Counter Card -->
+                <div class="kick-counter-card" onclick="openKickCounter()">
+                  <div class="kick-card-left">
+                    <div class="kick-icon-wrap"><i data-lucide="baby" class="kick-icon"></i></div>
+                    <div>
+                      <h5>Fetal Kick Counter</h5>
+                      <p>Cardiff Count-to-Ten Protocol</p>
+                    </div>
+                  </div>
+                  <span class="kick-start-badge">Start <i data-lucide="chevron-right"></i></span>
+                </div>
+
+                <!-- AI Medical Report Analyzer Card -->
+                <div class="kick-counter-card report-analyzer-card" onclick="openReportAnalyzer()">
+                  <div class="kick-card-left">
+                    <div class="kick-icon-wrap" style="background: rgba(61,142,217,0.15);"><i data-lucide="file-text" class="kick-icon" style="stroke: #3d8ed9;"></i></div>
+                    <div>
+                      <h5>AI Medical Report Analyzer</h5>
+                      <p>Analyze prescriptions & scans instantly</p>
+                    </div>
+                  </div>
+                  <span class="kick-start-badge" style="background: rgba(61,142,217,0.12); color: #3d8ed9;">Upload <i data-lucide="chevron-right"></i></span>
+                </div>
+
+                <!-- Mood Journal Card -->
+                <div class="mood-journal-card">
+                  <div class="mood-journal-header">
+                    <i data-lucide="heart-handshake" class="mood-icon"></i>
+                    <h5>Daily Mood Check-In</h5>
+                    <span class="mood-ai-badge">✨ AI</span>
+                  </div>
+                  <p class="mood-subtitle">How are you feeling today? (1–2 sentences)</p>
+                  <textarea id="mood-journal-input" class="mood-textarea" placeholder="e.g. I feel a bit anxious and tired today..."></textarea>
+                  <button class="mood-analyze-btn" onclick="analyzeMood()">Analyze with AI</button>
+                  <div class="mood-radar" id="mood-radar" style="display:none;">
+                    <div class="mood-bar-row">
+                      <span class="mood-label">Anxiety</span>
+                      <div class="mood-bar-track"><div class="mood-bar-fill anxiety" id="bar-anxiety" style="width:0%"></div></div>
+                      <span class="mood-pct" id="pct-anxiety">0%</span>
+                    </div>
+                    <div class="mood-bar-row">
+                      <span class="mood-label">Sadness</span>
+                      <div class="mood-bar-track"><div class="mood-bar-fill sadness" id="bar-sadness" style="width:0%"></div></div>
+                      <span class="mood-pct" id="pct-sadness">0%</span>
+                    </div>
+                    <div class="mood-bar-row">
+                      <span class="mood-label">Isolation</span>
+                      <div class="mood-bar-track"><div class="mood-bar-fill isolation" id="bar-isolation" style="width:0%"></div></div>
+                      <span class="mood-pct" id="pct-isolation">0%</span>
+                    </div>
+                    <div class="mood-bar-row">
+                      <span class="mood-label">Pain</span>
+                      <div class="mood-bar-track"><div class="mood-bar-fill pain" id="bar-pain" style="width:0%"></div></div>
+                      <span class="mood-pct" id="pct-pain">0%</span>
+                    </div>
+                    <div class="mood-cta" id="mood-cta"></div>
+                  </div>
+                </div>
+
+                <!-- Interactive Vitals Chart (Moved below everything) -->
+                <div class="chart-container">
+                  <h4>Vitals Analytics (RAG Calibrated)</h4>
+                  <canvas id="vitalsChart" width="280" height="130"></canvas>
+                </div>
+
+              </div>
+
+              <!-- SCREEN 2: AI VOICE ASSISTANT & SYMPTOM Q&A -->
+              <div id="screen-chat" class="app-screen">
+                <div class="chat-intro-banner">
+                  <i data-lucide="bot" class="chat-bot-icon"></i>
+                  <div>
+                    <h4>MaternaAI Companion</h4>
+                    <p class="subtitle">Clinical Safety RAG Active | English & Bengali</p>
+                  </div>
+                </div>
+
+                <!-- AI Steganographic Alert Warning banner (only visible in stealth distress alert) -->
+                <div class="stealth-warning-banner" id="stealth-indicator" style="display: none;">
+                  <i data-lucide="shield" class="shield-green-icon"></i>
+                  <span>Stealth Distress Mode Active | Main UI Safely Masqueraded</span>
+                </div>
+
+                <!-- Chat History Window -->
+                <div class="chat-history" id="chat-history-box">
+                  <div class="chat-message bot">
+                    <div class="msg-avatar">🤖</div>
+                    <div class="msg-bubble">
+                      Assalamu Alaikum! I am your MaternaAI health assistant. How can I help you today? You can ask in
+                      English or speak in Bengali!
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Quick Query suggestions chips -->
+                <div class="query-chips" id="chat-query-chips">
+                  <button class="chip" onclick="sendQuickQuery('Aamar pete betha korche ki korbo?', 'bengali')">আমার
+                    পেটে ব্যাথা করছে...</button>
+                  <button class="chip"
+                    onclick="sendQuickQuery('What are preeclampsia symptoms?', 'english')">Preeclampsia
+                    symptoms?</button>
+                  <button class="chip" onclick="sendQuickQuery('Give me my weekly diet plan', 'english')">Daily Diet
+                    Plan</button>
+                  <button class="chip med-chip" onclick="openMedChecker()">💊 Med Safety Check</button>
+                </div>
+
+                <!-- Med Safety Checker Sub-view -->
+                <div class="med-checker-panel" id="med-checker-panel" style="display:none;">
+                  <div class="med-checker-header">
+                    <span>💊 Pregnancy-Safe Medication Checker</span>
+                    <button onclick="closeMedChecker()"><i data-lucide="x"></i></button>
+                  </div>
+                  <div class="med-search-row">
+                    <input type="text" id="med-input" placeholder="Type drug name (e.g. Ibuprofen)...">
+                    <button class="med-check-btn" onclick="checkMedication()">Check</button>
+                  </div>
+                  <div id="med-result" class="med-result-card" style="display:none;"></div>
+                </div>
+
+                <!-- Upgraded Symptom Triage Q&A Drawer -->
+                <div class="symptom-qa-drawer">
+                  <h5><i data-lucide="activity" class="drawer-icon"></i> Interactive Symptom QA Checker</h5>
+                  <div class="drawer-checks-grid">
+                    <button class="symptom-qa-btn" onclick="toggleQASymptom('bleeding', this)">Vaginal Bleeding</button>
+                    <button class="symptom-qa-btn" onclick="toggleQASymptom('headache', this)">Severe Headache</button>
+                    <button class="symptom-qa-btn" onclick="toggleQASymptom('nausea', this)">Severe Vomiting</button>
+                    <button class="symptom-qa-btn" onclick="toggleQASymptom('cramping', this)">Mild Cramping</button>
+                  </div>
+                  <button class="triage-check-btn" onclick="runSymptomQAAnalysis()">Run AI Triage Check</button>
+                </div>
+
+                <!-- Thinking Overlay / RAG step indicator -->
+                <div class="rag-thinking-indicator" id="rag-thinking-box" style="display: none;">
+                  <span class="spinner"></span>
+                  <span class="rag-step-text" id="rag-step-desc">Loading conversation history...</span>
+                </div>
+
+                <!-- Audio TTS player simulation -->
+                <div class="tts-player" id="voice-player" style="display: none;">
+                  <button class="tts-play-btn" onclick="toggleVoicePlayback()"><i data-lucide="play"
+                      id="tts-icon"></i></button>
+                  <div class="tts-wave-animation">
+                    <span class="wave-bar"></span>
+                    <span class="wave-bar"></span>
+                    <span class="wave-bar"></span>
+                    <span class="wave-bar"></span>
+                  </div>
+                  <span class="tts-language">Voice Feedback (Bangla TTS)</span>
+                </div>
+
+                <!-- Chat input area -->
+                <div class="chat-input-bar">
+                  <input type="text" id="chat-input" placeholder="Type symptom, question, or speak..."
+                    onkeydown="handleChatEnter(event)">
+                  <button class="mic-btn" id="voice-input-btn" onclick="emulateVoiceInput()"><i
+                      data-lucide="mic"></i></button>
+                  <button class="send-btn" onclick="sendUserMessage()"><i data-lucide="send"></i></button>
+                </div>
+              </div>
+
+              <!-- SCREEN 3: PPD EPDS SCREEN -->
+              <div id="screen-ppd" class="app-screen">
+                <div class="ppd-intro">
+                  <h3>Postpartum Depression Screening</h3>
+                  <p>In Bangladesh, 29.9% of mothers suffer from PPD. Fill out this private 10-question Edinburgh
+                    Postnatal Depression Scale (EPDS) to screen for risk.</p>
+                </div>
+
+                <div class="ppd-calculator-container" id="ppd-calculator-form">
+                  <!-- EPDS Question 1 -->
+                  <div class="ppd-q-box" data-q="1">
+                    <p class="ppd-q-text">1. I have been able to laugh and see the funny side of things:</p>
+                    <div class="ppd-options">
+                      <label><input type="radio" name="ppdq1" value="0" checked> As much as I always could</label>
+                      <label><input type="radio" name="ppdq1" value="1"> Not quite so much now</label>
+                      <label><input type="radio" name="ppdq1" value="2"> Definitely not so much now</label>
+                      <label><input type="radio" name="ppdq1" value="3"> Not at all</label>
+                    </div>
+                  </div>
+
+                  <!-- EPDS Question 2 -->
+                  <div class="ppd-q-box" data-q="2">
+                    <p class="ppd-q-text">2. I have looked forward with enjoyment to things:</p>
+                    <div class="ppd-options">
+                      <label><input type="radio" name="ppdq2" value="0" checked> As much as I ever did</label>
+                      <label><input type="radio" name="ppdq2" value="1"> Rather less than I used to</label>
+                      <label><input type="radio" name="ppdq2" value="2"> Definitely less than I used to</label>
+                      <label><input type="radio" name="ppdq2" value="3"> Hardly at all</label>
+                    </div>
+                  </div>
+
+                  <!-- EPDS Question 3 -->
+                  <div class="ppd-q-box" data-q="3">
+                    <p class="ppd-q-text">3. I have blamed myself unnecessarily when things went wrong:</p>
+                    <div class="ppd-options">
+                      <label><input type="radio" name="ppdq3" value="3"> Yes, most of the time</label>
+                      <label><input type="radio" name="ppdq3" value="2"> Yes, some of the time</label>
+                      <label><input type="radio" name="ppdq3" value="1"> Not very often</label>
+                      <label><input type="radio" name="ppdq3" value="0" checked> No, never</label>
+                    </div>
+                  </div>
+
+                  <!-- EPDS Question 4 -->
+                  <div class="ppd-q-box" data-q="4">
+                    <p class="ppd-q-text">4. I have been anxious or worried for no good reason:</p>
+                    <div class="ppd-options">
+                      <label><input type="radio" name="ppdq4" value="0" checked> No, not at all</label>
+                      <label><input type="radio" name="ppdq4" value="1"> Hardly ever</label>
+                      <label><input type="radio" name="ppdq4" value="2"> Yes, sometimes</label>
+                      <label><input type="radio" name="ppdq4" value="3"> Yes, very often</label>
+                    </div>
+                  </div>
+
+                  <!-- EPDS Question 5 -->
+                  <div class="ppd-q-box" data-q="5">
+                    <p class="ppd-q-text">5. I have felt scared or panicky for no very good reason:</p>
+                    <div class="ppd-options">
+                      <label><input type="radio" name="ppdq5" value="3"> Yes, quite a lot</label>
+                      <label><input type="radio" name="ppdq5" value="2"> Yes, sometimes</label>
+                      <label><input type="radio" name="ppdq5" value="1"> No, not much</label>
+                      <label><input type="radio" name="ppdq5" value="0" checked> No, not at all</label>
+                    </div>
+                  </div>
+
+                  <button class="calculate-ppd-btn" onclick="calculateEPDS()">Calculate EPDS Score</button>
+                </div>
+
+                <!-- PPD Results Screen -->
+                <div class="ppd-results-card" id="ppd-results" style="display: none;">
+                  <div class="results-heading">
+                    <h4>Screening Results</h4>
+                    <button class="ppd-reset-btn" onclick="resetEPDS()">Retake</button>
+                  </div>
+                  <div class="score-circle-container">
+                    <div class="score-circle" id="ppd-score-circle">14</div>
+                    <div class="score-label">EPDS Score (Out of 30)</div>
+                  </div>
+                  <div class="score-status high" id="ppd-score-status">High Risk of Depression</div>
+                  <p class="score-advice" id="ppd-score-advice">
+                    A score of 13 or higher indicates significant emotional stress or postpartum depression risk. We
+                    recommend connecting immediately with our verified clinical partners.
+                  </p>
+                  <div class="ppd-actions">
+                    <button class="ppd-action-btn peer" onclick="showPeerSupportAlert()"><i data-lucide="users"></i>
+                      Join Support Group</button>
+                    <button class="ppd-action-btn clinical" onclick="callDoctor()"><i data-lucide="phone"></i> Call
+                      Doctor</button>
+                  </div>
+                </div>
+              </div>
+
+              <!-- SCREEN 4: BIRTH PLAN GENERATOR -->
+              <div id="screen-birth" class="app-screen">
+                <div class="birth-plan-intro">
+                  <h3>Interactive Birth Plan Generator</h3>
+                  <p>AI-calibrated birth planning matching WHO standards and local medical availability in Bangladesh.
+                  </p>
+                </div>
+
+                <div class="birth-plan-form" id="birth-form-container">
+                  <div class="form-group">
+                    <label>1. Preferred Delivery Facility:</label>
+                    <select id="bp-facility">
+                      <option value="Dhaka Medical College Hospital">Dhaka Medical College Hospital</option>
+                      <option value="Sreemangal Community Clinic">Sreemangal Community Clinic (Tea Gardens)</option>
+                      <option value="Home Delivery with Trained Midwife">Home Delivery with Trained Midwife</option>
+                    </select>
+                  </div>
+
+                  <div class="form-group">
+                    <label>2. Chosen Birth Companion:</label>
+                    <select id="bp-companion">
+                      <option value="Certified Midwife / Nurse">Certified Midwife / Nurse</option>
+                      <option value="Husband & Family member">Husband & Family member</option>
+                      <option value="No Companion (Clinician choice)">No Companion (Clinician choice)</option>
+                    </select>
+                  </div>
+
+                  <div class="form-group">
+                    <label>3. Pain Management Preference:</label>
+                    <select id="bp-pain">
+                      <option value="Natural (Breathing, massages, water)">Natural (Breathing, massages)</option>
+                      <option value="Medical Intervention (Epidural/Gas)">Medical Intervention (Epidural)</option>
+                    </select>
+                  </div>
+
+                  <div class="form-group">
+                    <label>4. Emergency Transport Plan:</label>
+                    <select id="bp-transport">
+                      <option value="Pre-arranged Local CNG Ambulance (Midwife loop)">Pre-arranged CNG Ambulance
+                        (Midwife loop)</option>
+                      <option value="None pre-arranged (Call 16263 at delivery)">None (Call 16263 at delivery)</option>
+                    </select>
+                  </div>
+
+                  <button class="generate-plan-btn" onclick="compileBirthPlan()">Generate AI Birth Plan</button>
+                </div>
+
+                <!-- Printable generated Birth plan sheet -->
+                <div class="birth-plan-result" id="birth-plan-result-card" style="display: none;">
+                  <div class="plan-header">
+                    <h4>Clinical Birth Plan</h4>
+                    <button class="reset-plan-btn" onclick="resetBirthPlan()">Edit Plan</button>
+                  </div>
+
+                  <div class="plan-sheet">
+                    <div class="plan-row">
+                      <strong>Patient Name:</strong> <span>Rahima Begum</span>
+                    </div>
+                    <div class="plan-row">
+                      <strong>Gestation Age:</strong> <span>Week 24 (Trimester 2)</span>
+                    </div>
+                    <div class="plan-row">
+                      <strong>Target Facility:</strong> <span id="res-bp-facility">Dhaka Medical College</span>
+                    </div>
+                    <div class="plan-row">
+                      <strong>Companion:</strong> <span id="res-bp-companion">Midwife</span>
+                    </div>
+                    <div class="plan-row">
+                      <strong>Pain Preference:</strong> <span id="res-bp-pain">Natural</span>
+                    </div>
+                    <div class="plan-row">
+                      <strong>Emergency Route:</strong> <span id="res-bp-transport">CNG Ambulance</span>
+                    </div>
+                    <div class="plan-stamp">
+                      <i data-lucide="cpu" class="stamp-icon"></i>
+                      <span>MaternaAI Safety Calibrated</span>
+                    </div>
+                  </div>
+                  <button class="save-plan-device-btn" onclick="savePlanToDevice()">Save & Print Plan</button>
+                </div>
+              </div>
+
+              <!-- SCREEN 5: COMMUNITY GROUPS HUB (Facebook-style) -->
+              <div id="screen-groups" class="app-screen">
+
+                <!-- VIEW A: Groups Feed -->
+                <div id="groups-feed-view" class="groups-view">
+                  <div class="groups-topbar">
+                    <h4>Community Groups</h4>
+                    <button class="create-group-btn" onclick="showCreateGroupModal()">
+                      <i data-lucide="plus"></i> Create
+                    </button>
+                  </div>
+
+                  <div class="groups-search-row">
+                    <i data-lucide="search" class="gsearch-icon"></i>
+                    <input type="text" id="groups-search" placeholder="Search groups..." oninput="filterGroups(this.value)">
+                  </div>
+
+                  <!-- AI Recommendations Strip -->
+                  <div class="ai-recs-strip" id="ai-recs-strip">
+                    <div class="ai-recs-label"><i data-lucide="sparkles"></i> AI Recommended for You</div>
+                    <div class="ai-recs-chips" id="ai-recs-chips"></div>
+                  </div>
+
+                  <!-- Category Filter Tabs -->
+                  <div class="group-cat-tabs">
+                    <button class="cat-tab active" onclick="filterGroupCat('all', this)">All</button>
+                    <button class="cat-tab" onclick="filterGroupCat('support', this)">Support</button>
+                    <button class="cat-tab" onclick="filterGroupCat('clinical', this)">Clinical</button>
+                    <button class="cat-tab" onclick="filterGroupCat('nutrition', this)">Nutrition</button>
+                    <button class="cat-tab" onclick="filterGroupCat('rural', this)">Rural</button>
+                  </div>
+
+                  <!-- Groups Grid -->
+                  <div class="groups-grid" id="groups-grid"></div>
+                </div>
+
+                <!-- VIEW B: Group Detail -->
+                <div id="group-detail-view" class="groups-view" style="display:none;">
+                  <div class="group-detail-header">
+                    <button class="back-btn" onclick="backToGroupsFeed()">
+                      <i data-lucide="arrow-left"></i>
+                    </button>
+                    <div class="group-detail-title" id="group-detail-title"></div>
+                    <button class="view-members-btn" onclick="toggleMembersPanel()">
+                      <i data-lucide="users"></i>
+                    </button>
+                  </div>
+
+                  <!-- Group Hero Banner -->
+                  <div class="group-hero-banner" id="group-hero-banner">
+                    <div class="group-hero-info">
+                      <h3 id="group-hero-name"></h3>
+                      <p id="group-hero-desc"></p>
+                      <div class="group-hero-stats">
+                        <span id="group-hero-members"></span>
+                        <span id="group-hero-tag"></span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <!-- Members Slide Panel -->
+                  <div class="members-panel" id="members-panel" style="display:none;">
+                    <div class="members-panel-header">
+                      <h5>Group Members</h5>
+                      <button onclick="toggleMembersPanel()"><i data-lucide="x"></i></button>
+                    </div>
+                    <div class="members-list" id="members-list"></div>
+                  </div>
+
+                  <!-- Post Composer -->
+                  <div class="post-composer">
+                    <div class="composer-avatar">👤</div>
+                    <div class="composer-right">
+                      <textarea id="new-post-input" class="composer-textarea" placeholder="Share something with the group..."></textarea>
+                      <div class="composer-actions">
+                        <button class="attach-vitals-btn" onclick="attachVitalsToPost()">
+                          <i data-lucide="activity"></i> Attach Vitals
+                        </button>
+                        <button class="post-submit-btn" onclick="submitGroupPost()">Post</button>
+                      </div>
+                    </div>
+                  </div>
+
+                  <!-- Posts Feed -->
+                  <div class="posts-feed" id="posts-feed"></div>
+                </div>
+
+              </div>
+
+              <!-- SCREEN 6 (NEW): DIRECT MESSAGES -->
+              <div id="screen-dm" class="app-screen">
+                <div class="dm-header">
+                  <h4>Direct Messages</h4>
+                </div>
+                <!-- DM Conversation List -->
+                <div class="dm-conversation-list" id="dm-conversation-list"></div>
+                <!-- DM Chat View (hidden until conversation selected) -->
+                <div class="dm-chat-view" id="dm-chat-view" style="display:none;">
+                  <div class="dm-chat-header">
+                    <button class="back-btn" onclick="backToDMList()">
+                      <i data-lucide="arrow-left"></i>
+                    </button>
+                    <div class="dm-chat-person" id="dm-chat-person"></div>
+                  </div>
+                  <div class="dm-messages-box" id="dm-messages-box"></div>
+                  <div class="dm-input-bar">
+                    <input type="text" id="dm-input" placeholder="Type a message..." onkeydown="handleDMEnter(event)">
+                    <button class="dm-send-btn" onclick="sendDMMessage()"><i data-lucide="send"></i></button>
+                  </div>
+                </div>
+              </div>
+
+              <!-- SCREEN 6: OFFLINE SMS GATEWAY -->
+              <div id="screen-sms" class="app-screen">
+                <div class="sms-header-banner">
+                  <i data-lucide="message-square" class="sms-icon"></i>
+                  <div>
+                    <h4>Offline SMS Gateway</h4>
+                    <p class="subtitle">Emulated offline channel for rural/tea garden users without internet (8080)</p>
+                  </div>
+                </div>
+
+                <div class="sms-chat-container" id="sms-messages-box">
+                  <div class="sms-msg incoming">
+                    <span class="sms-timestamp">20:30</span>
+                    <p class="sms-bubble">HELP DIET W24</p>
+                  </div>
+                  <div class="sms-msg outgoing">
+                    <span class="sms-timestamp">20:31</span>
+                    <p class="sms-bubble">
+                      [MaternaAI SMS Helper] Week 24 nutrition protocol: Focus on Iron & Folic Acid. Eat rich foods like
+                      spinach, boiled eggs, and bananas. Continue your daily calcium supplement. Send "DANGER" for
+                      symptoms check.
+                    </p>
+                  </div>
+                </div>
+
+                <div class="sms-query-chips">
+                  <button class="sms-chip" onclick="sendOfflineSMS('HELP DIET W24')">"HELP DIET W24"</button>
+                  <button class="sms-chip" onclick="sendOfflineSMS('DANGER BLEEDING')">"DANGER BLEEDING"</button>
+                  <button class="sms-chip" onclick="sendOfflineSMS('PPD EPDS')">"PPD EPDS"</button>
+                </div>
+
+                <div class="sms-input-bar">
+                  <input type="text" id="sms-input" placeholder="Type SMS command (e.g. HELP)..."
+                    onkeydown="handleSMSEnter(event)">
+                  <button class="sms-send-btn" onclick="sendUserSMS()"><i data-lucide="send"></i></button>
+                </div>
+              </div>
+
+            </div> <!-- End App Body -->
+
+            <!-- Mobile App Navigation Bottom Bar (6 tabs) -->
+            <nav class="app-nav" id="app-nav">
+              <button class="nav-item active" onclick="switchMobileTab('dashboard', this)">
+                <i data-lucide="layout-dashboard"></i>
+                <span>Home</span>
+              </button>
+              <button class="nav-item" onclick="switchMobileTab('chat', this)">
+                <i data-lucide="message-square"></i>
+                <span>AI Chat</span>
+              </button>
+              <button class="nav-item" onclick="switchMobileTab('ppd', this)">
+                <i data-lucide="smile"></i>
+                <span>PPD</span>
+              </button>
+              <button class="nav-item" onclick="switchMobileTab('groups', this)">
+                <i data-lucide="users"></i>
+                <span>Groups</span>
+              </button>
+              <button class="nav-item" onclick="switchMobileTab('dm', this)">
+                <i data-lucide="message-circle"></i>
+                <span>Messages</span>
+              </button>
+            </nav>
+
+            <!-- FLOATING SOS PANIC BUTTON -->
+            <button class="floating-sos-btn" id="floating-sos-btn" onclick="triggerSOS()">
+              <i data-lucide="heart" class="sos-icon animate-pulse"></i>
+              <span>SOS</span>
+            </button>
+
+            <!-- EMERGENCY SOS SIMULATION OVERLAY -->
+            <div id="sos-overlay" style="display: none;">
+              <div class="sos-overlay-content">
+                <div class="sos-alert-header">
+                  <i data-lucide="alert-triangle" class="warning-triangle"></i>
+                  <h2>CRITICAL RISK DETECTED</h2>
+                  <p class="sos-sub">MaternaAI Obstetric Safety Overrides Activated</p>
+                  <div class="sos-eta-badge">🚑 Estimated arrival: <span id="sos-eta">8:42</span> min</div>
+                </div>
+
+                <!-- Claude Emergency Reasoning Log -->
+                <div class="sos-reasoning-card">
+                  <div class="reasoning-title">
+                    <span class="thinking-spinner"></span>
+                    <h4>Claude 4.6 Sonnet Emergency Reasoning Engine:</h4>
+                  </div>
+                  <pre class="reasoning-text" id="sos-reasoning-log">
+1. Analysing symptom profile: Severe vaginal bleeding + high blood pressure.
+2. Cross-referencing database: WHO recommendations for postpartum hemorrhage.
+3. RAG retrieval match: Bangladesh Obstetric Clinical Practice Guidelines Sec 4.
+4. Risk Stratification: CRITICAL. Overriding standard AI dialogue engine...
+5. Action plan generated: Dispatch Firebase Alert, send immediate TTS voice instructions, override UI to display life-saving maneuvers.
+                  </pre>
+                </div>
+
+                <!-- Emergency instructions for mother -->
+                <div class="sos-instructions-card">
+                  <h3>IMMEDIATE LIFE-SAVING INSTRUCTIONS:</h3>
+                  <ul class="sos-list">
+                    <li><strong class="urgent">1. Lie Down flat</strong> on your left side with hips elevated.</li>
+                    <li><strong class="urgent">2. Massage your abdomen</strong> firmly in circular motions.</li>
+                    <li><strong class="urgent">3. Emergency dispatched:</strong> We have sent an SMS alert and GPS
+                      coordinates to the local community midwife.</li>
+                  </ul>
+                </div>
+
+                <!-- Emulated Actions Status -->
+                <div class="sos-status-checks">
+                  <div class="status-chk active"><i data-lucide="check" class="chk-icon"></i> Firebase Critical
+                    Notification Sent</div>
+                  <div class="status-chk active"><i data-lucide="check" class="chk-icon"></i> TTS Emergency Voice Alert
+                    Triggered</div>
+                  <div class="status-chk active"><i data-lucide="check" class="chk-icon"></i> SMS dispatched to Midwife
+                    in Tea Garden</div>
+                </div>
+
+                <div class="sos-actions">
+                  <button class="sos-dismiss-btn" onclick="dismissSOS()">Dismiss Alert</button>
+                  <button class="sos-call-btn" onclick="callAmbulance()"><i data-lucide="phone"></i> Call Emergency
+                    (16263)</button>
+                </div>
+              </div>
+            </div>
+
+            <!-- KICK COUNTER OVERLAY -->
+            <div id="kick-counter-overlay" style="display:none;" class="kick-overlay">
+              <div class="kick-overlay-content">
+                <div class="kick-overlay-header">
+                  <h3>Fetal Kick Counter</h3>
+                  <button onclick="closeKickCounter()"><i data-lucide="x"></i></button>
+                </div>
+                <p class="kick-protocol-label">Cardiff Count-to-Ten Protocol</p>
+                <div class="kick-display">
+                  <div class="kick-count-circle" id="kick-count">0</div>
+                  <p class="kick-goal">Goal: 10 kicks</p>
+                </div>
+                <div class="kick-timer-row">
+                  <i data-lucide="clock"></i>
+                  <span id="kick-timer-display">00:00</span>
+                  <span class="kick-timer-label">elapsed</span>
+                </div>
+                <button class="kick-tap-btn" id="kick-tap-btn" onclick="recordKick()">
+                  <i data-lucide="hand"></i>
+                  TAP ON EVERY KICK
+                </button>
+                
+                <!-- Early Analysis Button -->
+                <button class="kick-early-btn" id="kick-early-btn" onclick="analyzeKickPattern(true)" style="display:none; background: rgba(171,115,151,0.12); color: var(--primary-mauve); border: 1px solid var(--primary-mauve); margin-top: 5px; width: 100%; border-radius: 20px; padding: 6px; font-size: 0.65rem; font-weight: 700; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 4px;">
+                  <i data-lucide="sparkles" style="width: 10px; height: 10px; stroke: var(--primary-mauve);"></i> Analyze Current Count Early
+                </button>
+
+                <div class="kick-result" id="kick-result" style="display:none;"></div>
+
+                <!-- AI Clinical Insights Panel -->
+                <div class="kick-ai-feedback" id="kick-ai-feedback" style="display:none; background: rgba(134,82,204,0.06); border: 1px dashed var(--primary-mauve); border-radius: 8px; padding: 8px 10px; margin-top: 8px;">
+                  <div class="ai-feedback-header" style="display: flex; align-items: center; gap: 4px; color: var(--primary-mauve); margin-bottom: 4px;">
+                    <i data-lucide="sparkles" class="sparkles-icon" style="width: 12px; height: 12px; stroke: var(--primary-mauve);"></i>
+                    <h5 style="font-size: 0.65rem; font-weight: 800; margin: 0;">AI Clinical Insights (Cardiff Protocol)</h5>
+                  </div>
+                  <p id="kick-ai-text" style="font-size: 0.58rem; color: var(--text-muted); line-height: 1.4; margin: 0; font-weight: 600; text-align: left;"></p>
+                </div>
+
+                <button class="kick-reset-btn" onclick="resetKickCounter()">Reset</button>
+              </div>
+            </div>
+
+            <!-- AI REPORT ANALYZER OVERLAY -->
+            <div id="report-analyzer-overlay" style="display:none;" class="kick-overlay">
+              <div class="kick-overlay-content report-overlay-content" style="max-height: 90%; overflow-y: auto;">
+                <div class="kick-overlay-header">
+                  <h3>AI Report & Prescription Analyzer</h3>
+                  <button onclick="closeReportAnalyzer()"><i data-lucide="x"></i></button>
+                </div>
+                <p class="kick-protocol-label" style="color: #3d8ed9;">Clinical OCR & Prescription Explanation</p>
+                
+                <div class="report-upload-zone" id="report-upload-zone" style="border: 2px dashed rgba(61,142,217,0.3); border-radius: 8px; padding: 20px 10px; text-align: center; background: rgba(61,142,217,0.02); margin: 10px 0; cursor: pointer;">
+                  <i data-lucide="upload-cloud" class="upload-icon" style="width: 36px; height: 36px; stroke: #3d8ed9; margin-bottom: 8px; display: inline-block;"></i>
+                  <p style="font-size: 0.68rem; font-weight: 700; color: var(--text-dark); margin: 0 0 4px 0;">Tap to upload medical report / prescription</p>
+                  <p style="font-size: 0.55rem; color: var(--text-muted); margin: 0 0 10px 0;">Supports PDF, JPG, PNG medical scans</p>
+                  <span class="upload-sub" style="display: block; font-size: 0.52rem; font-weight: 700; color: var(--text-muted); margin-bottom: 6px; letter-spacing: 0.5px; text-transform: uppercase;">Or select a demo report:</span>
+                  <div class="demo-reports-row" style="display: flex; flex-direction: column; gap: 4px; padding: 0 10px;">
+                    <button class="demo-report-btn" onclick="analyzePresetReport('prescription')" style="background: #3d8ed9; color: #fff; border: none; border-radius: 12px; padding: 6px 12px; font-size: 0.6rem; font-weight: 700; cursor: pointer; text-align: left; display: flex; align-items: center; gap: 4px;"><i data-lucide="file-text" style="width: 10px; height: 10px; stroke: #fff;"></i> 📋 Dr. Anwara's Prescription (Week 24)</button>
+                    <button class="demo-report-btn" onclick="analyzePresetReport('ultrasound')" style="background: rgba(61,142,217,0.12); color: #3d8ed9; border: 1px solid rgba(61,142,217,0.2); border-radius: 12px; padding: 6px 12px; font-size: 0.6rem; font-weight: 700; cursor: pointer; text-align: left; display: flex; align-items: center; gap: 4px;"><i data-lucide="baby" style="width: 10px; height: 10px; stroke: #3d8ed9;"></i> 👶 Week 28 Ultrasound Scan Report</button>
+                  </div>
+                </div>
+
+                <!-- AI Analysis Progress -->
+                <div class="report-loading" id="report-loading" style="display:none; text-align: center; padding: 20px 10px;">
+                  <div class="loading-spinner" style="border: 3px solid rgba(61,142,217,0.1); border-top: 3px solid #3d8ed9; border-radius: 50%; width: 24px; height: 24px; animation: spin 1s linear infinite; margin: 0 auto 10px auto;"></div>
+                  <p id="report-loading-text" style="font-size: 0.62rem; font-weight: 700; color: var(--text-dark); margin: 0;">Extracting text using clinical OCR...</p>
+                </div>
+
+                <!-- AI Analysis Result -->
+                <div class="report-result" id="report-result" style="display:none; animation: fadeIn 0.4s ease-out; text-align: left;">
+                  <div class="report-result-header" style="display: flex; align-items: center; gap: 8px; padding: 8px; background: rgba(58,166,115,0.08); border: 1px solid rgba(58,166,115,0.15); border-radius: 8px; margin-bottom: 10px;">
+                    <i data-lucide="check-circle" class="success-icon" style="stroke: #3aa673; width: 18px; height: 18px; flex-shrink:0;"></i>
+                    <div>
+                      <h4 id="report-result-title" style="font-size: 0.72rem; font-weight: 800; color: #3aa673; margin: 0;">Prescription Extraction Complete</h4>
+                      <p id="report-result-date" style="font-size: 0.52rem; color: var(--text-muted); margin: 0; font-weight: 600;"></p>
+                    </div>
+                  </div>
+                  
+                  <div class="report-details-box" style="background: rgba(35,25,31,0.02); border: 1px solid var(--glass-border); border-radius: 8px; padding: 10px; max-height: 250px; overflow-y: auto;">
+                    <h5 style="font-size: 0.65rem; font-weight: 800; color: var(--text-dark); margin: 0 0 6px 0; border-bottom: 1px solid var(--glass-border); padding-bottom: 3px;">💊 IDENTIFIED MEDICINES & DOSAGE:</h5>
+                    <div id="report-meds-list" class="report-meds-list" style="display: flex; flex-direction: column; gap: 6px;"></div>
+                    
+                    <h5 style="font-size: 0.65rem; font-weight: 800; color: var(--text-dark); margin: 12px 0 6px 0; border-bottom: 1px solid var(--glass-border); padding-bottom: 3px;">📊 CLINICAL SUMMARY & CRITICAL WARNINGS:</h5>
+                    <div id="report-findings" class="report-findings-text" style="font-size: 0.58rem; color: var(--text-muted); line-height: 1.4; font-weight: 600;"></div>
+                  </div>
+                  
+                  <button class="import-plan-btn" id="import-plan-btn" onclick="importMedsToPlan()" style="background: var(--primary-mauve); color: #fff; border: none; border-radius: 20px; width: 100%; padding: 8px; font-size: 0.68rem; font-weight: 700; margin-top: 10px; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 4px; box-shadow: 0 4px 10px rgba(171,115,151,0.2);">
+                    <i data-lucide="plus-circle" style="width: 14px; height: 14px; stroke: #fff;"></i> Import to Daily AI Plan
+                  </button>
+                </div>
+
+                <button class="kick-reset-btn" onclick="resetReportAnalyzer()" style="margin-top: 10px; background: rgba(35,25,31,0.06); color: var(--text-dark); border: none; border-radius: 20px; width: 100%; padding: 8px; font-size: 0.68rem; font-weight: 700; cursor: pointer;">Reset Analyzer</button>
+              </div>
+            </div>
+              </div>
+            </div>
+
+          </div> <!-- End Smartphone Screen -->
+        </div> <!-- End Bezel -->
+
+        <!-- Physical button styling on bezel -->
+        <span class="volume-up"></span>
+        <span class="volume-down"></span>
+        <span class="power-btn"></span>
+      </div> <!-- End Phone Case -->
+    </section>
+  </main>
+
+  <!-- VITALS LOGGER MODAL WINDOW -->
+  <div id="logger-modal" class="modal" style="display: none;">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3>Log Health Metrics</h3>
+        <button class="close-modal-btn" onclick="closeLoggerModal()"><i data-lucide="x"></i></button>
+      </div>
+      <div class="modal-body">
+        <div class="input-group">
+          <label for="input-bp-systolic">Blood Pressure (Systolic):</label>
+          <input type="number" id="input-bp-systolic" value="120" placeholder="e.g. 120">
+        </div>
+        <div class="input-group">
+          <label for="input-bp-diastolic">Blood Pressure (Diastolic):</label>
+          <input type="number" id="input-bp-diastolic" value="80" placeholder="e.g. 80">
+        </div>
+        <div class="input-group">
+          <label for="input-glucose">Blood Glucose (mmol/L):</label>
+          <input type="number" id="input-glucose" step="0.1" value="5.4" placeholder="e.g. 5.4">
+        </div>
+        <div class="input-group">
+          <label for="input-weight">Weight (Gain in kg):</label>
+          <input type="number" id="input-weight" step="0.1" value="6.2" placeholder="e.g. 6.2">
+        </div>
+        <div class="input-group">
+          <label for="input-water">Water Intake (L):</label>
+          <input type="number" id="input-water" step="0.1" value="1.6" placeholder="e.g. 1.6">
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="modal-cancel-btn" onclick="closeLoggerModal()">Cancel</button>
+        <button class="modal-save-btn" onclick="saveVitals()">Save Metrics</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ARTICLE VIEW MODAL WINDOW -->
+  <div id="article-modal" class="modal" style="display: none;">
+    <div class="modal-content" style="width: 480px;">
+      <div class="modal-header">
+        <h3 id="art-title">Clinical Article</h3>
+        <button class="close-modal-btn" onclick="closeArticleModal()"><i data-lucide="x"></i></button>
+      </div>
+      <div class="modal-body" style="max-height: 400px; overflow-y: auto;">
+        <p id="art-body" style="font-size: 0.85rem; line-height: 1.6; color: var(--text-dark); font-weight: 500;"></p>
+      </div>
+      <div class="modal-footer">
+        <button class="modal-save-btn" onclick="closeArticleModal()">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- CREATE GROUP MODAL -->
+  <div id="create-group-modal" class="modal" style="display:none;">
+    <div class="modal-content cg-modal">
+      <div class="modal-header">
+        <h3>Create New Group</h3>
+        <button class="close-modal-btn" onclick="closeCreateGroupModal()"><i data-lucide="x"></i></button>
+      </div>
+      <div class="modal-body">
+        <div class="input-group">
+          <label>Group Name:</label>
+          <input type="text" id="cg-name" placeholder="e.g. Gestational Diabetes Moms">
+        </div>
+        <div class="input-group">
+          <label>Description:</label>
+          <input type="text" id="cg-desc" placeholder="What is this group about?">
+        </div>
+        <div class="input-group">
+          <label>Category:</label>
+          <select id="cg-category">
+            <option value="support">Mental Support</option>
+            <option value="clinical">Clinical / Medical</option>
+            <option value="nutrition">Nutrition & Diet</option>
+            <option value="rural">Rural Community</option>
+          </select>
+        </div>
+        <div class="input-group">
+          <label>Invite Members (select roles):</label>
+          <div class="cg-role-chips">
+            <label class="role-chip"><input type="checkbox" value="doctor" checked> 👨‍⚕️ Doctor</label>
+            <label class="role-chip"><input type="checkbox" value="nurse"> 👩‍⚕️ Nurse</label>
+            <label class="role-chip"><input type="checkbox" value="midwife" checked> 🤱 Midwife</label>
+            <label class="role-chip"><input type="checkbox" value="peer"> 💜 Peer Mothers</label>
+          </div>
+        </div>
+        <div class="input-group">
+          <label>Privacy:</label>
+          <select id="cg-privacy">
+            <option value="public">🌐 Public — Anyone can join</option>
+            <option value="private">🔒 Private — By invitation only</option>
+          </select>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="modal-cancel-btn" onclick="closeCreateGroupModal()">Cancel</button>
+        <button class="modal-save-btn" onclick="createNewGroup()">Create Group</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Custom JavaScript Core -->
+  <script src="app.js"></script>
+
+</body>
+
+</html>
