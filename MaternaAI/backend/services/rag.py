@@ -1,9 +1,11 @@
 import psycopg2
 from pgvector.psycopg2 import register_vector
+import cohere
 from google import genai
-from config import DATABASE_URL, GEMINI_API_KEY
+from config import DATABASE_URL, GEMINI_API_KEY, COHERE_API_KEY
 
-client = genai.Client(api_key=GEMINI_API_KEY)
+co = cohere.Client(COHERE_API_KEY)
+gemini_client = genai.Client(api_key=GEMINI_API_KEY)
 
 def get_db():
     conn = psycopg2.connect(DATABASE_URL)
@@ -11,13 +13,12 @@ def get_db():
     return conn
 
 def embed_text(text: str) -> list:
-    from google.genai import types
-    result = client.models.embed_content(
-        model="gemini-embedding-001",
-        contents=text,
-        config=types.EmbedContentConfig(output_dimensionality=768)
+    response = co.embed(
+        texts=[text],
+        model="embed-english-v3.0",
+        input_type="search_query"
     )
-    return result.embeddings[0].values
+    return response.embeddings[0]
 
 def retrieve_context(query: str, category: str = None, top_k: int = 4) -> list:
     query_embedding = embed_text(query)
@@ -64,8 +65,8 @@ def rag_query(user_input: str, user_profile: dict, mode: str = "danger") -> str:
     context = format_context(chunks)
     prompt = build_prompt(user_input, user_profile, context, mode)
 
-    response = client.models.generate_content(
-        model="gemini-2.0-flash",
+    response = gemini_client.models.generate_content(
+        model="gemini-2.5-flash",
         contents=prompt
     )
     return response.text

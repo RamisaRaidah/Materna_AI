@@ -7,10 +7,10 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import psycopg2
 from pgvector.psycopg2 import register_vector
-from google import genai
-from config import DATABASE_URL, GEMINI_API_KEY
+import cohere
+from config import DATABASE_URL, COHERE_API_KEY
 
-client = genai.Client(api_key=GEMINI_API_KEY)
+co = cohere.Client(COHERE_API_KEY)
 
 KNOWLEDGE_CHUNKS = [
     {
@@ -105,13 +105,12 @@ In Bangladesh, many rural women have fewer visits due to access barriers."""
 ]
 
 def embed_text(text: str) -> list:
-    from google.genai import types
-    result = client.models.embed_content(
-        model="gemini-embedding-001",
-        contents=text,
-        config=types.EmbedContentConfig(output_dimensionality=768)
+    response = co.embed(
+        texts=[text],
+        model="embed-english-v3.0",
+        input_type="search_document"
     )
-    return result.embeddings[0].values
+    return response.embeddings[0]
 
 def seed_knowledge_base():
     conn = psycopg2.connect(DATABASE_URL)

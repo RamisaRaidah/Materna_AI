@@ -7,19 +7,26 @@ CREATE TABLE users (
     name VARCHAR(100) NOT NULL,
     phone VARCHAR(20) UNIQUE NOT NULL,
     password_hash VARCHAR(255) NOT NULL,
+    role VARCHAR(20) DEFAULT 'patient', -- patient | clinician | admin  -- new
     age INTEGER,
     weeks_pregnant INTEGER,        -- NULL if postpartum
     is_postpartum BOOLEAN DEFAULT FALSE,
+    persona VARCHAR(20) DEFAULT 'pregnant', -- pregnant | postpartum | recovery  -- new
     due_date DATE,
     location VARCHAR(100),         -- district/division in Bangladesh
     emergency_contact VARCHAR(20),
-    created_at TIMESTAMP DEFAULT NOW()
+    created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
 -- Health logs (what user reports each session)
 CREATE TABLE health_logs (
     id SERIAL PRIMARY KEY,
     user_id INTEGER REFERENCES users(id),
+    bp_systolic INTEGER, -- new
+    bp_diastolic INTEGER, -- new
+    blood_glucose NUMERIC(5,2), -- new
+    weight_gain NUMERIC(5,2), -- new
+    water_intake NUMERIC(4,2), -- new
     raw_input TEXT NOT NULL,           -- original voice/text input
     transcribed_text TEXT,             -- after Bangla STT
     symptoms TEXT[],                   -- extracted symptom array
@@ -27,7 +34,7 @@ CREATE TABLE health_logs (
     llm_response TEXT,                 -- what the AI said back
     flagged_abuse BOOLEAN DEFAULT FALSE,
     flagged_ppd BOOLEAN DEFAULT FALSE,
-    created_at TIMESTAMP DEFAULT NOW()
+    created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
 -- PPD assessments (Edinburgh scale)
@@ -38,20 +45,21 @@ CREATE TABLE ppd_assessments (
     total_score INTEGER NOT NULL,
     risk_level VARCHAR(20),            -- 'low', 'moderate', 'high'
     llm_advice TEXT,
-    created_at TIMESTAMP DEFAULT NOW()
+    created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
 -- Birth plans
 CREATE TABLE birth_plans (
     id SERIAL PRIMARY KEY,
-    user_id INTEGER REFERENCES users(id),
+    user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
     hospital_name VARCHAR(100),
+    transport VARCHAR(150), -- new
     support_person VARCHAR(100),
     pain_preference VARCHAR(50),
     special_notes TEXT,
     emergency_contacts JSONB,          -- [{name, phone, relation}]
     generated_plan TEXT,               -- LLM generated full plan
-    created_at TIMESTAMP DEFAULT NOW()
+    created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
 -- Nutrition plans
@@ -64,26 +72,105 @@ CREATE TABLE nutrition_plans (
     created_at TIMESTAMP DEFAULT NOW()
 );
 
+-- Fetal Kick Sessions -- new
+CREATE TABLE kick_sessions (
+    id SERIAL PRIMARY KEY,
+    user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+    kick_count INTEGER NOT NULL,
+    elapsed_secs INTEGER NOT NULL,
+    result VARCHAR(20), -- normal | reduced
+    ai_feedback TEXT,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Chat messages  -- new
+CREATE TABLE chat_messages (
+    id SERIAL PRIMARY KEY,
+    user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+    role VARCHAR(10) NOT NULL, -- user | assistant
+    content TEXT NOT NULL,
+    intent VARCHAR(30), -- eclampsia | diet | abuse | general | bengali
+    language VARCHAR(10) DEFAULT 'en',
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Community Groups -- new
+CREATE TABLE groups (
+    id SERIAL PRIMARY KEy,
+    name VARCHAR(150) NOT NULL,
+    description TEXT,
+    category VARCHAR(30),  -- support | clinical | nutrition | rural
+    emoji VARCHAR(10),
+    color VARCHAR(10),
+    creator_id INTEGER REFERENCES users(id),
+    member_count INTEGER DEFAULT 1,
+    is_private BOOLEAN DEFAULT FALSE,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Group members -- new
+CREATE TABLE group_members (
+    group_id INTEGER REFERENCES groups(id) ON DELETE CASCADE,
+    user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+    joined_at TIMESTAMPTZ DEFAULT NOW(),
+    PRIMARY KEY (group_id, user_id)
+);
+
 -- Community posts
 CREATE TABLE posts (
     id SERIAL PRIMARY KEY,
-    user_id INTEGER REFERENCES users(id),
+    group_id INTEGER REFERENCES groups(id) ON DELETE CASCADE, -- new
+    user_id INTEGER REFERENCES users(id) ON DELETE CASCADE, -- new
     content TEXT NOT NULL,
     is_anonymous BOOLEAN DEFAULT FALSE,
     is_flagged BOOLEAN DEFAULT FALSE,  -- AI moderation flag
     flag_reason TEXT,
     likes INTEGER DEFAULT 0,
-    created_at TIMESTAMP DEFAULT NOW()
+    created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
 -- Community comments
 CREATE TABLE comments (
     id SERIAL PRIMARY KEY,
-    post_id INTEGER REFERENCES posts(id),
-    user_id INTEGER REFERENCES users(id),
+    post_id INTEGER REFERENCES posts(id) ON DELETE CASCADE, -- new
+    user_id INTEGER REFERENCES users(id) ON DELETE CASCADE, -- new
     content TEXT NOT NULL,
     is_flagged BOOLEAN DEFAULT FALSE,
-    created_at TIMESTAMP DEFAULT NOW()
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Direct messages -- new
+CREATE TABLE direct_messages (
+    id SERIAL PRIMARY KEY,
+    sender_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+    receiver_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+    content TEXT NOT NULL,
+    is_read BOOLEAN DEFAULT FALSE,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- CLINICIAN ALERTS --new
+CREATE TABLE clinician_alerts (
+    id SERIAL PRIMARY KEY,
+    patient_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+    alert_type VARCHAR(30) NOT NULL, -- bp | glucose | kick | sos | domestic | ppd | hemorrhage
+    severity VARCHAR(20) DEFAULT 'critical',
+    title TEXT NOT NULL,
+    body TEXT,
+    meta TEXT,
+    is_dismissed BOOLEAN DEFAULT FALSE,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Appointments -- new
+CREATE TABLE appointments (
+    id SERIAL PRIMARY KEY,
+    patient_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+    doctor_name VARCHAR(100),
+    appt_date DATE,
+    appt_time VARCHAR(20),
+    status VARCHAR(20) DEFAULT 'confirmed',
+    created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
 -- ==========================================
