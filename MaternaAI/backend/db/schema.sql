@@ -41,7 +41,7 @@ CREATE TABLE health_logs (
 -- PPD assessments (Edinburgh scale)
 CREATE TABLE ppd_assessments (
     id SERIAL PRIMARY KEY,
-    user_id INTEGER REFERENCES users(id),
+    user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
     answers JSONB NOT NULL,            -- {q1: 2, q2: 1, ...}
     total_score INTEGER NOT NULL,
     risk_level VARCHAR(20),            -- 'low', 'moderate', 'high'
@@ -70,7 +70,7 @@ CREATE TABLE nutrition_plans (
     trimester INTEGER,
     conditions TEXT[],                 -- ['anemia', 'gestational_diabetes']
     generated_plan TEXT,               -- LLM generated meal plan
-    created_at TIMESTAMP DEFAULT NOW()
+    created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
 -- Fetal Kick Sessions
@@ -185,7 +185,7 @@ CREATE TABLE knowledge_chunks (
     source VARCHAR(200),               -- e.g. 'WHO Maternal Health Guidelines'
     category VARCHAR(50),              -- 'danger_signs', 'nutrition', 'ppd', 'general'
     content TEXT NOT NULL,             -- the actual text chunk
-    embedding vector(768),             -- pgvector column (768 dims for Google embedding)
+    embedding vector(1024),             -- pgvector column (1024 dims for Google embedding)
     created_at TIMESTAMP DEFAULT NOW()
 );
 

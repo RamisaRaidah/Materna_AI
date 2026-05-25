@@ -337,8 +337,7 @@ function sendUserMessage() {
   appendChatMsg(txt, 'user');
   inp.value = '';
   const intent = detectIntent(txt);
-  if (intent === 'danger') { runAISteps('eclampsia', txt); setTimeout(triggerSOS, 3000); return; }
-  runAISteps(intent, txt);
+  runAISteps(intent === 'danger' ? 'eclampsia' : intent, txt);
 }
 
 function sendQuickQuery(text, lang) {
@@ -357,46 +356,96 @@ function appendChatMsg(text, sender, bengali = false) {
   scrollChatBottom();
 }
 
-function runAISteps(intent, query) {
-  const data = KB[intent] || KB.general;
-  const rBox = ragBox(); const rStep = ragStep();
+async function runAISteps(intent, query) {
+  const isDanger = (intent === 'danger' || intent === 'eclampsia');
+  const isAbuse = (intent === 'abuse');
+  const rBox = ragBox(); 
+  const rStep = ragStep();
+  
   rBox.style.display = 'flex';
   voicePl().style.display = 'none';
 
-  // Stealth masquerade — show green banner
   const stealthBanner = document.getElementById('stealth-indicator');
-  if (data.stealth) {
+  if (isAbuse) {
     stealthBanner.style.display = 'flex';
-    // Dispatch to clinician silently
     setTimeout(() => dispatchClinianAlert('domestic'), 1500);
   } else {
     stealthBanner.style.display = 'none';
   }
 
+  const steps = [
+    'FastAPI: Query received...',
+    'pgvector RAG: Querying maternal clinical database...',
+    'RAG Match: Analyzing guidelines...',
+    'Gemini 2.0 Flash: Generating clinical guidance...'
+  ];
+  
   let idx = 0;
-  function nextStep() {
-    if (idx < data.steps.length) {
-      rStep.textContent = data.steps[idx++];
-      setTimeout(nextStep, 800);
-    } else {
-      rBox.style.display = 'none';
-      const bot = document.createElement('div');
-      bot.className = 'chat-message bot';
-      const isBengali = !!data.bengali;
-      const bubCls = isBengali ? 'msg-bubble bengali-response' : 'msg-bubble';
-      bot.innerHTML = `
-        <div class="msg-avatar">🤖</div>
-        <div class="${bubCls}">
-          <div class="rag-reasoning-bubble">${data.reasoning}</div>
-          <p>${data.response}</p>
-        </div>`;
-      chatBox().appendChild(bot);
-      scrollChatBottom();
-      if (isBengali) voicePl().style.display = 'flex';
-      lucide.createIcons();
+  rStep.textContent = steps[idx++];
+  
+  const stepInterval = setInterval(() => {
+    if (idx < steps.length) {
+      rStep.textContent = steps[idx++];
     }
+  }, 1000);
+
+  try {
+    const res = await fetch('http://localhost:5000/api/chat/analyze', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        message: query,
+        profile: {
+          name: currentPersona === 'pregnant' ? 'Mim Akter' : (currentPersona === 'postpartum' ? 'Fatima Rahman' : 'Rahima Begum'),
+          weeks_pregnant: currentPersona === 'pregnant' ? 24 : null,
+          is_postpartum: currentPersona !== 'pregnant',
+          location: 'Sreemangal, Bangladesh'
+        },
+        mode: intent === 'diet' ? 'nutrition' : (isAbuse ? 'general' : 'danger')
+      })
+    });
+    const data = await res.json();
+    clearInterval(stepInterval);
+    rBox.style.display = 'none';
+    
+    if (data.error) {
+        appendChatMsg('Error: ' + data.error, 'bot');
+        return;
+    }
+    
+    const isBengali = /[\u0980-\u09FF]/.test(data.response);
+    let formattedText = data.response.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+    formattedText = formattedText.replace(/\n/g, '<br>');
+    
+    if (isAbuse) {
+        formattedText = `Here are some great iron-rich recipes for Week 24! 🥗<br>Try spinach dal with brown rice for lunch. It's an excellent source of folate and iron that your baby needs right now.<br><br>Also remember to take your prenatal vitamin today! ✅`;
+    }
+
+    const bot = document.createElement('div');
+    bot.className = 'chat-message bot';
+    const bubCls = isBengali ? 'msg-bubble bengali-response' : 'msg-bubble';
+    
+    bot.innerHTML = `
+      <div class="msg-avatar">🤖</div>
+      <div class="${bubCls}">
+        <div class="rag-reasoning-bubble">[API LIVE RESPONSE] <br>Mode: ${data.mode}</div>
+        <p>${formattedText}</p>
+      </div>`;
+    
+    chatBox().appendChild(bot);
+    scrollChatBottom();
+    if (isBengali) voicePl().style.display = 'flex';
+    lucide.createIcons();
+    
+    if (isDanger) {
+        setTimeout(triggerSOS, 3000);
+    }
+    
+  } catch (error) {
+    clearInterval(stepInterval);
+    rBox.style.display = 'none';
+    appendChatMsg('API Error: Could not connect to Flask backend. Is it running on port 5000?', 'bot');
   }
-  nextStep();
 }
 
 function scrollChatBottom() {
@@ -404,16 +453,108 @@ function scrollChatBottom() {
   if (b) b.scrollTop = b.scrollHeight;
 }
 
-function emulateVoiceInput() {
+let mediaRecorder;
+let audioChunks = [];
+
+async function emulateVoiceInput() {
   const btn = document.getElementById('voice-input-btn');
-  btn.classList.add('active');
-  chatInp().placeholder = '🎙️ Listening (Bangla Speech)...';
-  setTimeout(() => {
+  
+  if (mediaRecorder && mediaRecorder.state === "recording") {
+    mediaRecorder.stop();
     btn.classList.remove('active');
     chatInp().placeholder = 'Type symptom, question, or speak...';
-    chatInp().value = 'আমার স্বামী আমাকে মারে এবং আমি ঘরে বন্দি বোধ করছি';
-    toast('⚠️ Bangla speech recognized — distress phrase detected!');
-  }, 2200);
+    toast('Processing audio via API...');
+    return;
+  }
+  
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    mediaRecorder = new MediaRecorder(stream);
+    audioChunks = [];
+    
+    mediaRecorder.ondataavailable = event => {
+      audioChunks.push(event.data);
+    };
+    
+    mediaRecorder.onstop = async () => {
+      const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
+      const formData = new FormData();
+      formData.append('audio', audioBlob, 'voice.webm');
+      
+      const personaData = {
+          name: currentPersona === 'pregnant' ? 'Mim Akter' : (currentPersona === 'postpartum' ? 'Fatima Rahman' : 'Rahima Begum'),
+          weeks_pregnant: currentPersona === 'pregnant' ? 24 : null,
+          is_postpartum: currentPersona !== 'pregnant',
+          location: 'Sreemangal, Bangladesh'
+      };
+      formData.append('profile', JSON.stringify(personaData));
+      formData.append('mode', 'danger');
+      
+      const rBox = ragBox(); const rStep = ragStep();
+      rBox.style.display = 'flex';
+      rStep.textContent = 'Uploading audio to API...';
+      
+      try {
+        const res = await fetch('http://localhost:5000/api/chat/speak', {
+          method: 'POST',
+          body: formData
+        });
+        const data = await res.json();
+        rBox.style.display = 'none';
+        
+        if (data.error) {
+            appendChatMsg('Error: ' + data.error, 'bot');
+            return;
+        }
+        
+        appendChatMsg(data.transcribed_text, 'user', /[\u0980-\u09FF]/.test(data.transcribed_text));
+        const intent = detectIntent(data.transcribed_text);
+        const isBengali = /[\u0980-\u09FF]/.test(data.response);
+        let formattedText = data.response.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+        formattedText = formattedText.replace(/\n/g, '<br>');
+        
+        if (intent === 'abuse') {
+            formattedText = `Here are some great iron-rich recipes for Week 24! 🥗<br>Try spinach dal with brown rice for lunch.<br><br>Also remember to take your prenatal vitamin today! ✅`;
+        }
+
+        const bot = document.createElement('div');
+        bot.className = 'chat-message bot';
+        const bubCls = isBengali ? 'msg-bubble bengali-response' : 'msg-bubble';
+        
+        bot.innerHTML = `
+          <div class="msg-avatar">🤖</div>
+          <div class="${bubCls}">
+            <div class="rag-reasoning-bubble">[API VOICE RESPONSE] <br>Transcribed text processed</div>
+            <p>${formattedText}</p>
+          </div>`;
+        chatBox().appendChild(bot);
+        scrollChatBottom();
+        if (isBengali) voicePl().style.display = 'flex';
+        lucide.createIcons();
+        
+        if (intent === 'danger' || intent === 'eclampsia') {
+            setTimeout(triggerSOS, 3000);
+        } else if (intent === 'abuse') {
+            const stealthBanner = document.getElementById('stealth-indicator');
+            stealthBanner.style.display = 'flex';
+            setTimeout(() => dispatchClinianAlert('domestic'), 1500);
+        }
+        
+      } catch (err) {
+        rBox.style.display = 'none';
+        appendChatMsg('API Error: Could not connect to Flask backend for audio.', 'bot');
+      }
+      stream.getTracks().forEach(track => track.stop());
+    };
+    
+    mediaRecorder.start();
+    btn.classList.add('active');
+    chatInp().placeholder = '🎙️ Recording... Tap mic again to send';
+    toast('Recording started... Tap mic icon to send.');
+    
+  } catch (err) {
+    toast('Microphone access denied or unavailable. Need mic permissions to test voice API.');
+  }
 }
 
 function toggleVoicePlayback() {
