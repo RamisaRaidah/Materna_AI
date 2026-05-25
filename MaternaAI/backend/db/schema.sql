@@ -31,6 +31,7 @@ CREATE TABLE health_logs (
     transcribed_text TEXT,             -- after Bangla STT
     symptoms TEXT[],                   -- extracted symptom array
     danger_level VARCHAR(20),          -- 'safe', 'warning', 'danger'
+    severity_score INTEGER DEFAULT 0
     llm_response TEXT,                 -- what the AI said back
     flagged_abuse BOOLEAN DEFAULT FALSE,
     flagged_ppd BOOLEAN DEFAULT FALSE,
