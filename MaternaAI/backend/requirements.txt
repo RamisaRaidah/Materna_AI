@@ -3,8 +3,10 @@ flask-cors
 psycopg2-binary
 pgvector
 python-dotenv
-google-genai
+google-generativeai
 requests
 gunicorn
 cohere2
 bcrypt
+cohere
+edge-tts
