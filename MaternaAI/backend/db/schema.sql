@@ -7,11 +7,11 @@ CREATE TABLE users (
     name VARCHAR(100) NOT NULL,
     phone VARCHAR(20) UNIQUE NOT NULL,
     password_hash VARCHAR(255) NOT NULL,
-    role VARCHAR(20) DEFAULT 'patient', -- patient | clinician | admin  -- new
+    role VARCHAR(20) DEFAULT 'patient', -- patient | clinician | admin
     age INTEGER,
     weeks_pregnant INTEGER,        -- NULL if postpartum
     is_postpartum BOOLEAN DEFAULT FALSE,
-    persona VARCHAR(20) DEFAULT 'pregnant', -- pregnant | postpartum | recovery  -- new
+    persona VARCHAR(20) DEFAULT 'pregnant', -- pregnant | postpartum | recovery
     due_date DATE,
     location VARCHAR(100),         -- district/division in Bangladesh
     emergency_contact VARCHAR(20),
@@ -22,11 +22,11 @@ CREATE TABLE users (
 CREATE TABLE health_logs (
     id SERIAL PRIMARY KEY,
     user_id INTEGER REFERENCES users(id),
-    bp_systolic INTEGER, -- new
-    bp_diastolic INTEGER, -- new
-    blood_glucose NUMERIC(5,2), -- new
-    weight_gain NUMERIC(5,2), -- new
-    water_intake NUMERIC(4,2), -- new
+    bp_systolic INTEGER CHECK (bp_systolic BETWEEN 70 AND 250),
+    bp_diastolic INTEGER CHECK (bp_diastolic BETWEEN 40 AND 150),
+    blood_glucose NUMERIC(5,2),
+    weight_gain NUMERIC(5,2),
+    water_intake NUMERIC(4,2),
     raw_input TEXT NOT NULL,           -- original voice/text input
     transcribed_text TEXT,             -- after Bangla STT
     symptoms TEXT[],                   -- extracted symptom array
@@ -34,6 +34,7 @@ CREATE TABLE health_logs (
     llm_response TEXT,                 -- what the AI said back
     flagged_abuse BOOLEAN DEFAULT FALSE,
     flagged_ppd BOOLEAN DEFAULT FALSE,
+    CHECK (bp_systolic > bp_diastolic),
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
@@ -53,7 +54,7 @@ CREATE TABLE birth_plans (
     id SERIAL PRIMARY KEY,
     user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
     hospital_name VARCHAR(100),
-    transport VARCHAR(150), -- new
+    transport VARCHAR(150),
     support_person VARCHAR(100),
     pain_preference VARCHAR(50),
     special_notes TEXT,
@@ -72,7 +73,7 @@ CREATE TABLE nutrition_plans (
     created_at TIMESTAMP DEFAULT NOW()
 );
 
--- Fetal Kick Sessions -- new
+-- Fetal Kick Sessions
 CREATE TABLE kick_sessions (
     id SERIAL PRIMARY KEY,
     user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
@@ -83,7 +84,7 @@ CREATE TABLE kick_sessions (
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- Chat messages  -- new
+-- Chat messages
 CREATE TABLE chat_messages (
     id SERIAL PRIMARY KEY,
     user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
@@ -94,7 +95,7 @@ CREATE TABLE chat_messages (
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- Community Groups -- new
+-- Community Groups
 CREATE TABLE groups (
     id SERIAL PRIMARY KEy,
     name VARCHAR(150) NOT NULL,
@@ -108,7 +109,7 @@ CREATE TABLE groups (
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- Group members -- new
+-- Group members
 CREATE TABLE group_members (
     group_id INTEGER REFERENCES groups(id) ON DELETE CASCADE,
     user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
@@ -119,8 +120,8 @@ CREATE TABLE group_members (
 -- Community posts
 CREATE TABLE posts (
     id SERIAL PRIMARY KEY,
-    group_id INTEGER REFERENCES groups(id) ON DELETE CASCADE, -- new
-    user_id INTEGER REFERENCES users(id) ON DELETE CASCADE, -- new
+    group_id INTEGER REFERENCES groups(id) ON DELETE CASCADE,
+    user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
     content TEXT NOT NULL,
     is_anonymous BOOLEAN DEFAULT FALSE,
     is_flagged BOOLEAN DEFAULT FALSE,  -- AI moderation flag
@@ -132,14 +133,14 @@ CREATE TABLE posts (
 -- Community comments
 CREATE TABLE comments (
     id SERIAL PRIMARY KEY,
-    post_id INTEGER REFERENCES posts(id) ON DELETE CASCADE, -- new
-    user_id INTEGER REFERENCES users(id) ON DELETE CASCADE, -- new
+    post_id INTEGER REFERENCES posts(id) ON DELETE CASCADE,
+    user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
     content TEXT NOT NULL,
     is_flagged BOOLEAN DEFAULT FALSE,
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- Direct messages -- new
+-- Direct messages
 CREATE TABLE direct_messages (
     id SERIAL PRIMARY KEY,
     sender_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
@@ -149,7 +150,7 @@ CREATE TABLE direct_messages (
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- CLINICIAN ALERTS --new
+-- CLINICIAN ALERTS
 CREATE TABLE clinician_alerts (
     id SERIAL PRIMARY KEY,
     patient_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
@@ -162,7 +163,7 @@ CREATE TABLE clinician_alerts (
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- Appointments -- new
+-- Appointments
 CREATE TABLE appointments (
     id SERIAL PRIMARY KEY,
     patient_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
