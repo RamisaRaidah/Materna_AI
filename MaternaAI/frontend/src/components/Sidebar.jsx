@@ -20,7 +20,7 @@ const Sidebar = ({ isOpen, setIsOpen }) => {
   const navigate = useNavigate();
 
   const navItems = [
-    { name: 'Home / Dashboard', path: '/', icon: Home },
+    { name: 'Home', path: '/', icon: Home },
     { name: 'AI Voice Assistant', path: '/chat', icon: MessageSquare },
     { name: 'Vitals & Health', path: '/health', icon: Activity },
     { name: 'PPD EPDS Screen', path: '/ppd', icon: Smile },
