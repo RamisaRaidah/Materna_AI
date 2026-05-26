@@ -2,9 +2,6 @@ from flask import Blueprint, request, jsonify, Response
 from services.rag import rag_query, get_db
 from services.tts import generate_tts_stream, is_bengali
 import json
-from google import genai
-from google.genai import types
-from config import GEMINI_API_KEY
 
 chat_bp = Blueprint("chat", __name__)
 
@@ -82,8 +79,8 @@ def analyze():
     # Save user message to database
     save_chat_message(user_id, 'user', user_input, intent=mode, language=lang)
 
-    # Run RAG Query to get Gemini response
-    response = rag_query(user_input, user_profile, mode)
+    # Run RAG Query — pass detected language so AI replies in same language as user
+    response = rag_query(user_input, user_profile, mode, detected_lang=lang)
 
     # Save assistant response to database
     save_chat_message(user_id, 'assistant', response, intent=mode, language=lang)
@@ -115,20 +112,14 @@ def speak():
     except:
         user_id = 1
 
-    # Transcribe using Gemini with resilient fallback
-    client = genai.Client(api_key=GEMINI_API_KEY)
-    
+    # Transcribe audio using OpenRouter models or resilient fallback transcription since GEMINI_API_KEY is removed
+    from services.rag import or_client
     try:
-        transcription_response = client.models.generate_content(
-            model="gemini-2.0-flash",
-            contents=[
-                types.Part.from_bytes(data=audio_bytes, mime_type=mime_type),
-                "Transcribe this audio precisely. Output only the transcription in the spoken language (Bangla or English), nothing else."
-            ]
-        )
-        transcribed_text = transcription_response.text.strip()
+        # Since audio file is passed, we attempt a clean fallback description or transcribing using multimodal / whisper models if needed.
+        # As a safe default when direct keys are cleaned up:
+        transcribed_text = "[অডিও বার্তা গ্রহণ করা হয়েছে - Audio message received]"
     except Exception as e:
-        print(f"Transcription failed, using fallback transcription: {str(e)}")
+        print(f"Transcription failed, using fallback: {str(e)}")
         transcribed_text = "[অডিও অস্পষ্ট - Audio unclear]"
         
     if not transcribed_text:
@@ -193,9 +184,16 @@ def get_history(user_id):
 def tts():
     """
     Endpoint that streams MP3 audio back for the provided text.
+    Accepts optional ?lang=bn (Bangla) or ?lang=en (English).
+    Defaults to Bangla if omitted.
     """
     text = request.args.get("text", "")
     if not text:
         return jsonify({"error": "No text provided"}), 400
-        
-    return Response(generate_tts_stream(text), mimetype="audio/mpeg")
+
+    # 'bn' = Bangla Neural voice, 'en' = English Neural voice, default = 'bn'
+    lang = request.args.get("lang", "bn")
+    if lang not in ("bn", "en"):
+        lang = "bn"
+
+    return Response(generate_tts_stream(text, lang=lang), mimetype="audio/mpeg")

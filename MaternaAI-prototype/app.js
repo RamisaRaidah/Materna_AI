@@ -14,6 +14,11 @@ let sosEtaInterval = null;
 let currentDMPerson = null;
 let dmConversations = {};
 let epdsScore = 0;
+let lastAiResponseText = "";
+let currentAudio = null;
+let preferredTtsLanguage = "bn";
+let ttsMessageStore = {};
+let ttsMessageCounter = 0;
 
 
 const vitalsHistory = {
@@ -359,11 +364,10 @@ function appendChatMsg(text, sender, bengali = false) {
 async function runAISteps(intent, query) {
   const isDanger = (intent === 'danger' || intent === 'eclampsia');
   const isAbuse = (intent === 'abuse');
-  const rBox = ragBox(); 
+  const rBox = ragBox();
   const rStep = ragStep();
-  
+
   rBox.style.display = 'flex';
-  voicePl().style.display = 'none';
 
   const stealthBanner = document.getElementById('stealth-indicator');
   if (isAbuse) {
@@ -379,10 +383,10 @@ async function runAISteps(intent, query) {
     'RAG Match: Analyzing guidelines...',
     'Gemini 2.0 Flash: Generating clinical guidance...'
   ];
-  
+
   let idx = 0;
   rStep.textContent = steps[idx++];
-  
+
   const stepInterval = setInterval(() => {
     if (idx < steps.length) {
       rStep.textContent = steps[idx++];
@@ -407,41 +411,39 @@ async function runAISteps(intent, query) {
     const data = await res.json();
     clearInterval(stepInterval);
     rBox.style.display = 'none';
-    
+
     if (data.error) {
-        appendChatMsg('Error: ' + data.error, 'bot');
-        return;
+      appendChatMsg('Error: ' + data.error, 'bot');
+      return;
     }
-    
+
     const isBengali = /[\u0980-\u09FF]/.test(data.response);
+    const msgId = `tts-${++ttsMessageCounter}`;
+    ttsMessageStore[msgId] = data.response;
     lastAiResponseText = data.response;
     let formattedText = data.response.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
     formattedText = formattedText.replace(/\n/g, '<br>');
-    
-    if (isAbuse) {
-        formattedText = `Here are some great iron-rich recipes for Week 24! 🥗<br>Try spinach dal with brown rice for lunch. It's an excellent source of folate and iron that your baby needs right now.<br><br>Also remember to take your prenatal vitamin today! ✅`;
-    }
 
     const bot = document.createElement('div');
     bot.className = 'chat-message bot';
     const bubCls = isBengali ? 'msg-bubble bengali-response' : 'msg-bubble';
-    
+
     bot.innerHTML = `
       <div class="msg-avatar">🤖</div>
       <div class="${bubCls}">
         <div class="rag-reasoning-bubble">[API LIVE RESPONSE] <br>Mode: ${data.mode}</div>
         <p>${formattedText}</p>
+        <button class="msg-tts-btn" data-tts-id="${msgId}" onclick="playMessageTTS('${msgId}')">🔊 Listen</button>
       </div>`;
-    
+
     chatBox().appendChild(bot);
     scrollChatBottom();
-    if (isBengali) voicePl().style.display = 'flex';
     lucide.createIcons();
-    
+
     if (isDanger) {
-        setTimeout(triggerSOS, 3000);
+      setTimeout(triggerSOS, 3000);
     }
-    
+
   } catch (error) {
     clearInterval(stepInterval);
     rBox.style.display = 'none';
@@ -454,153 +456,139 @@ function scrollChatBottom() {
   if (b) b.scrollTop = b.scrollHeight;
 }
 
-let mediaRecorder;
-let audioChunks = [];
-let lastAiResponseText = "";
-let currentAudio = null;
+let recognition = null;
+let isRecognizing = false;
 
 async function emulateVoiceInput() {
   const btn = document.getElementById('voice-input-btn');
-  
-  if (mediaRecorder && mediaRecorder.state === "recording") {
-    mediaRecorder.stop();
-    btn.classList.remove('active');
-    chatInp().placeholder = 'Type symptom, question, or speak...';
-    toast('Processing audio via API...');
+  const chatInputEl = chatInp();
+
+  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SpeechRecognition) {
+    toast('Voice recognition is not supported in this browser. Please use Google Chrome or MS Edge.');
     return;
   }
-  
-  try {
-    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-    mediaRecorder = new MediaRecorder(stream);
-    audioChunks = [];
-    
-    mediaRecorder.ondataavailable = event => {
-      audioChunks.push(event.data);
-    };
-    
-    mediaRecorder.onstop = async () => {
-      const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
-      const formData = new FormData();
-      formData.append('audio', audioBlob, 'voice.webm');
-      
-      const personaData = {
-          name: currentPersona === 'pregnant' ? 'Mim Akter' : (currentPersona === 'postpartum' ? 'Fatima Rahman' : 'Rahima Begum'),
-          weeks_pregnant: currentPersona === 'pregnant' ? 24 : null,
-          is_postpartum: currentPersona !== 'pregnant',
-          location: 'Sreemangal, Bangladesh'
-      };
-      formData.append('profile', JSON.stringify(personaData));
-      formData.append('mode', 'danger');
-      
-      const rBox = ragBox(); const rStep = ragStep();
-      rBox.style.display = 'flex';
-      rStep.textContent = 'Uploading audio to API...';
-      
-      try {
-        const res = await fetch('http://localhost:5000/api/chat/speak', {
-          method: 'POST',
-          body: formData
-        });
-        const data = await res.json();
-        rBox.style.display = 'none';
-        
-        if (data.error) {
-            appendChatMsg('Error: ' + data.error, 'bot');
-            return;
-        }
-        
-        appendChatMsg(data.transcribed_text, 'user', /[\u0980-\u09FF]/.test(data.transcribed_text));
-        const intent = detectIntent(data.transcribed_text);
-        const isBengali = /[\u0980-\u09FF]/.test(data.response);
-        lastAiResponseText = data.response;
-        let formattedText = data.response.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
-        formattedText = formattedText.replace(/\n/g, '<br>');
-        
-        if (intent === 'abuse') {
-            formattedText = `Here are some great iron-rich recipes for Week 24! 🥗<br>Try spinach dal with brown rice for lunch.<br><br>Also remember to take your prenatal vitamin today! ✅`;
-        }
 
-        const bot = document.createElement('div');
-        bot.className = 'chat-message bot';
-        const bubCls = isBengali ? 'msg-bubble bengali-response' : 'msg-bubble';
-        
-        bot.innerHTML = `
-          <div class="msg-avatar">🤖</div>
-          <div class="${bubCls}">
-            <div class="rag-reasoning-bubble">[API VOICE RESPONSE] <br>Transcribed text processed</div>
-            <p>${formattedText}</p>
-          </div>`;
-        chatBox().appendChild(bot);
-        scrollChatBottom();
-        if (isBengali) voicePl().style.display = 'flex';
-        lucide.createIcons();
-        
-        if (intent === 'danger' || intent === 'eclampsia') {
-            setTimeout(triggerSOS, 3000);
-        } else if (intent === 'abuse') {
-            const stealthBanner = document.getElementById('stealth-indicator');
-            stealthBanner.style.display = 'flex';
-            setTimeout(() => dispatchClinianAlert('domestic'), 1500);
-        }
-        
-      } catch (err) {
-        rBox.style.display = 'none';
-        appendChatMsg('API Error: Could not connect to Flask backend for audio.', 'bot');
-      }
-      stream.getTracks().forEach(track => track.stop());
+  if (isRecognizing) {
+    if (recognition) {
+      recognition.stop();
+    }
+    return;
+  }
+
+  try {
+    recognition = new SpeechRecognition();
+    recognition.continuous = false;
+    recognition.interimResults = false;
+    
+    // Set to Bangla (Bangladesh) to recognize natural spoken Bangla
+    recognition.lang = 'bn-BD';
+
+    recognition.onstart = () => {
+      isRecognizing = true;
+      btn.classList.add('active');
+      chatInputEl.placeholder = 'শুনছি... Speak in Bangla or English';
+      toast('🎙️ Listening... Speak now!');
     };
-    
-    mediaRecorder.start();
-    btn.classList.add('active');
-    chatInp().placeholder = '🎙️ Recording... Tap mic again to send';
-    toast('Recording started... Tap mic icon to send.');
-    
+
+    recognition.onerror = (event) => {
+      console.error('Speech recognition error:', event.error);
+      isRecognizing = false;
+      btn.classList.remove('active');
+      chatInputEl.placeholder = 'Type symptom, question, or speak...';
+      toast('⚠️ Speech recognition issue: ' + event.error);
+    };
+
+    recognition.onend = () => {
+      isRecognizing = false;
+      btn.classList.remove('active');
+      chatInputEl.placeholder = 'Type symptom, question, or speak...';
+    };
+
+    recognition.onresult = async (event) => {
+      const resultText = event.results[0][0].transcript;
+      if (!resultText) return;
+
+      chatInputEl.value = resultText;
+      toast('✍️ Captured: "' + resultText + '"');
+
+      // Submit the text to unified analysis pathway automatically
+      sendUserMessage();
+    };
+
+    recognition.start();
+
   } catch (err) {
-    toast('Microphone access denied or unavailable. Need mic permissions to test voice API.');
+    console.error('Failed to start Web Speech Recognition:', err);
+    btn.classList.remove('active');
+    chatInputEl.placeholder = 'Type symptom, question, or speak...';
+    toast('❌ Microphone access denied or error starting voice input.');
   }
 }
 
-function toggleVoicePlayback() {
-  const pl = voicePl();
-  const icon = document.getElementById('tts-icon');
-  
-  // If playing, stop it
-  if (currentAudio && !currentAudio.paused) {
-    currentAudio.pause();
-    currentAudio.currentTime = 0;
-    pl.classList.remove('playing');
-    icon.setAttribute('data-lucide', 'play');
-    lucide.createIcons();
+
+
+function playMessageTTS(msgId) {
+  const text = ttsMessageStore[msgId];
+  if (!text) {
+    toast('No voice message to play.');
     return;
   }
-  
-  if (!lastAiResponseText) {
-      toast('No voice message to play.');
-      return;
+
+  const btn = document.querySelector(`[data-tts-id="${msgId}"]`);
+
+  // If playing this exact message, stop it
+  if (currentAudio && !currentAudio.paused && currentAudio.src.includes(encodeURIComponent(text))) {
+    currentAudio.pause();
+    currentAudio.currentTime = 0;
+    if (btn) {
+      btn.innerHTML = '🔊 Listen';
+      btn.classList.remove('playing');
+    }
+    toast('Voice message stopped.');
+    return;
   }
-  
-  // Start playing
-  pl.classList.add('playing');
-  icon.setAttribute('data-lucide', 'square');
-  lucide.createIcons();
-  toast('🔊 Playing TTS voice response...');
-  
-  const url = `http://localhost:5000/api/chat/tts?text=${encodeURIComponent(lastAiResponseText)}`;
-  currentAudio = new Audio(url);
-  
-  currentAudio.play().catch(err => {
-      console.error("Audio playback failed:", err);
-      toast('Audio playback failed.');
-      pl.classList.remove('playing');
-      icon.setAttribute('data-lucide', 'play');
-      lucide.createIcons();
+
+  // Stop any other playing audio
+  if (currentAudio) {
+    currentAudio.pause();
+    currentAudio.currentTime = 0;
+  }
+
+  // Find all other play buttons to reset their state
+  document.querySelectorAll('.msg-tts-btn').forEach(b => {
+    b.innerHTML = '🔊 Listen';
+    b.classList.remove('playing');
   });
-  
+
+  if (btn) {
+    btn.innerHTML = '⏹️ Stop';
+    btn.classList.add('playing');
+  }
+
+  // Auto-detect voice language based on text content (Bangla Unicode vs English)
+  const isBengaliText = /[\u0980-\u09FF]/.test(text);
+  const detectedLang = isBengaliText ? 'bn' : 'en';
+
+  toast(`🔊 Playing TTS (${detectedLang === 'bn' ? 'Bangla' : 'English'})...`);
+
+  const url = `http://localhost:5000/api/chat/tts?text=${encodeURIComponent(text)}&lang=${detectedLang}`;
+  currentAudio = new Audio(url);
+
+  currentAudio.play().catch(err => {
+    console.error("Audio playback failed:", err);
+    toast('Audio playback failed.');
+    if (btn) {
+      btn.innerHTML = '🔊 Listen';
+      btn.classList.remove('playing');
+    }
+  });
+
   currentAudio.onended = () => {
-      pl.classList.remove('playing');
-      icon.setAttribute('data-lucide', 'play');
-      lucide.createIcons();
+    if (btn) {
+      btn.innerHTML = '🔊 Listen';
+      btn.classList.remove('playing');
+    }
   };
 }
 

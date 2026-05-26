@@ -5201,3 +5201,62 @@ body {
 .loading-spinner {
   animation: spin 1s linear infinite;
 }
+
+.tts-lang-toggle-badge {
+  background: rgba(225, 164, 196, 0.15);
+  border: 1px solid rgba(225, 164, 196, 0.3);
+  color: var(--secondary-blush);
+  font-size: 0.55rem;
+  font-weight: 800;
+  padding: 2px 6px;
+  border-radius: 10px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.2s ease;
+  outline: none;
+}
+
+.tts-lang-toggle-badge:hover {
+  background: var(--primary-mauve);
+  color: #fff;
+  border-color: var(--primary-mauve);
+}
+
+/* Premium Per-Message TTS Listen Button Styles */
+.msg-tts-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: rgba(171, 115, 151, 0.08);
+  border: 1px solid rgba(171, 115, 151, 0.2);
+  color: var(--primary-mauve);
+  font-size: 0.6rem;
+  font-weight: 700;
+  padding: 4px 10px;
+  border-radius: 12px;
+  cursor: pointer;
+  margin-top: 6px;
+  transition: all 0.2s ease;
+  font-family: var(--font-english);
+  outline: none;
+}
+
+.msg-tts-btn:hover {
+  background: var(--primary-mauve);
+  color: #fff;
+  border-color: var(--primary-mauve);
+  box-shadow: 0 2px 6px rgba(171, 115, 151, 0.2);
+}
+
+.msg-tts-btn.playing {
+  background: var(--color-danger);
+  color: #fff;
+  border-color: var(--color-danger);
+  animation: pulse-border 1.5s infinite;
+}
+
+@keyframes pulse-border {
+  0% { box-shadow: 0 0 0 0 rgba(217, 61, 89, 0.4); }
+  70% { box-shadow: 0 0 0 4px rgba(217, 61, 89, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(217, 61, 89, 0); }
+}

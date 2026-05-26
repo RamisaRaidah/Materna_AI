@@ -1,10 +1,13 @@
 import psycopg2
 from pgvector.psycopg2 import register_vector
-from google import genai
+import openai
 import cohere
-from config import DATABASE_URL, GEMINI_API_KEY, COHERE_API_KEY
+from config import DATABASE_URL, OPENROUTER_API_KEY, COHERE_API_KEY
 
-client = genai.Client(api_key=GEMINI_API_KEY)
+or_client = openai.OpenAI(
+    base_url="https://openrouter.ai/api/v1",
+    api_key=OPENROUTER_API_KEY
+)
 co = cohere.Client(api_key=COHERE_API_KEY)
 
 def get_db():
@@ -63,45 +66,85 @@ def format_context(chunks: list) -> str:
         for c in chunks
     ])
 
-def rag_query(user_input: str, user_profile: dict, mode: str = "danger") -> str:
+def rag_query(user_input: str, user_profile: dict, mode: str = "danger", detected_lang: str = "bn") -> str:
     try:
         chunks = retrieve_context(user_input, category=mode if mode != "general" else None)
         context = format_context(chunks)
-        prompt = build_prompt(user_input, user_profile, context, mode)
+        prompt = build_prompt(user_input, user_profile, context, mode, detected_lang)
 
-        response = client.models.generate_content(
-            model="gemini-2.0-flash",
-            contents=prompt
-        )
-        return response.text
+        response = None
+        last_err = None
+        for model in ["openrouter/free", "meta-llama/llama-3.1-8b-instruct:free", "qwen/qwen-2.5-72b-instruct:free"]:
+            try:
+                response = or_client.chat.completions.create(
+                    model=model,
+                    messages=[{"role": "user", "content": prompt}]
+                )
+                break
+            except Exception as model_err:
+                print(f"Model {model} failed on OpenRouter: {str(model_err)}")
+                last_err = model_err
+        
+        if not response:
+            raise last_err
+
+        return response.choices[0].message.content
     except Exception as e:
-        print(f"RAG Gemini API failed (applying fallback): {str(e)}")
+        print(f"RAG OpenRouter API failed (applying fallback): {str(e)}")
         
-        # Resilience fallbacks to guarantee 100% uptime for local testing under API rate limits
+        # Resilience fallbacks — match user's language
         lower_input = user_input.lower()
-        
         import re as _re
         greeting_pattern = _re.compile(
             r'\b(hello|hi|hey)\b|হ্যালো|সালাম|আসসালামুয়ালাইকুম|ভালো আছেন',
             _re.IGNORECASE
         )
-        if greeting_pattern.search(lower_input):
-            return "আমি ম্যাটারনা এআই। মাতৃস্বাস্থ্য ও সুস্থতা সম্পর্কিত যেকোনো প্রশ্নে আমি আপনার পাশে আছি। আজ কেমন অনুভব করছেন?"
 
-        if mode == "danger":
-            return "আমি আপনার বার্তাটি বুঝেছি। নিজের যত্ন নিন, পর্যাপ্ত বিশ্রাম নিন এবং যদি অস্বস্তি বাড়ে বা উদ্বেগ থাকে তাহলে একজন স্বাস্থ্যসেবা বিশেষজ্ঞের সঙ্গে যোগাযোগ করুন।"
-        elif mode == "ppd":
-            return "আপনার অনুভূতিগুলো গুরুত্বপূর্ণ। নিজের জন্য একটু সময় নিন, কাছের মানুষের সাথে কথা বলুন এবং প্রয়োজন হলে সহায়তা নিতে দ্বিধা করবেন না।"
-        elif mode == "nutrition":
-            return "সুস্থ থাকার জন্য নিয়মিত পুষ্টিকর খাবার, পর্যাপ্ত পানি এবং পর্যাপ্ত বিশ্রাম খুবই গুরুত্বপূর্ণ। ছোট ছোট স্বাস্থ্যকর অভ্যাসও বড় পরিবর্তন আনতে পারে।"
+        if detected_lang == 'en':
+            if greeting_pattern.search(lower_input):
+                return "I'm MaternaAI, your caring maternal health companion. I'm here for you every step of the way — how are you feeling today?"
+            if mode == "danger":
+                return "I hear you, and I care about your wellbeing. Please rest, stay hydrated, and if your discomfort increases, reach out to a healthcare provider soon."
+            elif mode == "ppd":
+                return "Your feelings are completely valid. Take a gentle moment for yourself, talk to someone you trust, and remember — you are never alone in this."
+            elif mode == "nutrition":
+                return "Nourishing yourself with wholesome local foods, plenty of water, and enough rest is so important right now. How has your appetite been lately?"
+            else:
+                return "Thank you for reaching out. I'm here to support you with any maternal health questions — what would you like to talk about?"
         else:
-            return "আপনার বার্তার জন্য ধন্যবাদ। মাতৃস্বাস্থ্য ও সুস্থতা সম্পর্কিত যেকোনো সাধারণ প্রশ্নে আমি সহায়তা করার চেষ্টা করব।"
+            if greeting_pattern.search(lower_input):
+                return "আমি ম্যাটারনা এআই, আপনার যত্নশীল স্বাস্থ্য সহায়িকা। আপনার প্রতিটি পদক্ষেপে আমি আপনার পাশে আছি। আজ কেমন অনুভব করছেন?"
+            if mode == "danger":
+                return "আমি আপনার কথা শুনছি এবং আপনার সুস্থতার জন্য চিন্তিত। একটু বিশ্রাম নিন, পানি পান করুন — আর যদি অস্বস্তি বাড়ে, তাহলে দ্রুত একজন ডাক্তারের সাথে কথা বলুন।"
+            elif mode == "ppd":
+                return "আপনার অনুভূতিগুলো একদম স্বাভাবিক এবং গুরুত্বপূর্ণ। নিজের জন্য একটু সময় নিন, কাছের কাউকে মনের কথা বলুন — মনে রাখবেন, আপনি একা নন।"
+            elif mode == "nutrition":
+                return "পুষ্টিকর দেশীয় খাবার, পর্যাপ্ত পানি আর ভালো বিশ্রাম এখন আপনার জন্য সবচেয়ে জরুরি। আজকে আপনার খাওয়ার রুচি কেমন ছিল?"
+            else:
+                return "আপনার বার্তার জন্য আন্তরিক ধন্যবাদ। মাতৃস্বাস্থ্য বিষয়ে যেকোনো প্রশ্নে আমি সাহায্য করতে এখানে আছি — আপনি কী জানতে চান?"
 
-def build_prompt(user_input: str, user_profile: dict, context: str, mode: str) -> str:
-    base_system = f"""You are MaternaAI, a compassionate maternal health assistant 
-for women in Bangladesh. You respond in simple, warm language.
-Always respond in the same language the user writes in (Bangla or English).
-Never give a definitive medical diagnosis. Always recommend consulting a doctor for serious concerns.
+def build_prompt(user_input: str, user_profile: dict, context: str, mode: str, detected_lang: str = "bn") -> str:
+    if detected_lang == 'en':
+        lang_rule = """ABSOLUTE LANGUAGE RULE: You MUST respond ENTIRELY in warm, simple English.
+Every single word must be in English. Do NOT use any Bangla script, Arabic, or any other language.
+If you write even one word in another language, you have failed."""
+    else:
+        lang_rule = """ABSOLUTE LANGUAGE RULE: আপনাকে সম্পূর্ণ প্রাকৃতিক, সহজ বাংলায় উত্তর দিতে হবে।
+প্রতিটি শব্দ অবশ্যই বাংলায় হতে হবে। কোনো ইংরেজি, আরবি বা অন্য ভাষা ব্যবহার করবেন না।
+আপনি যদি অন্য ভাষায় একটি শব্দও লেখেন, তাহলে আপনি ব্যর্থ হয়েছেন।"""
+
+    base_system = f"""You are MaternaAI, a compassionate maternal health companion for women in Bangladesh.
+You speak in a warm, loving, and supportive tone, like a caring elder sister (Apu) or a gentle community midwife.
+
+{lang_rule}
+
+OTHER CRITICAL INSTRUCTIONS:
+1. LENGTH: Be extremely brief — 2 to 3 warm sentences only. No bullet points or long paragraphs.
+2. CONVERSATIONAL FLOW:
+   - Acknowledge their situation with deep empathy first.
+   - Suggest one simple, comforting step or local remedy.
+   - End with exactly ONE warm, open-ended follow-up question.
+3. CLINICAL SAFETY: Never diagnose. If danger signs are mentioned, gently encourage seeing a doctor.
 
 User Profile:
 - Name: {user_profile.get('name', 'Unknown')}
@@ -109,35 +152,17 @@ User Profile:
 - Is postpartum: {user_profile.get('is_postpartum', False)}
 - Location: {user_profile.get('location', 'Bangladesh')}
 
-Relevant Medical Knowledge:
+Medical Knowledge Context (Use this to guide your advice naturally):
 {context}
 """
 
     if mode == "danger":
-        task = """Analyze the user's reported symptoms carefully.
-1. Identify any danger signs based on the medical knowledge provided.
-2. Rate danger level: SAFE / WARNING / DANGER
-3. Explain what the symptoms might indicate in simple terms.
-4. Give clear next steps (rest at home / see doctor soon / go to emergency NOW).
-5. Also gently check if there are any signs of emotional distress or domestic abuse.
-Respond warmly and clearly."""
-
+        task = "Acknowledge their symptom with warmth and care. Briefly state if it could be a warning sign, suggest a simple comforting step, and ask one gentle question to analyze the severity."
     elif mode == "ppd":
-        task = """The user may be experiencing postpartum depression.
-1. Acknowledge their feelings with empathy first.
-2. Based on what they shared, assess PPD risk: LOW / MODERATE / HIGH.
-3. Provide 3-4 practical coping suggestions.
-4. Encourage them to seek professional help if risk is moderate or high.
-5. Remind them they are not alone and this is a medical condition, not a weakness."""
-
+        task = "Respond with deep empathy and reassurance. Remind them they are not alone. Suggest one simple emotional self-care action, and ask one warm question about how they are sleeping or feeling."
     elif mode == "nutrition":
-        task = """Create a personalized daily nutrition plan.
-1. Consider their trimester and any conditions mentioned.
-2. Suggest 3 meals and 2 snacks with locally available Bangladeshi foods.
-3. Highlight key nutrients needed (iron, folate, calcium, protein).
-4. Keep suggestions affordable and realistic for Bangladesh."""
-
+        task = "Suggest one healthy, affordable local food item rich in iron/folate suitable for their trimester. Ask one warm question about their daily meals or appetite."
     else:
-        task = "Answer the user's question using the medical knowledge provided. Be warm, clear, and concise."
+        task = "Answer their question in a highly warm, supportive, and extremely concise manner. Ask one friendly follow-up question to keep the conversation interactive."
 
     return f"{base_system}\n\nTask: {task}\n\nUser says: {user_input}"
