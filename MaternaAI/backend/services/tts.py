@@ -13,14 +13,26 @@ def is_bengali(text: str) -> bool:
     # 2. Banglish detection (Bangla words written in English alphabet)
     # Common Banglish phonetic words/patterns
     banglish_keywords = [
+        # Pronouns, basic particles, and question words
+        "ami", "amr", "amar", "aamar", "amra", "apni", "apnr", "apnar", "apnara", "tumi", "tomar", "tui", "tomra",
+        "ki", "keno", "kothay", "kothai", "kokhon", "kibhabe", "kivabe", "kar", "ke", "kemne", "kmne",
+        "tai", "toh", "to", "na", "ha", "ji", "jee", "kintu", "ebong", "athoba", "chai",
         # Greetings & feelings
-        "ki korbo", "amar", "aamar", "betha", "byatha", "kore", "korche", "kemoi", "kemon", "bhalo", "bhala",
-        "ache", "achen", "asundor", "shundor", "sundor", "matha", "ghuraitse", "ghuracche", "pet", "pete",
-        # Common particles & verbs
-        "hobe", "hobe na", "khabo", "khaite", "khaitese", "ashche", "aschhe", "hacche", "hoy", "hoye", "kora",
-        # Safety & maternal terms
+        "ki korbo", "betha", "byatha", "batha", "kore", "korche", "korse", "korsen", "korchen", "koira", 
+        "kemoi", "kemon", "bhalo", "bhala", "valo", "ache", "achen", "ase", "asen", "asundor", "shundor", 
+        "sundor", "matha", "ghuraitse", "ghuracche", "pet", "pete",
+        # Common verbs & particles
+        "hobe", "hobe na", "khabo", "khaite", "khaitese", "khamu", "ashche", "aschhe", "hacche", "hoy", "hoye", 
+        "kora", "korbo", "korben", "koren", "koro", "koris", "hoise", "hoyse", "hoiyeche", "hoyeche", "giyese", 
+        "geche", "gese", "dorkar", "proyojon", "lagbe", "bolen", "bolben", "bujhte", "parchi", "parsi", "janen", 
+        "shunben", "onek", "khub", "shomossa", "somossa", "bujhi", "jani",
+        # Safety, family, & maternal terms
         "baccha", "bacha", "bachha", "shishu", "sishu", "gorbho", "gorvoboti", "ma", "maa", "baba",
-        "shami", "sami", "daktar", "dakter", "apa", "apu", "bon", "nani", "dadi"
+        "shami", "sami", "daktar", "dakter", "apa", "apu", "bon", "nani", "dadi", "bhaia", "bhaiya", "bhai",
+        # Mental state / feelings
+        "chinta", "voy", "bhoy", "kosto", "mon", "kharap", "kanna", "hashi", "ghum", "khide", "khida",
+        # Danger / health terms
+        "rokto", "rokto-khoron", "srab", "jhor", "jor", "bomi", "vomit", "kashi", "shash", "sas"
     ]
     
     lower_text = text.lower()

@@ -80,9 +80,9 @@ def analyze():
     # Save user message to database
     save_chat_message(user_id, 'user', user_input, intent=mode, language=lang)
 
-    # Run RAG Query — pass detected language so AI replies in same language as user
+    # Run RAG Query — pass detected language and user_id to leverage history context
     try:
-        response = rag_query(user_input, user_profile, mode, detected_lang=lang)
+        response = rag_query(user_input, user_profile, mode, detected_lang=lang, user_id=user_id)
     except Exception as e:
         print("RAG failed:", e)
         response = "দুঃখিত, এখন উত্তর দিতে সমস্যা হচ্ছে। পরে আবার চেষ্টা করুন।"
@@ -136,9 +136,9 @@ def speak():
     # Save user speech transcription to database
     save_chat_message(user_id, 'user', transcribed_text, intent=mode, language=lang)
 
-    # Pass transcribed text to RAG
+    # Pass transcribed text to RAG with history context
     try:
-        response = rag_query(transcribed_text, user_profile, mode)
+        response = rag_query(transcribed_text, user_profile, mode, detected_lang=lang, user_id=user_id)
     except Exception as e:
         print("RAG failed:", e)
         response = "দুঃখিত, সমস্যা হয়েছে।"

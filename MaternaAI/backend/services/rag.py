@@ -2,7 +2,11 @@ import psycopg2
 from pgvector.psycopg2 import register_vector
 import openai
 import cohere
-from config import DATABASE_URL, OPENROUTER_API_KEY, COHERE_API_KEY
+import google.generativeai as genai
+from config import DATABASE_URL, OPENROUTER_API_KEY, COHERE_API_KEY, GEMINI_API_KEY
+
+if GEMINI_API_KEY:
+    genai.configure(api_key=GEMINI_API_KEY)
 
 or_client = openai.OpenAI(
     base_url="https://openrouter.ai/api/v1",
@@ -66,19 +70,154 @@ def format_context(chunks: list) -> str:
         for c in chunks
     ])
 
-def rag_query(user_input: str, user_profile: dict, mode: str = "danger", detected_lang: str = "bn") -> str:
+def get_recent_history(user_id: int, limit: int = 6) -> list:
+    if not user_id:
+        return []
+    conn = None
+    try:
+        conn = get_db()
+        cur = conn.cursor()
+        cur.execute("""
+            SELECT role, content
+            FROM chat_messages
+            WHERE user_id = %s
+            ORDER BY id DESC
+            LIMIT %s
+        """, (user_id, limit))
+        rows = cur.fetchall()
+        cur.close()
+        # The query returns in reverse order (newest first). Reverse it to chronological.
+        rows.reverse()
+        return [{"role": r[0], "content": r[1]} for r in rows]
+    except Exception as e:
+        print("Error fetching history for RAG:", e)
+        return []
+    finally:
+        if conn:
+            conn.close()
+
+def build_system_prompt(user_profile: dict, context: str, mode: str, detected_lang: str = "bn") -> str:
+    if detected_lang == 'en':
+        lang_rule = """ABSOLUTE LANGUAGE RULE: You MUST respond ENTIRELY in warm, simple English.
+Every single word must be in English. Do NOT use any Bangla script, Arabic, or any other language.
+If you write even one word in another language, you have failed."""
+    else:
+        lang_rule = """ABSOLUTE LANGUAGE RULE:
+1. You MUST respond ENTIRELY in warm, natural, and standard native Bengali (বাংলা).
+2. Use standard Bengali script (Unicode).
+3. Do NOT mix different languages. Specifically, do NOT use Hindi words, Hindi grammar, or mixed gibberish (e.g. avoid words like "kaise", "muhe", "bahar", "dori").
+4. Every single word of your response must be in fluent Bengali, using local and supportive phrasing like a caring elder sister (Apu) or gentle midwife."""
+
+    base_system = f"""You are MaternaAI, a compassionate maternal health companion for women in Bangladesh.
+You speak in a warm, loving, and supportive tone, like a caring elder sister (Apu) or a gentle community midwife.
+
+{lang_rule}
+
+OTHER CRITICAL INSTRUCTIONS:
+1. LENGTH: Be extremely brief — 2 to 3 warm sentences only. No bullet points or long paragraphs.
+2. CONVERSATIONAL FLOW:
+   - Acknowledge their situation with deep empathy first.
+   - Suggest one simple, comforting step or local remedy.
+   - End with exactly ONE warm, open-ended follow-up question.
+3. CLINICAL SAFETY: Never diagnose. If danger signs are mentioned, gently encourage seeing a doctor.
+
+User Profile:
+- Name: {user_profile.get('name', 'Unknown')}
+- Weeks pregnant: {user_profile.get('weeks_pregnant', 'Unknown')}
+- Is postpartum: {user_profile.get('is_postpartum', False)}
+- Location: {user_profile.get('location', 'Bangladesh')}
+
+Medical Knowledge Context (Use this to guide your advice naturally):
+{context}
+"""
+
+    if mode == "danger":
+        task = "Acknowledge their symptom with warmth and care. Briefly state if it could be a warning sign, suggest a simple comforting step, and ask one gentle question to analyze the severity."
+    elif mode == "ppd":
+        task = "Respond with deep empathy and reassurance. Remind them they are not alone. Suggest one simple emotional self-care action, and ask one warm question about how they are sleeping or feeling."
+    elif mode == "nutrition":
+        task = "Suggest one healthy, affordable local food item rich in iron/folate suitable for their trimester. Ask one warm question about their daily meals or appetite."
+    else:
+        task = "Answer their question in a highly warm, supportive, and extremely concise manner. Ask one friendly follow-up question to keep the conversation interactive."
+
+    return f"{base_system}\n\nTask: {task}"
+
+def rag_query(user_input: str, user_profile: dict, mode: str = "danger", detected_lang: str = "bn", user_id: int = 1) -> str:
     try:
         chunks = retrieve_context(user_input, category=mode if mode != "general" else None)
         context = format_context(chunks)
-        prompt = build_prompt(user_input, user_profile, context, mode, detected_lang)
+        
+        system_content = build_system_prompt(user_profile, context, mode, detected_lang)
+        
+        # Build standard messages list incorporating chat history context
+        messages = [{"role": "system", "content": system_content}]
+        
+        history = get_recent_history(user_id, limit=6)
+        
+        # Append history messages, omitting duplication of the current input
+        for msg in history:
+            role = "user" if msg["role"] == "user" else "assistant"
+            content = msg["content"]
+            
+            # If the current user message is already stored in the DB (which it is, since we save before querying),
+            # skip it from the middle of the loop so we can explicitly handle it at the end.
+            if role == "user" and content == user_input:
+                continue
+                
+            messages.append({"role": role, "content": content})
+            
+        # Ensure the current user message is at the end of the history
+        messages.append({"role": "user", "content": user_input})
 
+        # -------------------------------------------------------------
+        # 1. Direct Google Gemini API (Primary high-priority method)
+        # -------------------------------------------------------------
+        if GEMINI_API_KEY:
+            try:
+                # Map standard message format to genai content format
+                # contents expects: [{"role": "user"|"model", "parts": [str]}]
+                gemini_contents = []
+                for msg in messages:
+                    if msg["role"] == "system":
+                        continue
+                    role = "user" if msg["role"] == "user" else "model"
+                    gemini_contents.append({"role": role, "parts": [msg["content"]]})
+                
+                genai_model = genai.GenerativeModel(
+                    model_name="gemini-1.5-flash",
+                    system_instruction=system_content
+                )
+                response_text = genai_model.generate_content(
+                    gemini_contents,
+                    generation_config={"max_output_tokens": 500}
+                ).text
+                
+                if response_text:
+                    print("Direct Gemini API call succeeded!")
+                    return response_text
+            except Exception as gemini_err:
+                print(f"Direct Gemini API failed (trying OpenRouter fallback): {str(gemini_err)}")
+
+        # -------------------------------------------------------------
+        # 2. OpenRouter API Fallback
+        # -------------------------------------------------------------
         response = None
         last_err = None
-        for model in ["openrouter/free", "meta-llama/llama-3.1-8b-instruct:free", "qwen/qwen-2.5-72b-instruct:free"]:
+        
+        # Cleaned up model queue with valid OpenRouter model IDs and a free active fallback
+        model_queue = [
+            "google/gemini-2.5-flash",
+            "qwen/qwen-2.5-72b-instruct",
+            "meta-llama/llama-3.3-70b-instruct",
+            "meta-llama/llama-3.1-8b-instruct:free"
+        ]
+        
+        for model in model_queue:
             try:
                 response = or_client.chat.completions.create(
                     model=model,
-                    messages=[{"role": "user", "content": prompt}]
+                    messages=messages,
+                    max_tokens=500  # Strictly limit worst-case output to fit free accounts/credits
                 )
                 break
             except Exception as model_err:
@@ -122,47 +261,3 @@ def rag_query(user_input: str, user_profile: dict, mode: str = "danger", detecte
                 return "পুষ্টিকর দেশীয় খাবার, পর্যাপ্ত পানি আর ভালো বিশ্রাম এখন আপনার জন্য সবচেয়ে জরুরি। আজকে আপনার খাওয়ার রুচি কেমন ছিল?"
             else:
                 return "আপনার বার্তার জন্য আন্তরিক ধন্যবাদ। মাতৃস্বাস্থ্য বিষয়ে যেকোনো প্রশ্নে আমি সাহায্য করতে এখানে আছি — আপনি কী জানতে চান?"
-
-def build_prompt(user_input: str, user_profile: dict, context: str, mode: str, detected_lang: str = "bn") -> str:
-    if detected_lang == 'en':
-        lang_rule = """ABSOLUTE LANGUAGE RULE: You MUST respond ENTIRELY in warm, simple English.
-Every single word must be in English. Do NOT use any Bangla script, Arabic, or any other language.
-If you write even one word in another language, you have failed."""
-    else:
-        lang_rule = """ABSOLUTE LANGUAGE RULE: আপনাকে সম্পূর্ণ প্রাকৃতিক, সহজ বাংলায় উত্তর দিতে হবে।
-প্রতিটি শব্দ অবশ্যই বাংলায় হতে হবে। কোনো ইংরেজি, আরবি বা অন্য ভাষা ব্যবহার করবেন না।
-আপনি যদি অন্য ভাষায় একটি শব্দও লেখেন, তাহলে আপনি ব্যর্থ হয়েছেন।"""
-
-    base_system = f"""You are MaternaAI, a compassionate maternal health companion for women in Bangladesh.
-You speak in a warm, loving, and supportive tone, like a caring elder sister (Apu) or a gentle community midwife.
-
-{lang_rule}
-
-OTHER CRITICAL INSTRUCTIONS:
-1. LENGTH: Be extremely brief — 2 to 3 warm sentences only. No bullet points or long paragraphs.
-2. CONVERSATIONAL FLOW:
-   - Acknowledge their situation with deep empathy first.
-   - Suggest one simple, comforting step or local remedy.
-   - End with exactly ONE warm, open-ended follow-up question.
-3. CLINICAL SAFETY: Never diagnose. If danger signs are mentioned, gently encourage seeing a doctor.
-
-User Profile:
-- Name: {user_profile.get('name', 'Unknown')}
-- Weeks pregnant: {user_profile.get('weeks_pregnant', 'Unknown')}
-- Is postpartum: {user_profile.get('is_postpartum', False)}
-- Location: {user_profile.get('location', 'Bangladesh')}
-
-Medical Knowledge Context (Use this to guide your advice naturally):
-{context}
-"""
-
-    if mode == "danger":
-        task = "Acknowledge their symptom with warmth and care. Briefly state if it could be a warning sign, suggest a simple comforting step, and ask one gentle question to analyze the severity."
-    elif mode == "ppd":
-        task = "Respond with deep empathy and reassurance. Remind them they are not alone. Suggest one simple emotional self-care action, and ask one warm question about how they are sleeping or feeling."
-    elif mode == "nutrition":
-        task = "Suggest one healthy, affordable local food item rich in iron/folate suitable for their trimester. Ask one warm question about their daily meals or appetite."
-    else:
-        task = "Answer their question in a highly warm, supportive, and extremely concise manner. Ask one friendly follow-up question to keep the conversation interactive."
-
-    return f"{base_system}\n\nTask: {task}\n\nUser says: {user_input}"
