@@ -62,6 +62,72 @@ def list_patients():
            FROM users WHERE role = 'patient' ORDER BY created_at DESC"""
     )
     return jsonify(patients)
+
+
+@clinician_bp.route("/patients/overview", methods=["GET"])
+@require_auth
+def patients_overview():
+    role = g.user.get("role", "patient")
+    if role not in ("clinician", "admin"):
+        return jsonify({"error": "Clinician access required"}), 403
+
+    limit = int(request.args.get("limit", 10))
+    rows = query(
+        """
+        SELECT
+            u.id, u.name, u.phone, u.age, u.weeks_pregnant, u.is_postpartum, u.persona, u.location, u.created_at,
+            hl.bp_systolic, hl.bp_diastolic, hl.blood_glucose, hl.water_intake, hl.danger_level, hl.created_at AS vitals_created_at,
+            ppd.total_score, ppd.risk_level, ppd.created_at AS ppd_created_at
+        FROM users u
+        LEFT JOIN LATERAL (
+            SELECT bp_systolic, bp_diastolic, blood_glucose, water_intake, danger_level, created_at
+            FROM health_logs
+            WHERE user_id = u.id AND bp_systolic IS NOT NULL
+            ORDER BY created_at DESC
+            LIMIT 1
+        ) hl ON TRUE
+        LEFT JOIN LATERAL (
+            SELECT total_score, risk_level, created_at
+            FROM ppd_assessments
+            WHERE user_id = u.id
+            ORDER BY created_at DESC
+            LIMIT 1
+        ) ppd ON TRUE
+        WHERE u.role = 'patient'
+        ORDER BY u.created_at DESC
+        LIMIT %s
+        """,
+        (limit,)
+    )
+
+    overview = []
+    for row in rows:
+        overview.append({
+            "id": row.get("id"),
+            "name": row.get("name"),
+            "phone": row.get("phone"),
+            "age": row.get("age"),
+            "weeks_pregnant": row.get("weeks_pregnant"),
+            "is_postpartum": row.get("is_postpartum"),
+            "persona": row.get("persona"),
+            "location": row.get("location"),
+            "created_at": row.get("created_at"),
+            "latest_vitals": {
+                "bp_systolic": row.get("bp_systolic"),
+                "bp_diastolic": row.get("bp_diastolic"),
+                "blood_glucose": row.get("blood_glucose"),
+                "water_intake": row.get("water_intake"),
+                "danger_level": row.get("danger_level"),
+                "created_at": row.get("vitals_created_at"),
+            },
+            "latest_ppd": {
+                "total_score": row.get("total_score"),
+                "risk_level": row.get("risk_level"),
+                "created_at": row.get("ppd_created_at"),
+            },
+        })
+
+    return jsonify(overview)
  
 
 @clinician_bp.route("/patients/<int:patient_id>/summary", methods=["GET"])

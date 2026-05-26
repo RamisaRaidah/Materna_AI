@@ -19,7 +19,7 @@ const Sidebar = ({ isOpen, setIsOpen }) => {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
 
-  const navItems = [
+  const patientNavItems = [
     { name: 'Home / Dashboard', path: '/', icon: Home },
     { name: 'AI Voice Assistant', path: '/chat', icon: MessageSquare },
     { name: 'Vitals & Health', path: '/health', icon: Activity },
@@ -29,10 +29,16 @@ const Sidebar = ({ isOpen, setIsOpen }) => {
     { name: 'Birth Plan Compiler', path: '/birth-plan', icon: FileText },
   ];
 
-  // If the user is a clinician, we can prioritize the clinician view
-  if (user?.role === 'clinician') {
-    navItems.unshift({ name: 'Clinician Portal', path: '/clinician', icon: ShieldAlert });
-  }
+  const clinicianNavItems = [
+    { name: 'Home / Dashboard', path: '/clinician', icon: ShieldAlert },
+    { name: 'AI Voice Assistant', path: '/clinician/ai-voice', icon: MessageSquare },
+    { name: 'Vitals & Health', path: '/clinician/vitals', icon: Activity },
+    { name: 'PPD EPDS Screen', path: '/clinician/ppd', icon: Smile },
+    { name: 'Community Groups', path: '/clinician/community', icon: Users },
+    { name: 'Nutrition & Diet', path: '/clinician/nutrition', icon: Apple },
+  ];
+
+  const navItems = user?.role === 'clinician' ? clinicianNavItems : patientNavItems;
 
   const handleLogout = () => {
     logout();
@@ -110,7 +116,7 @@ const Sidebar = ({ isOpen, setIsOpen }) => {
           {/* User Persona Capsule */}
           <div className="mx-4 my-5 p-4 rounded-xl bg-bg-rose-white border border-primary-mauve/5 flex items-center gap-3">
             <div className="w-10 h-10 rounded-full bg-secondary-blush/20 flex items-center justify-center text-lg font-bold text-primary-mauve">
-              🤰
+              {user?.role === 'clinician' ? '🩺' : '🤰'}
             </div>
             <div className="overflow-hidden">
               <h4 className="font-bold text-sm text-text-dark truncate">{user?.name || 'Guest User'}</h4>
@@ -147,13 +153,13 @@ const Sidebar = ({ isOpen, setIsOpen }) => {
         {/* Footer Actions */}
         <div className="p-4 border-t border-primary-mauve/5 space-y-3">
           {/* EMERGENCY SOS BUTTON */}
-          <button 
-            onClick={triggerSOS}
-            className="w-full flex items-center justify-center gap-2.5 py-3 rounded-lg bg-danger/10 hover:bg-danger text-danger hover:text-white font-extrabold text-sm border border-danger/25 transition-all duration-300 shadow-glow animate-pulse"
-          >
-            <AlertTriangle className="w-5 h-5" />
-            <span>EMERGENCY SOS</span>
-          </button>
+            <button 
+              onClick={triggerSOS}
+              className="w-full flex items-center justify-center gap-2.5 py-3 rounded-lg bg-danger/10 hover:bg-danger text-danger hover:text-white font-extrabold text-sm border border-danger/25 transition-all duration-300 shadow-glow animate-pulse"
+            >
+              <AlertTriangle className="w-5 h-5" />
+              <span>EMERGENCY SOS</span>
+            </button>
 
           {/* Logout Button */}
           <button 

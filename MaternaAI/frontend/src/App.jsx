@@ -11,7 +11,13 @@ import PPD from './pages/PPD';
 import Community from './pages/Community';
 import Nutrition from './pages/Nutrition';
 import BirthPlan from './pages/BirthPlan';
-import Clinician from './pages/Clinician';
+import ClinicianDashboard from './pages/ClinicianDashboard';
+import ClinicianVoice from './pages/ClinicianVoice';
+import ClinicianVitals from './pages/ClinicianVitals';
+import ClinicianPPD from './pages/ClinicianPPD';
+import ClinicianCommunity from './pages/ClinicianCommunity';
+import ClinicianNutrition from './pages/ClinicianNutrition';
+import ClinicianSOS from './pages/ClinicianSOS';
 
 const PrivateRoute = ({ children }) => {
   const { isAuthenticated, loading } = useAuth();
@@ -53,7 +59,13 @@ function App() {
         <Route path="community" element={<Community />} />
         <Route path="nutrition" element={<Nutrition />} />
         <Route path="birth-plan" element={<BirthPlan />} />
-        <Route path="clinician" element={<Clinician />} />
+        <Route path="clinician" element={<ClinicianDashboard />} />
+        <Route path="clinician/ai-voice" element={<ClinicianVoice />} />
+        <Route path="clinician/vitals" element={<ClinicianVitals />} />
+        <Route path="clinician/ppd" element={<ClinicianPPD />} />
+        <Route path="clinician/community" element={<ClinicianCommunity />} />
+        <Route path="clinician/nutrition" element={<ClinicianNutrition />} />
+        <Route path="clinician/sos" element={<ClinicianSOS />} />
       </Route>
 
       {/* Catch-all Redirect */}

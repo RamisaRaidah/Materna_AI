@@ -7,6 +7,36 @@ const api = axios.create({
   },
 });
 
+const cacheStore = new Map();
+
+const getCached = async (key, ttlMs, fetcher) => {
+  const now = Date.now();
+  const cached = cacheStore.get(key);
+  if (cached?.value && now - cached.time < ttlMs) {
+    return cached.value;
+  }
+  if (cached?.promise) {
+    return cached.promise;
+  }
+  const promise = fetcher()
+    .then((value) => {
+      cacheStore.set(key, { value, time: Date.now() });
+      return value;
+    })
+    .finally(() => {
+      const latest = cacheStore.get(key);
+      if (latest?.promise) {
+        cacheStore.delete(key);
+      }
+    });
+  cacheStore.set(key, { promise });
+  return promise;
+};
+
+const clearCache = (key) => {
+  cacheStore.delete(key);
+};
+
 // Request interceptor to attach JWT token
 api.interceptors.request.use(
   (config) => {
@@ -49,6 +79,94 @@ export const authAPI = {
   },
   updateMe: async (userData) => {
     const response = await api.patch('/auth/me', userData);
+    return response.data;
+  }
+};
+
+export const clinicianAPI = {
+  getStats: async () => {
+    return getCached('clinician:stats', 15000, async () => {
+      const response = await api.get('/api/clinician/stats');
+      return response.data;
+    });
+  },
+  getAlerts: async () => {
+    return getCached('clinician:alerts', 8000, async () => {
+      const response = await api.get('/api/clinician/alerts');
+      return response.data;
+    });
+  },
+  dismissAlert: async (alertId) => {
+    const response = await api.patch(`/api/clinician/alerts/${alertId}/dismiss`);
+    clearCache('clinician:alerts');
+    clearCache('clinician:stats');
+    return response.data;
+  },
+  listPatients: async () => {
+    const response = await api.get('/api/clinician/patients');
+    return response.data;
+  },
+  getPatientsOverview: async (limit = 8) => {
+    return getCached(`clinician:overview:${limit}`, 12000, async () => {
+      const response = await api.get('/api/clinician/patients/overview', {
+        params: { limit },
+      });
+      return response.data;
+    });
+  },
+  getPatientSummary: async (patientId) => {
+    const response = await api.get(`/api/clinician/patients/${patientId}/summary`);
+    return response.data;
+  }
+};
+
+export const communityAPI = {
+  listGroups: async (category) => {
+    const response = await api.get('/api/community/groups', {
+      params: category ? { category } : undefined,
+    });
+    return response.data;
+  }
+};
+
+export const nutritionAPI = {
+  createPlan: async (payload) => {
+    const response = await api.post('/api/nutrition/plans', payload);
+    return response.data;
+  },
+  listPlans: async (userId) => {
+    const response = await api.get(`/api/nutrition/plans/${userId}`);
+    return response.data;
+  }
+};
+
+export const sosAPI = {
+  getContacts: async () => {
+    const response = await api.get('/api/sos/contacts');
+    return response.data;
+  },
+  getPersonalContacts: async (userId) => {
+    const response = await api.get(`/api/sos/contacts/personal/${userId}`);
+    return response.data;
+  },
+  triggerSOS: async (payload) => {
+    const response = await api.post('/api/sos/trigger', payload);
+    return response.data;
+  }
+};
+
+export const ppdAPI = {
+  getHistory: async (userId) => {
+    const response = await api.get(`/api/ppd/history/${userId}`);
+    return response.data;
+  }
+};
+
+export const healthAPI = {
+  getVitalsHistory: async (limit = 10) => {
+    const response = await api.get('/api/health/vitals/history', {
+      params: { limit },
+    });
     return response.data;
   }
 };
