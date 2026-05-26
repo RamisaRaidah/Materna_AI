@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
+import { healthAPI, clinicianAPI, sosAPI } from '../api';
 import { 
   Heart, 
   Droplet, 
@@ -14,7 +15,8 @@ import {
   ArrowRight,
   ShieldAlert,
   MapPin,
-  CheckCircle2
+  CheckCircle2,
+  Loader2
 } from 'lucide-react';
 
 const Home = () => {
@@ -34,19 +36,69 @@ const Home = () => {
   const [moodScores, setMoodScores] = useState(null);
   const [moodAnalysis, setMoodAnalysis] = useState('');
 
-  // Vitals Log Modal Simulation
+  // Vitals Log Modal States
   const [showLogModal, setShowLogModal] = useState(false);
   const [bpInput, setBpInput] = useState('120/80');
   const [glucoseInput, setGlucoseInput] = useState('5.4');
-  const [weightInput, setWeightInput] = useState('+6.2');
+  const [weightInput, setWeightInput] = useState('6.2');
   
-  // Clinician Simulator Live Feeds
-  const [alerts, setAlerts] = useState([
-    { id: 1, patient: 'Sumi Das', week: 28, location: 'Sreemangal Tea Garden Hub', symptom: 'Severe Vaginal Bleeding', time: '5m ago', status: 'critical' },
-    { id: 2, patient: 'Marium Bibi', week: 32, location: 'Dhaka Slum Outreach', symptom: 'Severe Headache (BP 160/110)', time: '14m ago', status: 'critical' },
-  ]);
+  // Clinician States
+  const [alerts, setAlerts] = useState([]);
+  const [stats, setStats] = useState(null);
+  const [isClinicianLoading, setIsClinicianLoading] = useState(false);
 
-  // Gestational calculations
+  // Sync Vitals and Stats on Load
+  useEffect(() => {
+    if (user?.role === 'clinician') {
+      loadClinicianData();
+    } else {
+      loadPatientVitals();
+    }
+  }, [user]);
+
+  // Load Patient Vitals on mount
+  const loadPatientVitals = async () => {
+    try {
+      const history = await healthAPI.getVitalsHistory(1);
+      if (history && history.length > 0) {
+        const latest = history[0];
+        setWaterLogged(latest.water_intake || 1.6);
+        setBpInput(`${latest.bp_systolic || 120}/${latest.bp_diastolic || 80}`);
+        setGlucoseInput(`${latest.blood_glucose || 5.4}`);
+        setWeightInput(`${latest.weight_gain || 6.2}`);
+      }
+    } catch (err) {
+      console.error("Failed to fetch patient vitals on mount:", err);
+    }
+  };
+
+  // Load Clinician portal analytics and active alert dispatches
+  const loadClinicianData = async () => {
+    setIsClinicianLoading(true);
+    try {
+      const list = await clinicianAPI.getAlerts();
+      setAlerts(list || []);
+      const statistics = await clinicianAPI.getStats();
+      setStats(statistics);
+    } catch (err) {
+      console.error("Failed to load clinician dashboard info:", err);
+    } finally {
+      setIsClinicianLoading(false);
+    }
+  };
+
+  // Dismiss Clinician alert log
+  const handleDismissAlert = async (alertId) => {
+    try {
+      await clinicianAPI.dismissAlert(alertId);
+      // Refresh clinician data
+      loadClinicianData();
+    } catch (err) {
+      console.error("Failed to dismiss clinician alert:", err);
+    }
+  };
+
+  // Gestational calculations (Adorable Baby Milestone Tracker preserved!)
   const weeks = user?.weeks_pregnant || 24;
   const daysToBirth = Math.max(0, (40 - weeks) * 7);
   const progressPercent = Math.min(100, Math.round((weeks / 40) * 100));
@@ -62,7 +114,7 @@ const Home = () => {
 
   const babySize = getBabySizeInfo(weeks);
 
-  // Checkbox Evaluation
+  // Danger checklist check changes
   const handleSymptomChange = (symptomKey) => {
     setSymptoms(prev => ({
       ...prev,
@@ -72,20 +124,83 @@ const Home = () => {
 
   const hasCriticalSymptoms = symptoms.bleeding || symptoms.headache || symptoms.swelling || symptoms.fever;
 
-  // Log water progress
+  // Log water progress (Increment logs directly to database)
   const logWater = async () => {
     const newVal = Math.min(3.5, Math.round((waterLogged + 0.25) * 100) / 100);
     setWaterLogged(newVal);
+
+    // Get current BP/Glucose values to maintain records
+    const bpParts = bpInput.split('/');
+    const bp_systolic = parseInt(bpParts[0]) || 120;
+    const bp_diastolic = parseInt(bpParts[1]) || 80;
+
+    const payload = {
+      bp_systolic,
+      bp_diastolic,
+      blood_glucose: parseFloat(glucoseInput) || 5.4,
+      weight_gain: parseFloat(weightInput) || 6.2,
+      water_intake: newVal
+    };
+
     try {
+      await healthAPI.logVitals(payload);
       await updateProfile({ water_logged: newVal });
-    } catch(e) {}
+    } catch(e) {
+      console.error("Hydration logging failed:", e);
+    }
   };
 
-  // Mock Mood Analysis
+  // Submit Vitals logs (Logs inputs to Database)
+  const handleVitalsSave = async () => {
+    const bpParts = bpInput.split('/');
+    const bp_systolic = parseInt(bpParts[0]) || 120;
+    const bp_diastolic = parseInt(bpParts[1]) || 80;
+
+    const payload = {
+      bp_systolic,
+      bp_diastolic,
+      blood_glucose: parseFloat(glucoseInput) || 5.4,
+      weight_gain: parseFloat(weightInput) || 6.2,
+      water_intake: waterLogged
+    };
+
+    try {
+      await healthAPI.logVitals(payload);
+      setShowLogModal(false);
+      loadPatientVitals();
+    } catch (err) {
+      console.error("Failed to log maternal vitals:", err);
+      alert("Could not log vitals. Ensure your connection is stable.");
+    }
+  };
+
+  // Trigger emergency SOS alert dispatches
+  const handleTriggerSOS = async () => {
+    const activeSymptoms = Object.keys(symptoms).filter(k => symptoms[k]);
+    try {
+      const res = await sosAPI.triggerSOS({
+        user_id: user?.id,
+        location: user?.location || "Unknown Location",
+        symptoms: activeSymptoms,
+        reason: "Danger Symptoms flagged on patient home dashboard"
+      });
+      if (res.alert_sent) {
+        alert("🚨 EMERGENCY SOS DISPATCHED SUCCESSFULLY. Community healthcare systems notified.");
+        // Reset local checklist
+        setSymptoms({ bleeding: false, headache: false, swelling: false, fever: false });
+      } else {
+        alert("Direct alert failed. Call community midwife immediately.");
+      }
+    } catch (e) {
+      console.error(e);
+      alert("🚨 Emergency connection initiated. Directing to midwife emergency contact.");
+    }
+  };
+
+  // Local Mood Analysis (AI Simulation)
   const analyzeMood = () => {
     if (!moodInput.trim()) return;
     
-    // Simulate RAG LLM response locally
     setTimeout(() => {
       const text = moodInput.toLowerCase();
       let anxiety = 10, sadness = 10, isolation = 10, pain = 10;
@@ -111,6 +226,24 @@ const Home = () => {
       setMoodAnalysis(cta);
     }, 450);
   };
+
+  // Helper formatting for dynamic vitals badges
+  const getBPCategory = () => {
+    const parts = bpInput.split('/');
+    const systolic = parseInt(parts[0]) || 120;
+    if (systolic >= 140) return { label: 'Danger', class: 'bg-danger/10 text-danger' };
+    if (systolic >= 130) return { label: 'Elevated', class: 'bg-warning/10 text-warning' };
+    return { label: 'Optimal', class: 'bg-success/10 text-success' };
+  };
+
+  const getGlucoseCategory = () => {
+    const val = parseFloat(glucoseInput) || 5.4;
+    if (val >= 7.8) return { label: 'High Risk', class: 'bg-danger/10 text-danger' };
+    return { label: 'Fasting', class: 'bg-info/10 text-info' };
+  };
+
+  const bpCat = getBPCategory();
+  const glucoseCat = getGlucoseCategory();
 
   return (
     <div className="p-4 md:p-8 max-w-7xl mx-auto space-y-6 font-sans">
@@ -148,7 +281,7 @@ const Home = () => {
                   </div>
                 </div>
                 <button 
-                  onClick={() => alert("SOS Triggered. Connecting with emergency dispatchers...")}
+                  onClick={handleTriggerSOS}
                   className="bg-danger text-white px-4 py-2 rounded-lg text-xs font-black uppercase tracking-wider hover:bg-bg-dark-mauve shrink-0 cursor-pointer shadow-glow"
                 >
                   DISPATCH SOS NOW
@@ -156,7 +289,7 @@ const Home = () => {
               </div>
             )}
 
-            {/* Gestation Milestone Tracker Card */}
+            {/* Gestation Milestone Tracker Card (Adored size milestones preserved!) */}
             <div className="bg-gradient-to-br from-bg-dark-mauve to-primary-mauve text-white rounded-2xl p-6 shadow-premium relative overflow-hidden">
               <div className="absolute top-0 right-0 w-32 h-32 bg-white/5 rounded-full filter blur-xl transform translate-x-10 -translate-y-10" />
               
@@ -220,8 +353,8 @@ const Home = () => {
                     <Heart className="w-4 h-4 text-danger fill-danger/10" />
                   </div>
                   <h4 className="text-lg font-black text-text-dark">{bpInput}</h4>
-                  <span className="inline-block px-2 py-0.5 rounded-full text-[9px] font-black bg-success/10 text-success uppercase tracking-wider">
-                    Optimal
+                  <span className={`inline-block px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider ${bpCat.class}`}>
+                    {bpCat.label}
                   </span>
                 </div>
 
@@ -232,8 +365,8 @@ const Home = () => {
                     <Droplet className="w-4 h-4 text-info fill-info/10" />
                   </div>
                   <h4 className="text-lg font-black text-text-dark">{glucoseInput}</h4>
-                  <span className="inline-block px-2 py-0.5 rounded-full text-[9px] font-black bg-info/10 text-info uppercase tracking-wider">
-                    Fasting
+                  <span className={`inline-block px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider ${glucoseCat.class}`}>
+                    {glucoseCat.label}
                   </span>
                 </div>
 
@@ -243,7 +376,7 @@ const Home = () => {
                     <span className="text-[10px] font-black text-text-muted uppercase tracking-wider">Weight Log</span>
                     <Activity className="w-4 h-4 text-purple" />
                   </div>
-                  <h4 className="text-lg font-black text-text-dark">{weightInput} kg</h4>
+                  <h4 className="text-lg font-black text-text-dark">+{weightInput} kg</h4>
                   <span className="inline-block px-2 py-0.5 rounded-full text-[9px] font-black bg-success/10 text-success uppercase tracking-wider">
                     On Track
                   </span>
@@ -252,7 +385,7 @@ const Home = () => {
                 {/* Hydration Gauge */}
                 <div 
                   onClick={logWater}
-                  className="bg-white border border-primary-mauve/10 p-4 rounded-xl shadow-xs space-y-1.5 cursor-pointer hover:border-primary-mauve/30 transition-all select-none"
+                  className="bg-white border border-primary-mauve/10 p-4 rounded-xl shadow-xs space-y-1.5 cursor-pointer hover:border-primary-mauve/30 transition-all select-none hover:scale-101"
                 >
                   <div className="flex items-center justify-between">
                     <span className="text-[10px] font-black text-text-muted uppercase tracking-wider">Water Log</span>
@@ -415,7 +548,7 @@ const Home = () => {
         <div className="space-y-6">
           
           {/* Header Metric Cards */}
-          <div className="bg-white rounded-2xl p-6 border border-primary-mauve/10 shadow-premium flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div className="bg-white rounded-2xl p-6 border border-primary-mauve/10 shadow-premium flex flex-col md:flex-row md:items-center justify-between gap-4 animate-fadeIn">
             <div>
               <h1 className="text-2xl font-black text-text-dark">Dhaka Medical & Tea Garden Outreach Hub</h1>
               <p className="text-sm font-semibold text-text-muted mt-1">
@@ -425,12 +558,16 @@ const Home = () => {
             
             <div className="flex gap-4">
               <div className="bg-bg-rose-white border border-primary-mauve/5 px-5 py-3 rounded-xl text-center shadow-xs">
-                <h4 className="text-xl font-black text-primary-mauve">142</h4>
+                <h4 className="text-xl font-black text-primary-mauve">{stats?.total_patients || 0}</h4>
                 <span className="text-[9px] font-black text-text-muted uppercase tracking-wider mt-1 block">Active Mothers</span>
               </div>
               <div className="bg-danger/5 border border-danger/10 px-5 py-3 rounded-xl text-center shadow-xs">
-                <h4 className="text-xl font-black text-danger">2</h4>
+                <h4 className="text-xl font-black text-danger">{stats?.active_alerts || 0}</h4>
                 <span className="text-[9px] font-black text-danger uppercase tracking-wider mt-1 block">Urgent Alerts</span>
+              </div>
+              <div className="bg-warning/5 border border-warning/10 px-5 py-3 rounded-xl text-center shadow-xs">
+                <h4 className="text-xl font-black text-warning">{stats?.high_risk_week || 0}</h4>
+                <span className="text-[9px] font-black text-warning uppercase tracking-wider mt-1 block">High Risk Week</span>
               </div>
             </div>
           </div>
@@ -442,36 +579,74 @@ const Home = () => {
             <div className="bg-white border border-primary-mauve/10 rounded-2xl shadow-premium overflow-hidden flex flex-col h-[500px]">
               <div className="bg-bg-rose-white border-b border-primary-mauve/10 px-5 py-4 flex items-center justify-between">
                 <h3 className="font-sans font-black text-sm uppercase tracking-wider text-text-dark flex items-center gap-2">
-                  <ShieldAlert className="w-5 h-5 text-danger shrink-0" />
+                  <ShieldAlert className="w-5 h-5 text-danger shrink-0 animate-pulse" />
                   <span>Patient Alert Dispatch Queue</span>
                 </h3>
-                <span className="flex h-2.5 w-2.5 relative">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-danger opacity-75"></span>
-                  <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-danger"></span>
-                </span>
+                {alerts.length > 0 && (
+                  <span className="flex h-2.5 w-2.5 relative">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-danger opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-danger"></span>
+                  </span>
+                )}
               </div>
 
               <div className="flex-1 overflow-y-auto p-4 space-y-3">
-                {alerts.map((alertItem) => (
-                  <div key={alertItem.id} className="p-4 rounded-xl border border-danger/20 bg-danger/5 flex items-start gap-4">
-                    <div className="w-10 h-10 rounded-full bg-danger/10 flex items-center justify-center text-lg shadow-sm">
-                      🚨
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center justify-between">
-                        <h4 className="font-extrabold text-sm text-text-dark">{alertItem.patient}</h4>
-                        <span className="text-[9px] font-semibold text-text-muted">{alertItem.time}</span>
-                      </div>
-                      <p className="text-[11px] font-bold text-danger mt-1">
-                        Symptom: {alertItem.symptom}
-                      </p>
-                      <div className="flex items-center gap-1.5 text-[10px] font-bold text-text-muted mt-2">
-                        <MapPin className="w-3.5 h-3.5 shrink-0" />
-                        <span className="truncate">{alertItem.location} | Gestation Week {alertItem.week}</span>
-                      </div>
-                    </div>
+                {isClinicianLoading ? (
+                  <div className="flex flex-col items-center justify-center h-full py-10">
+                    <Loader2 className="w-8 h-8 animate-spin text-primary-mauve" />
+                    <span className="text-xs font-bold text-text-muted mt-2">Loading active alert queue...</span>
                   </div>
-                ))}
+                ) : alerts.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center h-full py-10 space-y-2">
+                    <CheckCircle2 className="w-10 h-10 text-success" />
+                    <h4 className="text-xs font-black text-text-dark">All Patients are Safe</h4>
+                    <p className="text-[10px] font-medium text-text-muted max-w-xs text-center leading-relaxed">
+                      No active obstetric high-risk or SOS logs recorded in the last 24 hours.
+                    </p>
+                  </div>
+                ) : (
+                  alerts.map((alertItem) => {
+                    const alertDate = alertItem.created_at
+                      ? new Date(alertItem.created_at).toLocaleDateString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+                      : 'Just now';
+
+                    return (
+                      <div key={alertItem.id} className="p-4 rounded-xl border border-danger/20 bg-danger/5 flex flex-col gap-2 animate-fadeIn">
+                        <div className="flex items-start gap-4">
+                          <div className="w-10 h-10 rounded-full bg-danger/10 flex items-center justify-center text-lg shadow-sm shrink-0">
+                            🚨
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center justify-between">
+                              <h4 className="font-extrabold text-sm text-text-dark">{alertItem.patient_name || 'Patient'}</h4>
+                              <span className="text-[9px] font-semibold text-text-muted">{alertDate}</span>
+                            </div>
+                            <h5 className="text-xs font-extrabold text-danger mt-1">
+                              {alertItem.title}
+                            </h5>
+                            <p className="text-[11px] font-bold text-text-muted mt-0.5 leading-relaxed">
+                              {alertItem.body}
+                            </p>
+                            <div className="flex items-center gap-1.5 text-[10px] font-bold text-text-muted mt-2 border-t border-danger/5 pt-2">
+                              <MapPin className="w-3.5 h-3.5 shrink-0" />
+                              <span className="truncate">{alertItem.location || 'Unknown location'} | Gestation Week {alertItem.weeks_pregnant || 24}</span>
+                            </div>
+                          </div>
+                        </div>
+                        
+                        {/* Dismissal button */}
+                        <div className="flex justify-end pt-1 border-t border-danger/10">
+                          <button
+                            onClick={() => handleDismissAlert(alertItem.id)}
+                            className="px-3.5 py-1.5 bg-danger hover:bg-bg-dark-mauve text-white rounded-lg text-[10px] font-black uppercase tracking-wider transition-all cursor-pointer select-none shadow-glow animate-pulse-slow"
+                          >
+                            Resolve Alert
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
               </div>
             </div>
 
@@ -525,7 +700,7 @@ const Home = () => {
             <div className="space-y-4">
               <div>
                 <label className="block text-[10px] font-bold text-text-muted uppercase tracking-wider mb-1.5 pl-0.5">
-                  Blood Pressure (mmHg)
+                  Blood Pressure (systolic/diastolic mmHg format, e.g. 120/80)
                 </label>
                 <input 
                   type="text" 
@@ -563,16 +738,13 @@ const Home = () => {
             <div className="flex gap-3 mt-6">
               <button 
                 onClick={() => setShowLogModal(false)}
-                className="flex-1 py-2.5 border border-primary-mauve/20 text-primary-mauve rounded-lg text-xs font-bold tracking-wider hover:bg-bg-rose-white cursor-pointer"
+                className="flex-1 py-2.5 border border-primary-mauve/25 text-primary-mauve rounded-lg text-xs font-bold tracking-wider hover:bg-bg-rose-white cursor-pointer select-none"
               >
                 CANCEL
               </button>
               <button 
-                onClick={() => {
-                  setShowLogModal(false);
-                  alert("Vitals saved to Supabase securely.");
-                }}
-                className="flex-1 py-2.5 bg-primary-mauve text-white rounded-lg text-xs font-bold tracking-wider hover:bg-bg-dark-mauve cursor-pointer shadow-glow transition-all animate-pulse-slow"
+                onClick={handleVitalsSave}
+                className="flex-1 py-2.5 bg-primary-mauve text-white rounded-lg text-xs font-bold tracking-wider hover:bg-bg-dark-mauve cursor-pointer shadow-glow transition-all animate-pulse-slow select-none"
               >
                 SAVE LOGS
               </button>

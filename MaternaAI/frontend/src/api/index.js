@@ -156,4 +156,42 @@ export const communityAPI = {
   },
 };
 
+export const clinicianAPI = {
+  getAlerts: async () => {
+    const response = await api.get('/api/clinician/alerts');
+    return response.data;
+  },
+  dismissAlert: async (alertId) => {
+    const response = await api.patch(`/api/clinician/alerts/${alertId}/dismiss`);
+    return response.data;
+  },
+  getPatients: async () => {
+    const response = await api.get('/api/clinician/patients');
+    return response.data;
+  },
+  getPatientSummary: async (patientId) => {
+    const response = await api.get(`/api/clinician/patients/${patientId}/summary`);
+    return response.data;
+  },
+  getStats: async () => {
+    const response = await api.get('/api/clinician/stats');
+    return response.data;
+  }
+};
+
+export const sosAPI = {
+  triggerSOS: async (sosData) => {
+    const response = await api.post('/api/sos/trigger', sosData);
+    return response.data;
+  },
+  getContacts: async () => {
+    const response = await api.get('/api/sos/contacts');
+    return response.data;
+  },
+  getPersonalContacts: async (userId) => {
+    const response = await api.get(`/api/sos/contacts/personal/${userId}`);
+    return response.data;
+  }
+};
+
 export default api;
