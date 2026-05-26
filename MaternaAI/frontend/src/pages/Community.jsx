@@ -409,7 +409,7 @@ const Community = () => {
         </div>
         
         {/* DM and Create buttons */}
-        <div className="flex items-center gap-3 w-full md:w-auto">
+        <div className="flex items-center gap-3 w-full md:w-auto shrink-0">
           <button
             onClick={handleOpenDMDrawer}
             className="flex-1 md:flex-none flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl border border-primary-mauve/20 text-primary-mauve hover:bg-primary-mauve/8 text-xs font-black uppercase tracking-wider transition-all cursor-pointer"
@@ -429,7 +429,7 @@ const Community = () => {
       </div>
 
       {/* ──────────────────────────────────────────────────────── */}
-      {/* 2. INSTAGRAM STORIES (GROUPS SELECTION) */}
+      {/* 2. (GROUPS SELECTION) */}
       {/* ──────────────────────────────────────────────────────── */}
       <div className="bg-white border border-primary-mauve/10 rounded-2xl p-5 shadow-premium space-y-3.5">
         <div className="flex justify-between items-center px-1">
@@ -542,17 +542,17 @@ const Community = () => {
       )}
 
       {/* ──────────────────────────────────────────────────────── */}
-      {/* 4. INSTAGRAM POST FEED (MAIN CONTENT) */}
+      {/* 4. POST FEED (MAIN CONTENT) */}
       {/* ──────────────────────────────────────────────────────── */}
       <div className="grid grid-cols-1 md:grid-cols-12 gap-6 items-stretch">
         
-        {/* LEFT COLUMN (Col Span 8): Instagram style Posts Feed */}
+        {/* LEFT COLUMN (Col Span 8): style Posts Feed */}
         <div className="md:col-span-8 space-y-6">
           
           {isPostsLoading ? (
             <div className="bg-white border border-primary-mauve/10 rounded-2xl p-12 shadow-premium flex flex-col items-center justify-center text-center">
               <Loader2 className="w-8 h-8 animate-spin text-primary-mauve" />
-              <span className="text-xs font-bold text-text-muted mt-2">Loading Instagram feed...</span>
+              <span className="text-xs font-bold text-text-muted mt-2">Loading your feed...</span>
             </div>
           ) : posts.length === 0 ? (
             <div className="bg-white border border-primary-mauve/10 rounded-2xl p-12 shadow-premium flex flex-col items-center justify-center text-center space-y-4">
@@ -614,7 +614,7 @@ const Community = () => {
                     )}
                   </div>
 
-                  {/* Post Media Card (Instagram Image simulation with text overlay) */}
+                  {/* Post Media Card (Image simulation with text overlay) */}
                   <div className={`w-full aspect-square md:aspect-[16/10] bg-gradient-to-br ${cardGradient} p-6 flex items-center justify-center relative select-none`}>
                     {/* Background decorations to make it look premium */}
                     <div className="absolute top-4 left-4 w-12 h-12 rounded-full border border-white/10" />
@@ -1084,7 +1084,7 @@ const Community = () => {
       )}
 
       {/* ──────────────────────────────────────────────────────── */}
-      {/* MODAL: PUBLISH INSTAGRAM POST */}
+      {/* MODAL: PUBLISH POST */}
       {/* ──────────────────────────────────────────────────────── */}
       {showCreatePostModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-text-dark/40 backdrop-blur-xs px-4">
