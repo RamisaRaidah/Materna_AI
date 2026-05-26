@@ -24,7 +24,7 @@ def register():
         """INSERT INTO users (name, phone, password_hash, role, age, weeks_pregnant,
            is_postpartum, persona, location, emergency_contact)
            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
-           RETURNING id, name, phone, role, persona""",
+           RETURNING *""",
         (name, phone, pw_hash, role,
          data.get("age"), data.get("weeks_pregnant"),
          data.get("is_postpartum", False),
@@ -33,7 +33,8 @@ def register():
         fetch="one"
     )
     token = create_token(user["id"], user["role"])
-    return jsonify({"token": token, "user": user}), 201
+    safe = {k: v for k, v in user.items() if k != "password_hash"}
+    return jsonify({"token": token, "user": safe}), 201
  
 @auth_bp.route("/login", methods=["POST"])
 def login():
