@@ -203,26 +203,19 @@ def submit_assessment():
         # Full RAG pipeline — uses build_prompt(mode="ppd") + WHO context + fallback
         advice = rag_query(user_message, user_profile, mode="ppd")
 
-        conn = get_db()
-        cur = conn.cursor()
-        cur.execute("""
+        row= query("""
             INSERT INTO ppd_assessments (user_id, answers, total_score, risk_level, llm_advice)
             VALUES (%s, %s, %s, %s, %s)
             RETURNING id, risk_level, llm_advice, created_at
-        """, (user_id, json.dumps(answers), total_score, risk_level, advice))
-        row = cur.fetchone()
+        """, (user_id, json.dumps(answers), total_score, risk_level, advice), fetch="one")
 
         # Auto-alert clinician on high risk
         if risk_level == "high":
-            cur.execute("""
+            query("""
                 INSERT INTO clinician_alerts (patient_id, alert_type, severity, title, body)
                 VALUES (%s, 'ppd', 'critical', 'High PPD Risk Detected',
                         'Patient scored >= 13 on EPDS screening.')
-            """, (user_id,))
-
-        conn.commit()
-        cur.close()
-        conn.close()
+            """, (user_id,), fetch="none")
 
         return jsonify({
             "id":         row[0],
@@ -240,25 +233,18 @@ def get_ppd_history(user_id):
     """Get all past PPD assessments for a user."""
     conn = None
     try:
-        conn = get_db()
-        cur = conn.cursor()
-        cur.execute("""
+        rows=query("""
             SELECT id, total_score, risk_level, llm_advice, created_at
             FROM ppd_assessments
             WHERE user_id = %s
             ORDER BY created_at DESC
-        """, (user_id,))
-        rows = cur.fetchall()
-        cur.close()
+        """, (user_id,), fetch="all")
         return jsonify([{
-            "id":          r[0],
-            "total_score": r[1],
-            "risk_level":  r[2],
-            "advice":      r[3],
-            "created_at":  r[4].isoformat() if r[4] else None
+            "id":          r["id"],
+            "total_score": r["total_score"],
+            "risk_level":  r["risk_level"],
+            "advice":      r["llm_advice"],
+            "created_at":  r["created_at"].isoformat() if r["created_at"] else None
         } for r in rows])
     except Exception as e:
         return jsonify({"error": str(e)}), 500
-    finally:
-        if conn:
-            conn.close()
