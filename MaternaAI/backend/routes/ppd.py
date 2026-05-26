@@ -218,11 +218,11 @@ def submit_assessment():
             """, (user_id,), fetch="none")
 
         return jsonify({
-            "id":         row[0],
+            "id":         row["id"],
             "total_score": total_score,
-            "risk_level": row[1],
-            "advice":     row[2],
-            "created_at": row[3].isoformat() if row[3] else None
+            "risk_level": row["risk_level"],
+            "advice":     row["llm_advice"],
+            "created_at": row["created_at"].isoformat() if row["created_at"] else None
         }), 201
     except Exception as e:
         return jsonify({"error": str(e)}), 500
@@ -231,7 +231,6 @@ def submit_assessment():
 @ppd_bp.route("/history/<int:user_id>", methods=["GET"])
 def get_ppd_history(user_id):
     """Get all past PPD assessments for a user."""
-    conn = None
     try:
         rows=query("""
             SELECT id, total_score, risk_level, llm_advice, created_at
