@@ -65,6 +65,7 @@ def save_chat_message(user_id, role, content, intent=None, language='en'):
         if conn:
             conn.close()
 
+@chat_bp.route("/message", methods=["POST"])
 @chat_bp.route("/analyze", methods=["POST"])
 def analyze():
     data = request.json
@@ -83,7 +84,11 @@ def analyze():
     save_chat_message(user_id, 'user', user_input, intent=mode, language=lang)
 
     # Run RAG Query to get Gemini response
-    response = rag_query(user_input, user_profile, mode)
+    try:
+        response = rag_query(user_input, user_profile, mode)
+    except Exception as e:
+        print("RAG failed:", e)
+        response = "দুঃখিত, এখন উত্তর দিতে সমস্যা হচ্ছে। পরে আবার চেষ্টা করুন।"
 
     # Save assistant response to database
     save_chat_message(user_id, 'assistant', response, intent=mode, language=lang)
@@ -141,7 +146,11 @@ def speak():
     save_chat_message(user_id, 'user', transcribed_text, intent=mode, language=lang)
 
     # Pass transcribed text to RAG
-    response = rag_query(transcribed_text, user_profile, mode)
+    try:
+        response = rag_query(transcribed_text, user_profile, mode)
+    except Exception as e:
+        print("RAG failed:", e)
+        response = "দুঃখিত, সমস্যা হয়েছে।"
 
     # Save assistant response to database
     save_chat_message(user_id, 'assistant', response, intent=mode, language=lang)
