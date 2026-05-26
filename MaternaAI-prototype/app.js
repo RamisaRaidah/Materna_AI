@@ -414,6 +414,7 @@ async function runAISteps(intent, query) {
     }
     
     const isBengali = /[\u0980-\u09FF]/.test(data.response);
+    lastAiResponseText = data.response;
     let formattedText = data.response.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
     formattedText = formattedText.replace(/\n/g, '<br>');
     
@@ -455,6 +456,8 @@ function scrollChatBottom() {
 
 let mediaRecorder;
 let audioChunks = [];
+let lastAiResponseText = "";
+let currentAudio = null;
 
 async function emulateVoiceInput() {
   const btn = document.getElementById('voice-input-btn');
@@ -510,6 +513,7 @@ async function emulateVoiceInput() {
         appendChatMsg(data.transcribed_text, 'user', /[\u0980-\u09FF]/.test(data.transcribed_text));
         const intent = detectIntent(data.transcribed_text);
         const isBengali = /[\u0980-\u09FF]/.test(data.response);
+        lastAiResponseText = data.response;
         let formattedText = data.response.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
         formattedText = formattedText.replace(/\n/g, '<br>');
         
@@ -560,10 +564,44 @@ async function emulateVoiceInput() {
 function toggleVoicePlayback() {
   const pl = voicePl();
   const icon = document.getElementById('tts-icon');
-  const isPlaying = pl.classList.toggle('playing');
-  icon.setAttribute('data-lucide', isPlaying ? 'square' : 'play');
+  
+  // If playing, stop it
+  if (currentAudio && !currentAudio.paused) {
+    currentAudio.pause();
+    currentAudio.currentTime = 0;
+    pl.classList.remove('playing');
+    icon.setAttribute('data-lucide', 'play');
+    lucide.createIcons();
+    return;
+  }
+  
+  if (!lastAiResponseText) {
+      toast('No voice message to play.');
+      return;
+  }
+  
+  // Start playing
+  pl.classList.add('playing');
+  icon.setAttribute('data-lucide', 'square');
   lucide.createIcons();
-  if (isPlaying) toast('🔊 Bengali TTS voice playback active...');
+  toast('🔊 Playing TTS voice response...');
+  
+  const url = `http://localhost:5000/api/chat/tts?text=${encodeURIComponent(lastAiResponseText)}`;
+  currentAudio = new Audio(url);
+  
+  currentAudio.play().catch(err => {
+      console.error("Audio playback failed:", err);
+      toast('Audio playback failed.');
+      pl.classList.remove('playing');
+      icon.setAttribute('data-lucide', 'play');
+      lucide.createIcons();
+  });
+  
+  currentAudio.onended = () => {
+      pl.classList.remove('playing');
+      icon.setAttribute('data-lucide', 'play');
+      lucide.createIcons();
+  };
 }
 
 

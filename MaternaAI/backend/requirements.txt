@@ -6,6 +6,6 @@ python-dotenv
 google-generativeai
 requests
 gunicorn
-bcrypt
 cohere
+bcrypt
 edge-tts
