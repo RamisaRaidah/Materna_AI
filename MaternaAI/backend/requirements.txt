@@ -8,5 +8,4 @@ requests
 gunicorn
 cohere
 bcrypt
-cohere
 edge-tts

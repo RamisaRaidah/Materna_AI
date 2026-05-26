@@ -27,7 +27,14 @@ app.register_blueprint(community_bp, url_prefix="/api/community")
 from routes.nutrition import nutrition_bp
 app.register_blueprint(nutrition_bp, url_prefix="/api/nutrition")
 
+from routes.clinician import clinician_bp
+app.register_blueprint(clinician_bp, url_prefix="/api/clinician")
 
+from routes.birth_plan import birth_plan_bp
+app.register_blueprint(birth_plan_bp, url_prefix="/api/birth_plan")
+
+from routes.sos import sos_bp
+app.register_blueprint(sos_bp, url_prefix="/api/sos")
 
 @app.route("/")
 def home():
