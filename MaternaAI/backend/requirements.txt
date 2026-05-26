@@ -10,3 +10,4 @@ cohere
 bcrypt
 edge-tts
 openai
+PyJWT
