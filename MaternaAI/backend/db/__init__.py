@@ -14,6 +14,12 @@ def get_pool():
 
 def get_conn():
     conn = get_pool().getconn()
+    if conn.closed:
+        try:
+            get_pool().putconn(conn, close=True)
+        except Exception:
+            pass
+        conn = get_pool().getconn()
     try:
         from pgvector.psycopg2 import register_vector
         register_vector(conn)
@@ -22,7 +28,13 @@ def get_conn():
     return conn
 
 def put_conn(conn):
-    get_pool().putconn(conn)
+    try:
+        if conn and conn.closed:
+            get_pool().putconn(conn, close=True)
+        else:
+            get_pool().putconn(conn)
+    except Exception:
+        pass
 
 def query(sql, params=None, fetch="all"):
     """
@@ -44,7 +56,11 @@ def query(sql, params=None, fetch="all"):
             return dict(row) if row else None
         return None
     except Exception as e:
-        conn.rollback()
+        try:
+            if conn and not conn.closed:
+                conn.rollback()
+        except Exception:
+            pass
         raise e
     finally:
         if cur:
@@ -66,7 +82,11 @@ def init_db():
         conn.commit()
         print("[DB] Schema initialized successfully.")
     except Exception as e:
-        conn.rollback()
+        try:
+            if conn and not conn.closed:
+                conn.rollback()
+        except Exception:
+            pass
         print(f"[DB] Schema init note: {e}")
 
     finally:
