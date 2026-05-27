@@ -11,7 +11,10 @@ import PPD from './pages/PPD';
 import Community from './pages/Community';
 import Nutrition from './pages/Nutrition';
 import BirthPlan from './pages/BirthPlan';
-import Clinician from './pages/Clinician';
+import ClinicianDashboard from './pages/ClinicianDashboard';
+import ClinicianSOS from './pages/ClinicianSOS';
+import ClinicianFollowUps from './pages/ClinicianFollowUps';
+import ClinicianProfile from './pages/ClinicianProfile';
 
 const PrivateRoute = ({ children }) => {
   const { isAuthenticated, loading } = useAuth();
@@ -53,7 +56,10 @@ function App() {
         <Route path="community" element={<Community />} />
         <Route path="nutrition" element={<Nutrition />} />
         <Route path="birth-plan" element={<BirthPlan />} />
-        <Route path="clinician" element={<Clinician />} />
+        <Route path="clinician" element={<ClinicianDashboard />} />
+        <Route path="clinician/sos" element={<ClinicianSOS />} />
+        <Route path="clinician/follow-ups" element={<ClinicianFollowUps />} />
+        <Route path="clinician/profile" element={<ClinicianProfile />} />
       </Route>
 
       {/* Catch-all Redirect */}

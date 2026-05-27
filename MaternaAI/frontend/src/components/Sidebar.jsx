@@ -12,27 +12,54 @@ import {
   FileText, 
   LogOut,
   X,
-  AlertTriangle
+  AlertTriangle,
+  LayoutDashboard,
+  ClipboardList,
+  UserRound
 } from 'lucide-react';
 
 const Sidebar = ({ isOpen, setIsOpen }) => {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
 
-  const navItems = [
-    { name: 'Home', path: '/', icon: Home },
-    { name: 'AI Voice Assistant', path: '/chat', icon: MessageSquare },
-    { name: 'Vitals & Health', path: '/health', icon: Activity },
-    { name: 'PPD EPDS Screen', path: '/ppd', icon: Smile },
-    { name: 'Community Groups', path: '/community', icon: Users },
-    { name: 'Nutrition & Diet', path: '/nutrition', icon: Apple },
-    { name: 'Birth Plan Compiler', path: '/birth-plan', icon: FileText },
+  const patientSections = [
+    {
+      title: 'Patient Hub',
+      items: [
+        { name: 'Home', path: '/', icon: Home },
+        { name: 'AI Voice Assistant', path: '/chat', icon: MessageSquare },
+        { name: 'Vitals & Health', path: '/health', icon: Activity },
+        { name: 'PPD EPDS Screen', path: '/ppd', icon: Smile },
+      ]
+    },
+    {
+      title: 'Care & Planning',
+      items: [
+        { name: 'Community Groups', path: '/community', icon: Users },
+        { name: 'Nutrition & Diet', path: '/nutrition', icon: Apple },
+        { name: 'Birth Plan Compiler', path: '/birth-plan', icon: FileText },
+      ]
+    }
   ];
 
-  // If the user is a clinician, we can prioritize the clinician view
-  if (user?.role === 'clinician') {
-    navItems.unshift({ name: 'Clinician Portal', path: '/clinician', icon: ShieldAlert });
-  }
+  const clinicianSections = [
+    {
+      title: 'Clinician Console',
+      items: [
+        { name: 'Home / Dashboard', path: '/clinician', icon: LayoutDashboard },
+        { name: 'SOS Dispatches', path: '/clinician/sos', icon: ShieldAlert },
+      ]
+    },
+    {
+      title: 'Operations',
+      items: [
+        { name: 'Follow-ups', path: '/clinician/follow-ups', icon: ClipboardList },
+        { name: 'My Profile', path: '/clinician/profile', icon: UserRound },
+      ]
+    }
+  ];
+
+  const navSections = user?.role === 'clinician' ? clinicianSections : patientSections;
 
   const handleLogout = () => {
     logout();
@@ -110,7 +137,7 @@ const Sidebar = ({ isOpen, setIsOpen }) => {
           {/* User Persona Capsule */}
           <div className="mx-4 my-5 p-4 rounded-xl bg-bg-rose-white border border-primary-mauve/5 flex items-center gap-3">
             <div className="w-10 h-10 rounded-full bg-secondary-blush/20 flex items-center justify-center text-lg font-bold text-primary-mauve">
-              🤰
+              {user?.role === 'clinician' ? '🩺' : '🤰'}
             </div>
             <div className="overflow-hidden">
               <h4 className="font-bold text-sm text-text-dark truncate">{user?.name || 'Guest User'}</h4>
@@ -121,39 +148,56 @@ const Sidebar = ({ isOpen, setIsOpen }) => {
           </div>
 
           {/* Nav Items */}
-          <nav className="px-3 space-y-1 overflow-y-auto max-h-[50vh]">
-            {navItems.map((item) => {
-              const Icon = item.icon;
-              return (
-                <NavLink
-                  key={item.path}
-                  to={item.path}
-                  onClick={() => setIsOpen(false)}
-                  className={({ isActive }) => `
-                    flex items-center gap-3.5 px-4 py-3 rounded-lg text-sm font-bold tracking-wide transition-all
-                    ${isActive 
-                      ? 'bg-primary-mauve/8 text-primary-mauve shadow-xs border-l-4 border-primary-mauve pl-3' 
-                      : 'text-text-muted hover:text-primary-mauve hover:bg-primary-mauve/4'}
-                  `}
-                >
-                  <Icon className="w-5 h-5 shrink-0" />
-                  <span>{item.name}</span>
-                </NavLink>
-              );
-            })}
+          <nav className="px-3 space-y-4 overflow-y-auto max-h-[50vh]">
+            {navSections.map((section) => (
+              <div key={section.title} className="space-y-1">
+                <p className="px-4 text-[10px] font-extrabold uppercase tracking-widest text-text-muted/70">
+                  {section.title}
+                </p>
+                {section.items.map((item) => {
+                  const Icon = item.icon;
+                  return (
+                    <NavLink
+                      key={item.path}
+                      to={item.path}
+                      onClick={() => setIsOpen(false)}
+                      className={({ isActive }) => `
+                        flex items-center gap-3.5 px-4 py-3 rounded-lg text-sm font-bold tracking-wide transition-all
+                        ${isActive 
+                          ? 'bg-primary-mauve/8 text-primary-mauve shadow-xs border-l-4 border-primary-mauve pl-3' 
+                          : 'text-text-muted hover:text-primary-mauve hover:bg-primary-mauve/4'}
+                      `}
+                    >
+                      <Icon className="w-5 h-5 shrink-0" />
+                      <span>{item.name}</span>
+                    </NavLink>
+                  );
+                })}
+              </div>
+            ))}
           </nav>
         </div>
 
         {/* Footer Actions */}
         <div className="p-4 border-t border-primary-mauve/5 space-y-3">
           {/* EMERGENCY SOS BUTTON */}
-          <button 
-            onClick={triggerSOS}
-            className="w-full flex items-center justify-center gap-2.5 py-3 rounded-lg bg-danger/10 hover:bg-danger text-danger hover:text-white font-extrabold text-sm border border-danger/25 transition-all duration-300 shadow-glow animate-pulse"
-          >
-            <AlertTriangle className="w-5 h-5" />
-            <span>EMERGENCY SOS</span>
-          </button>
+          {user?.role === 'clinician' ? (
+            <button
+              onClick={() => navigate('/clinician/sos')}
+              className="w-full flex items-center justify-center gap-2.5 py-3 rounded-lg bg-danger/10 hover:bg-danger text-danger hover:text-white font-extrabold text-sm border border-danger/25 transition-all duration-300 shadow-glow"
+            >
+              <ShieldAlert className="w-5 h-5" />
+              <span>EMERGENCY DISPATCH</span>
+            </button>
+          ) : (
+            <button 
+              onClick={triggerSOS}
+              className="w-full flex items-center justify-center gap-2.5 py-3 rounded-lg bg-danger/10 hover:bg-danger text-danger hover:text-white font-extrabold text-sm border border-danger/25 transition-all duration-300 shadow-glow animate-pulse"
+            >
+              <AlertTriangle className="w-5 h-5" />
+              <span>EMERGENCY SOS</span>
+            </button>
+          )}
 
           {/* Logout Button */}
           <button 
