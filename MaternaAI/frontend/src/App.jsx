@@ -15,6 +15,8 @@ import ClinicianDashboard from './pages/ClinicianDashboard';
 import ClinicianSOS from './pages/ClinicianSOS';
 import ClinicianFollowUps from './pages/ClinicianFollowUps';
 import ClinicianProfile from './pages/ClinicianProfile';
+import Landing from './pages/Landing'
+import Logo from './components/assets/Logo.png'
 
 const PrivateRoute = ({ children }) => {
   const { isAuthenticated, loading } = useAuth();
@@ -23,23 +25,21 @@ const PrivateRoute = ({ children }) => {
     return (
       <div className="flex h-screen items-center justify-center bg-bg-rose-white">
         <div className="flex flex-col items-center gap-3">
-          <svg className="w-12 h-12 animate-spin text-primary-mauve" viewBox="0 0 24 24" fill="none">
-            <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" className="opacity-25" />
-            <path d="M4 12a8 8 0 0 1 8-8V0C5.373 0 0 5.373 0 12h4z" fill="currentColor" />
-          </svg>
+          <img  className="block -mr-2" src={Logo}  style={{width:"50px", height:"40px",paddingRight:"0px",margin:"-12px"}}/>
           <span className="font-sans font-bold text-sm text-text-muted animate-pulse">Initializing MaternaAI...</span>
         </div>
       </div>
     );
   }
 
-  return isAuthenticated ? children : <Navigate to="/login" replace />;
+  return isAuthenticated ? children : <Navigate to="/landing" replace />;
 };
 
 function App() {
   return (
     <Routes>
       {/* Public Pages */}
+      <Route path="/landing" element={<Landing/>}/>
       <Route path="/login" element={<Login />} />
       <Route path="/register" element={<Register />} />
 
