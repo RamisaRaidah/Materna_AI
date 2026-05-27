@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Mail, MapPin, Phone, UserRound } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import { clinicianAPI } from '../api';
 
 const STORAGE_KEY = 'clinicianProfile';
 
@@ -20,6 +21,7 @@ const ClinicianProfile = () => {
     languages: '',
   });
   const [status, setStatus] = useState('');
+  const [sosMetrics, setSosMetrics] = useState({ total_handled: 0 });
 
   useEffect(() => {
     const saved = localStorage.getItem(STORAGE_KEY);
@@ -32,6 +34,25 @@ const ClinicianProfile = () => {
         setStatus('Saved profile data could not be read.');
       }
     }
+  }, []);
+
+  useEffect(() => {
+    let isActive = true;
+    const loadMetrics = async () => {
+      try {
+        const data = await clinicianAPI.getSosMetrics();
+        if (!isActive) return;
+        setSosMetrics(data || { total_handled: 0 });
+      } catch (err) {
+        if (!isActive) return;
+        setSosMetrics({ total_handled: 0 });
+      }
+    };
+
+    loadMetrics();
+    return () => {
+      isActive = false;
+    };
   }, []);
 
   const updateField = (key) => (event) => {
@@ -91,6 +112,16 @@ const ClinicianProfile = () => {
               <p className="text-[11px] font-bold uppercase tracking-wider">Location</p>
             </div>
             <p className="mt-2 text-sm font-semibold text-text-dark">{user?.location || 'Not set'}</p>
+          </div>
+          <div className="p-4 rounded-xl bg-bg-rose-white border border-primary-mauve/10 md:col-span-3">
+            <div className="flex items-center gap-2 text-primary-mauve">
+              <UserRound className="w-4 h-4" />
+              <p className="text-[11px] font-bold uppercase tracking-wider">SOS Handled (All Time)</p>
+            </div>
+            <p className="mt-2 text-2xl font-black text-text-dark">{sosMetrics.total_handled || 0}</p>
+            <p className="text-[10px] font-semibold text-text-muted mt-1">
+              Resolved SOS cases credited to your clinician profile.
+            </p>
           </div>
         </div>
       </div>

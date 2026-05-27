@@ -52,8 +52,6 @@ const Sidebar = ({ isOpen, setIsOpen }) => {
         { name: 'Vitals & Summary', path: '/clinician/vitals', icon: Activity },
         { name: 'PPD Screening', path: '/clinician/ppd', icon: Smile },
         { name: 'Community Direct', path: '/clinician/community', icon: Users },
-        { name: 'Home', path: '/clinician', icon: LayoutDashboard },
-        { name: 'SOS Dispatches', path: '/clinician/sos', icon: ShieldAlert },
       ]
     },
     {
@@ -86,6 +84,7 @@ const Sidebar = ({ isOpen, setIsOpen }) => {
           'Authorization': `Bearer ${localStorage.getItem('token')}`
         },
         body: JSON.stringify({
+          user_id: user?.id,
           location: user?.location || "Unknown Location",
           symptoms: ["Emergency Triggered by User"]
         })
@@ -98,6 +97,10 @@ const Sidebar = ({ isOpen, setIsOpen }) => {
     } catch (e) {
       alert("🚨 Emergency connection initiated. Directing to primary contact.");
     }
+  };
+
+  const triggerClinicianDispatch = () => {
+    navigate('/clinician/sos');
   };
 
   return (
@@ -185,7 +188,7 @@ const Sidebar = ({ isOpen, setIsOpen }) => {
           {/* EMERGENCY SOS BUTTON */}
           {user?.role === 'clinician' ? (
             <button
-              onClick={() => navigate('/clinician/sos')}
+              onClick={triggerClinicianDispatch}
               className="w-full flex items-center justify-center gap-2.5 py-3 rounded-lg bg-danger/10 hover:bg-danger text-danger hover:text-white font-extrabold text-sm border border-danger/25 transition-all duration-300 shadow-glow"
             >
               <ShieldAlert className="w-5 h-5" />

@@ -1,6 +1,7 @@
 # Clinician portal: patient alerts, dashboard metrics
 
 from flask import Blueprint, request, jsonify, g
+import json
 from db import query
 from services.auth import require_auth
 
@@ -11,6 +12,17 @@ def _require_clinician():
     if role not in ("clinician", "admin"):
         return jsonify({"error": "Clinician access required"}), 403
     return None
+
+def _create_notification(user_id, title, body, notif_type="info", data=None):
+    payload = json.dumps(data) if data is not None else None
+    query(
+        """
+        INSERT INTO notifications (user_id, title, body, type, data)
+        VALUES (%s, %s, %s, %s, %s)
+        """,
+        (user_id, title, body, notif_type, payload),
+        fetch="none"
+    )
 
 @clinician_bp.route("/alerts", methods=["GET"])
 @require_auth
@@ -43,18 +55,107 @@ def dismiss_alert(alert_id):
 
     if role in ("clinician", "admin"):
         query(
-            "UPDATE clinician_alerts SET is_dismissed=TRUE WHERE id=%s",
+            "UPDATE clinician_alerts SET is_dismissed=TRUE, status='resolved' WHERE id=%s",
             (alert_id,),
             fetch="none"
         )
     else:
         result = query(
-            "UPDATE clinician_alerts SET is_dismissed=TRUE WHERE id=%s AND patient_id=%s",
+            "UPDATE clinician_alerts SET is_dismissed=TRUE, status='resolved' WHERE id=%s AND patient_id=%s",
             (alert_id, g.user["id"]),
             fetch="none"
         )
 
     return jsonify({"message": "Alert dismissed"})
+
+@clinician_bp.route("/alerts/sos", methods=["GET"])
+@require_auth
+def get_sos_alerts():
+    auth_error = _require_clinician()
+    if auth_error:
+        return auth_error
+
+    alerts = query(
+        """
+        SELECT ca.*, u.name AS patient_name, u.phone AS patient_phone,
+               u.weeks_pregnant, u.location
+        FROM clinician_alerts ca
+        JOIN users u ON u.id = ca.patient_id
+        WHERE ca.is_dismissed = FALSE
+          AND ca.alert_type = 'sos'
+          AND (ca.assigned_to IS NULL OR ca.assigned_to = %s)
+        ORDER BY ca.created_at DESC
+        LIMIT 50
+        """,
+        (g.user["id"],)
+    )
+    return jsonify(alerts)
+
+@clinician_bp.route("/alerts/<int:alert_id>/assign", methods=["PATCH"])
+@require_auth
+def assign_alert(alert_id):
+    auth_error = _require_clinician()
+    if auth_error:
+        return auth_error
+
+    alert = query(
+        "SELECT id, patient_id, assigned_to, alert_type FROM clinician_alerts WHERE id=%s",
+        (alert_id,),
+        fetch="one"
+    )
+    if not alert:
+        return jsonify({"error": "Alert not found"}), 404
+    if alert.get("alert_type") != "sos":
+        return jsonify({"error": "Only SOS alerts can be assigned"}), 400
+    if alert.get("assigned_to") and alert.get("assigned_to") != g.user["id"]:
+        return jsonify({"error": "Alert already assigned"}), 409
+    if alert.get("assigned_to") == g.user["id"]:
+        return jsonify({"message": "Already assigned"})
+
+    query(
+        """
+        UPDATE clinician_alerts
+        SET assigned_to=%s, assigned_at=NOW(), status='assigned'
+        WHERE id=%s
+        """,
+        (g.user["id"], alert_id),
+        fetch="none"
+    )
+
+    clinician_name = g.user.get("name", "Clinician")
+    _create_notification(
+        alert.get("patient_id"),
+        "SOS Assigned",
+        f"{clinician_name} is handling your SOS. Please keep your phone nearby.",
+        "sos_assigned",
+        {"alert_id": alert_id, "clinician_name": clinician_name}
+    )
+
+    return jsonify({"message": "Alert assigned"})
+
+
+@clinician_bp.route("/sos/metrics", methods=["GET"])
+@require_auth
+def sos_metrics():
+    auth_error = _require_clinician()
+    if auth_error:
+        return auth_error
+
+    totals = query(
+        """
+        SELECT COUNT(*) AS total_handled
+        FROM clinician_alerts
+        WHERE alert_type = 'sos'
+          AND assigned_to = %s
+          AND status = 'resolved'
+        """,
+        (g.user["id"],),
+        fetch="one"
+    )
+
+    return jsonify({
+        "total_handled": totals.get("total_handled", 0) if totals else 0,
+    })
 
 @clinician_bp.route("/patients", methods=["GET"])
 @require_auth

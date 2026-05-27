@@ -1,12 +1,15 @@
 import React, { useEffect, useState } from 'react';
 import { AlertTriangle, PhoneCall, ShieldAlert } from 'lucide-react';
 import { clinicianAPI, sosAPI } from '../api';
+import { useAuth } from '../context/AuthContext';
 
 const ClinicianSOS = () => {
+  const { user } = useAuth();
   const [dispatches, setDispatches] = useState([]);
   const [contacts, setContacts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [assigningId, setAssigningId] = useState(null);
 
   useEffect(() => {
     let isActive = true;
@@ -14,16 +17,13 @@ const ClinicianSOS = () => {
       try {
         setLoading(true);
         const [alertData, contactData] = await Promise.all([
-          clinicianAPI.getAlerts(),
+          clinicianAPI.getSosAlerts(),
           sosAPI.getContacts(),
         ]);
         if (!isActive) {
           return;
         }
-        const sosAlerts = Array.isArray(alertData)
-          ? alertData.filter((alert) => alert.alert_type === 'sos' || alert.alert_type === 'kick')
-          : [];
-        setDispatches(sosAlerts);
+        setDispatches(Array.isArray(alertData) ? alertData : []);
         setContacts(Array.isArray(contactData) ? contactData : []);
         setError('');
       } catch (err) {
@@ -53,13 +53,29 @@ const ClinicianSOS = () => {
     }
   };
 
+  const handleAssign = async (alertId) => {
+    try {
+      setAssigningId(alertId);
+      await clinicianAPI.assignAlert(alertId);
+      setDispatches((prev) => prev.map((alert) => (
+        alert.id === alertId
+          ? { ...alert, assigned_to: user?.id, status: 'assigned' }
+          : alert
+      )));
+    } catch (err) {
+      setError('Unable to assign SOS alert. It may already be handled.');
+    } finally {
+      setAssigningId(null);
+    }
+  };
+
   return (
     <div className="p-4 md:p-8 max-w-6xl mx-auto space-y-6 font-sans">
       <div className="bg-white border border-primary-mauve/10 rounded-2xl p-6 shadow-premium flex items-center justify-between gap-4">
         <div>
-          <h1 className="text-xl font-black text-text-dark">Emergency SOS Dispatches</h1>
+          <h1 className="text-xl font-black text-text-dark">SOS Triggered Patients</h1>
           <p className="text-xs font-semibold text-text-muted mt-1">
-            Active emergency calls, escalation status, and response routing
+            Active SOS alerts from patients requiring immediate response
           </p>
         </div>
         <div className="w-12 h-12 rounded-xl bg-danger/10 text-danger flex items-center justify-center">
@@ -70,7 +86,7 @@ const ClinicianSOS = () => {
       <div className="bg-danger/5 border border-danger/20 rounded-2xl p-5 shadow-premium flex items-start gap-3">
         <AlertTriangle className="w-5 h-5 text-danger shrink-0 mt-1" />
         <div>
-          <h3 className="text-xs font-black uppercase tracking-wider text-danger">High Priority Dispatch</h3>
+            <h3 className="text-xs font-black uppercase tracking-wider text-danger">High Priority SOS Queue</h3>
           <p className="text-[11px] font-semibold text-text-muted mt-1">
             Verify location, send transport, and notify the nearest facility.
           </p>
@@ -81,7 +97,7 @@ const ClinicianSOS = () => {
         <div className="lg:col-span-2 bg-white border border-primary-mauve/10 rounded-2xl p-6 shadow-premium">
           <div className="flex items-center gap-2 text-primary-mauve">
             <PhoneCall className="w-5 h-5" />
-            <h3 className="text-xs font-black uppercase tracking-wider">Active Dispatch Log</h3>
+            <h3 className="text-xs font-black uppercase tracking-wider">Active SOS Log</h3>
           </div>
           {error && (
             <div className="mt-4 text-[11px] font-semibold text-danger bg-danger/10 border border-danger/20 rounded-lg px-3 py-2">
@@ -100,15 +116,30 @@ const ClinicianSOS = () => {
                     <p className="text-sm font-bold text-text-dark">{item.patient_name || 'Patient'}</p>
                     <p className="text-[11px] font-semibold text-text-muted">{item.title}</p>
                     <p className="text-[11px] font-semibold text-text-muted mt-1">{item.body}</p>
+                    {item.assigned_to === user?.id && (
+                      <span className="inline-flex mt-2 px-2.5 py-1 rounded-full bg-success/10 text-success text-[10px] font-bold uppercase tracking-wider">
+                        Assigned to you
+                      </span>
+                    )}
                   </div>
                   <div className="flex items-center gap-3 text-[11px] font-bold text-text-muted">
                     <span>{item.created_at ? new Date(item.created_at).toLocaleString() : 'Just now'}</span>
-                    <button
-                      onClick={() => handleDismiss(item.id)}
-                      className="px-3 py-1.5 rounded-full bg-white text-[10px] font-black uppercase tracking-wider border border-danger/20 text-danger hover:bg-danger hover:text-white transition-colors"
-                    >
-                      Dismiss
-                    </button>
+                    {item.assigned_to === user?.id ? (
+                      <button
+                        onClick={() => handleDismiss(item.id)}
+                        className="px-3 py-1.5 rounded-full bg-white text-[10px] font-black uppercase tracking-wider border border-danger/20 text-danger hover:bg-danger hover:text-white transition-colors"
+                      >
+                        Resolve
+                      </button>
+                    ) : (
+                      <button
+                        onClick={() => handleAssign(item.id)}
+                        disabled={assigningId === item.id}
+                        className="px-3 py-1.5 rounded-full bg-primary-mauve text-white text-[10px] font-black uppercase tracking-wider hover:bg-bg-dark-mauve transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+                      >
+                        {assigningId === item.id ? 'Assigning...' : 'Handle'}
+                      </button>
+                    )}
                   </div>
                 </div>
               ))
