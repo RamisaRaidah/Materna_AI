@@ -3,7 +3,7 @@ import { useAuth } from '../context/AuthContext';
 import {
   Sparkles, Flame, Apple, CheckCircle2,
   MessageSquare, MapPin, RefreshCw, Clock,
-  ChevronRight
+  ChevronRight, Mic, MicOff, Play, Square
 } from 'lucide-react';
 
 // UI Presentation Configurations (Updated to match Home.jsx warm mauve/rose palette)
@@ -235,6 +235,178 @@ const Nutrition = () => {
   const [chatLoading, setChatLoading] = useState(false);
   const chatEndRef = useRef(null);
 
+  // Audio & Recording states for Nutrition Chat
+  const [isRecording, setIsRecording] = useState(false);
+  const [speechLang, setSpeechLang] = useState('bn-BD'); // 'bn-BD' or 'en-US'
+  const [currentPlaybackMessageId, setCurrentPlaybackMessageId] = useState(null);
+  const [audioPermissionError, setAudioPermissionError] = useState(null);
+  const activeAudioRef = useRef(null);
+  const mediaRecorderRef = useRef(null);
+  const mediaStreamRef = useRef(null);
+  const audioChunksRef = useRef([]);
+  const clientTranscriptionRef = useRef('');
+  const recognitionRef = useRef(null);
+
+  // Clean up audio on unmount
+  useEffect(() => {
+    return () => {
+      stopTTS();
+      if (mediaStreamRef.current) {
+        mediaStreamRef.current.getTracks().forEach(track => track.stop());
+      }
+    };
+  }, []);
+
+  const stopTTS = () => {
+    if (activeAudioRef.current) {
+      activeAudioRef.current.pause();
+      activeAudioRef.current = null;
+    }
+    setCurrentPlaybackMessageId(null);
+  };
+
+  // Detect if text is primarily Bengali (Unicode range \u0980-\u09FF)
+  const isBengaliText = (text) => /[\u0980-\u09FF]/.test(text);
+
+  const playTTS = (text, messageIndex) => {
+    if (currentPlaybackMessageId === messageIndex) {
+      stopTTS();
+      return;
+    }
+    stopTTS();
+    try {
+      // Auto-detect language: use Bengali TTS voice if text has Bengali script, else English
+      const lang = isBengaliText(text) ? 'bn' : 'en';
+      const audioUrl = `/api/chat/tts?text=${encodeURIComponent(text)}&lang=${lang}`;
+      const audio = new Audio(audioUrl);
+      activeAudioRef.current = audio;
+      setCurrentPlaybackMessageId(messageIndex);
+      audio.onended = () => {
+        setCurrentPlaybackMessageId(null);
+      };
+      audio.onerror = (e) => {
+        console.error("Audio playback error:", e);
+        setCurrentPlaybackMessageId(null);
+      };
+      audio.play().catch(err => {
+        console.warn("Failed to play TTS audio:", err);
+        setCurrentPlaybackMessageId(null);
+      });
+    } catch (e) {
+      console.error(e);
+      setCurrentPlaybackMessageId(null);
+    }
+  };
+
+  const startRecording = async () => {
+    setAudioPermissionError(null);
+    stopTTS();
+    clientTranscriptionRef.current = '';
+
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (SpeechRecognition) {
+      try {
+        const rec = new SpeechRecognition();
+        rec.continuous = false;
+        rec.interimResults = false;
+        rec.lang = speechLang;
+        rec.onresult = (event) => {
+          const text = event.results[0][0].transcript;
+          if (text) {
+            clientTranscriptionRef.current = text;
+          }
+        };
+        rec.onerror = (e) => {
+          console.warn("SpeechRecognition error:", e.error);
+        };
+        rec.start();
+        recognitionRef.current = rec;
+      } catch (err) {
+        console.warn("Failed to start SpeechRecognition:", err);
+      }
+    }
+
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      mediaStreamRef.current = stream;
+
+      let mimeType = 'audio/webm';
+      if (!MediaRecorder.isTypeSupported('audio/webm')) {
+        mimeType = 'audio/ogg';
+        if (!MediaRecorder.isTypeSupported('audio/ogg')) {
+          mimeType = '';
+        }
+      }
+
+      const recorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
+      mediaRecorderRef.current = recorder;
+      audioChunksRef.current = [];
+
+      recorder.ondataavailable = (event) => {
+        if (event.data && event.data.size > 0) {
+          audioChunksRef.current.push(event.data);
+        }
+      };
+
+      recorder.onstop = async () => {
+        const audioBlob = new Blob(audioChunksRef.current, { type: mimeType || 'audio/webm' });
+        await handleAudioSubmit(audioBlob, clientTranscriptionRef.current);
+      };
+
+      recorder.start(100);
+      setIsRecording(true);
+    } catch (err) {
+      console.error("Microphone access denied:", err);
+      setAudioPermissionError("Microphone access denied.");
+    }
+  };
+
+  const stopRecording = () => {
+    if (mediaRecorderRef.current && isRecording) {
+      mediaRecorderRef.current.stop();
+      if (mediaStreamRef.current) {
+        mediaStreamRef.current.getTracks().forEach(track => track.stop());
+      }
+      setIsRecording(false);
+    }
+    if (recognitionRef.current) {
+      recognitionRef.current.stop();
+    }
+  };
+
+  const handleAudioSubmit = async (audioBlob, clientTranscriptionText = '') => {
+    setChatLoading(true);
+    stopTTS();
+
+    try {
+      const profile = { name: user?.name || '', weeks_pregnant: user?.weeks_pregnant || trimester * 13 };
+      const userId = user?.id || 1;
+
+      const { chatAPI } = await import('../api');
+      const data = await chatAPI.speak(audioBlob, profile, 'nutrition', userId, clientTranscriptionText);
+
+      const userText = data.transcribed_text || "[অডিও বার্তা]";
+      const assistantText = data.response || 'কোন উত্তর পাওয়া যায়নি।';
+      
+      // Update messages sequence
+      setMessages(prev => {
+        const updated = [...prev, { role: 'user', text: userText }, { role: 'ai', text: assistantText }];
+        setTimeout(() => playTTS(assistantText, updated.length - 1), 200);
+        return updated;
+      });
+
+      // Update metrics if extracted
+      if (data.extractedNutrients) {
+        handleExtractedMetricsUpdate(data.extractedNutrients);
+      }
+    } catch (err) {
+      console.error("Failed to process nutrition voice API:", err);
+      setMessages(prev => [...prev, { role: 'ai', text: 'ভয়েস বার্তা প্রসেস করতে সমস্যা হয়েছে।' }]);
+    } finally {
+      setChatLoading(false);
+    }
+  };
+
   /**
    * Sync metrics update directly into local state and localStorage safely
    */
@@ -393,7 +565,13 @@ const Nutrition = () => {
         }),
       });
       const data = await res.json();
-      setMessages(prev => [...prev, { role: 'ai', text: data.response || 'কোন উত্তর পাওয়া যায়নি।' }]);
+      const responseText = data.response || 'কোন উত্তর পাওয়া যায়নি।';
+      setMessages(prev => {
+        const updated = [...prev, { role: 'ai', text: responseText }];
+        // Auto-play TTS for the new assistant message in its detected language
+        setTimeout(() => playTTS(responseText, updated.length - 1), 200);
+        return updated;
+      });
     } catch {
       setMessages(prev => [...prev, { role: 'ai', text: 'সার্ভারের সাথে সংযোগ স্থাপন করা সম্ভব হয়নি।' }]);
     } finally {
@@ -569,14 +747,64 @@ const Nutrition = () => {
           </div>
         </div>
 
-        {/* Localized Chat Panel */}
         <div className="bg-white rounded-2xl p-5 border border-purple-100/40 shadow-sm flex flex-col justify-between gap-4">
           <div>
-            <SectionLabel icon={MessageSquare}>Consult Dietitian Assistant</SectionLabel>
+            <SectionLabel 
+              icon={MessageSquare}
+              extra={
+                <button
+                  type="button"
+                  onClick={() => setSpeechLang(prev => prev === 'bn-BD' ? 'en-US' : 'bn-BD')}
+                  className="flex items-center gap-1.5 text-[9px] font-bold text-bg-dark-mauve bg-purple-50 border border-purple-100/60 px-2 py-1 rounded-lg hover:bg-purple-100 transition-all cursor-pointer shadow-sm"
+                  title="Toggle speech input language"
+                >
+                  🎙️ {speechLang === 'bn-BD' ? "বাংলা" : "English"}
+                </button>
+              }
+            >
+              Consult Dietitian Assistant
+            </SectionLabel>
             <div className="min-h-[220px] max-h-[260px] overflow-y-auto flex flex-col gap-2 p-1">
-              {messages.map((m, i) => (
-                <div key={i} className={`max-w-[85%] px-3 py-2 rounded-xl text-[11px] font-medium whitespace-pre-wrap ${m.role === 'user' ? 'self-end bg-bg-dark-mauve text-white shadow-sm' : 'self-start bg-purple-50/40 border border-purple-100/40 text-gray-800'}`}>{m.text}</div>
-              ))}
+              {messages.map((m, i) => {
+                const isUser = m.role === 'user';
+                return (
+                  <div 
+                    key={i} 
+                    className={`max-w-[85%] px-3 py-2 rounded-xl text-[11px] font-medium whitespace-pre-wrap flex flex-col justify-between ${
+                      isUser 
+                        ? 'self-end bg-bg-dark-mauve text-white shadow-sm' 
+                        : 'self-start bg-purple-50/40 border border-purple-100/40 text-gray-800'
+                    }`}
+                  >
+                    <div>{m.text}</div>
+                    {!isUser && (
+                      <div className="flex justify-end mt-1.5 pt-1 border-t border-purple-200/20">
+                        <button
+                          type="button"
+                          onClick={() => playTTS(m.text, i)}
+                          className={`flex items-center gap-1 px-2 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider transition-all cursor-pointer ${
+                            currentPlaybackMessageId === i
+                              ? 'bg-rose-500 text-white'
+                              : 'bg-purple-100/50 hover:bg-purple-200/50 text-bg-dark-mauve'
+                          }`}
+                        >
+                          {currentPlaybackMessageId === i ? (
+                            <>
+                              <Square className="w-2.5 h-2.5 fill-current" />
+                              <span>Stop</span>
+                            </>
+                          ) : (
+                            <>
+                              <Play className="w-2.5 h-2.5 fill-current" />
+                              <span>Listen</span>
+                            </>
+                          )}
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
               {chatLoading && <div className="text-[10px] text-primary-mauve font-bold animate-pulse">Typing response query...</div>}
               <div ref={chatEndRef} />
             </div>
@@ -585,10 +813,40 @@ const Nutrition = () => {
             <div className="flex flex-wrap gap-1 mb-2.5">
               {QUICK_PROMPTS.map(p => <button key={p.label} onClick={() => sendChat(p.query)} className="text-[9px] font-bold text-white bg-bg-dark-mauve px-2.5 py-1 rounded-full hover:bg-primary-mauve transition-all shadow-sm cursor-pointer">{p.label}</button>)}
             </div>
-            <div className="flex gap-2">
-              <input type="text" value={chatInput} onChange={e => setChatInput(e.target.value)} onKeyDown={e => e.key === 'Enter' && sendChat()} placeholder="খাদ্য বা পুষ্টি নিয়ে প্রশ্ন লিখুন..." className="flex-1 px-3 py-2 text-[11px] bg-purple-50/20 border border-purple-100/60 rounded-xl outline-none focus:border-primary-mauve transition-all font-medium text-gray-800" />
-              <button onClick={() => sendChat()} disabled={!chatInput.trim() || chatLoading} className="bg-bg-dark-mauve hover:bg-primary-mauve text-white font-bold text-xs px-4 rounded-xl disabled:opacity-40 transition-all cursor-pointer shadow-sm">Send</button>
+            <div className="flex gap-2 items-center">
+              <button
+                type="button"
+                onClick={isRecording ? stopRecording : startRecording}
+                disabled={chatLoading}
+                className={`p-2 rounded-xl transition-all cursor-pointer border shrink-0 ${
+                  isRecording 
+                    ? 'bg-rose-500 border-rose-500 text-white animate-pulse'
+                    : 'bg-purple-50 border-purple-100 hover:bg-purple-100 text-bg-dark-mauve'
+                }`}
+                title={isRecording ? "Stop Recording" : "Record Voice"}
+              >
+                {isRecording ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
+              </button>
+              <input 
+                type="text" 
+                value={chatInput} 
+                onChange={e => setChatInput(e.target.value)} 
+                onKeyDown={e => e.key === 'Enter' && sendChat()} 
+                placeholder={isRecording ? "শুনছি... কথা বলুন..." : "খাদ্য বা পুষ্টি নিয়ে প্রশ্ন লিখুন..."} 
+                disabled={chatLoading || isRecording}
+                className="flex-1 px-3 py-2 text-[11px] bg-purple-50/20 border border-purple-100/60 rounded-xl outline-none focus:border-primary-mauve transition-all font-medium text-gray-800" 
+              />
+              <button 
+                onClick={() => sendChat()} 
+                disabled={!chatInput.trim() || chatLoading || isRecording} 
+                className="bg-bg-dark-mauve hover:bg-primary-mauve text-white font-bold text-xs px-4 py-2 rounded-xl disabled:opacity-40 transition-all cursor-pointer shadow-sm"
+              >
+                Send
+              </button>
             </div>
+            {audioPermissionError && (
+              <p className="text-[10px] text-rose-500 font-bold mt-1.5">{audioPermissionError}</p>
+            )}
           </div>
         </div>
       </div>

@@ -63,12 +63,15 @@ export const chatAPI = {
     const response = await api.post('/api/chat/analyze', { message, profile, mode, user_id: userId });
     return response.data;
   },
-  speak: async (audioBlob, profile, mode, userId) => {
+  speak: async (audioBlob, profile, mode, userId, clientTranscribedText = '') => {
     const formData = new FormData();
     formData.append('audio', audioBlob, 'recording.webm');
     formData.append('profile', JSON.stringify(profile));
     formData.append('mode', mode);
     formData.append('user_id', userId);
+    if (clientTranscribedText) {
+      formData.append('client_transcribed_text', clientTranscribedText);
+    }
     
     const response = await api.post('/api/chat/speak', formData, {
       headers: {

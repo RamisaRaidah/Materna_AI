@@ -85,6 +85,7 @@ const ClinicianAssistant = () => {
   const [isRecording, setIsRecording] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [autoplayTTS, setAutoplayTTS] = useState(true);
+  const [speechLang, setSpeechLang] = useState('bn-BD'); // 'bn-BD' or 'en-US'
   const [currentPlaybackMessageId, setCurrentPlaybackMessageId] = useState(null);
   const [audioPermissionError, setAudioPermissionError] = useState(null);
   const [errorMessage, setErrorMessage] = useState(null);
@@ -94,6 +95,8 @@ const ClinicianAssistant = () => {
   const audioChunksRef = useRef([]);
   const activeAudioRef = useRef(null);
   const messagesEndRef = useRef(null);
+  const clientTranscriptionRef = useRef('');
+  const recognitionRef = useRef(null);
 
   useEffect(() => {
     const loadHistory = async () => {
@@ -181,6 +184,33 @@ const ClinicianAssistant = () => {
     setAudioPermissionError(null);
     setErrorMessage(null);
     stopTTS();
+    clientTranscriptionRef.current = '';
+
+    // Initialize client-side Web Speech Recognition in parallel
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (SpeechRecognition) {
+      try {
+        const rec = new SpeechRecognition();
+        rec.continuous = false;
+        rec.interimResults = false;
+        rec.lang = speechLang; // Capture natural Bengali or English
+        
+        rec.onresult = (event) => {
+          const text = event.results[0][0].transcript;
+          if (text) {
+            console.log("Clinician client-side captured transcript:", text);
+            clientTranscriptionRef.current = text;
+          }
+        };
+        rec.onerror = (e) => {
+          console.warn("Clinician client-side SpeechRecognition error:", e.error);
+        };
+        rec.start();
+        recognitionRef.current = rec;
+      } catch (err) {
+        console.warn("Failed to start client-side SpeechRecognition:", err);
+      }
+    }
 
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -206,7 +236,7 @@ const ClinicianAssistant = () => {
 
       recorder.onstop = async () => {
         const audioBlob = new Blob(audioChunksRef.current, { type: mimeType || 'audio/webm' });
-        await handleAudioSubmit(audioBlob);
+        await handleAudioSubmit(audioBlob, clientTranscriptionRef.current);
       };
 
       recorder.start(100);
@@ -225,9 +255,12 @@ const ClinicianAssistant = () => {
       }
       setIsRecording(false);
     }
+    if (recognitionRef.current) {
+      recognitionRef.current.stop();
+    }
   };
 
-  const handleAudioSubmit = async (audioBlob) => {
+  const handleAudioSubmit = async (audioBlob, clientTranscriptionText = '') => {
     setIsProcessing(true);
     setErrorMessage(null);
 
@@ -235,7 +268,7 @@ const ClinicianAssistant = () => {
       const profile = getClinicianProfile();
       const userId = user?.id || 1;
 
-      const data = await chatAPI.speak(audioBlob, profile, mode, userId);
+      const data = await chatAPI.speak(audioBlob, profile, mode, userId, clientTranscriptionText);
 
       const userMsg = {
         role: 'user',
@@ -328,6 +361,13 @@ const ClinicianAssistant = () => {
           </p>
         </div>
         <div className="flex items-center gap-3">
+          <button
+            onClick={() => setSpeechLang(prev => prev === 'bn-BD' ? 'en-US' : 'bn-BD')}
+            className="flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-black uppercase tracking-wider border transition-all cursor-pointer bg-purple-50 border-purple-100 hover:bg-purple-100 text-bg-dark-mauve"
+            title="Toggle input speech recognition language"
+          >
+            <span>🎙️ Input: {speechLang === 'bn-BD' ? "বাংলা (Bangla)" : "English"}</span>
+          </button>
           <button
             onClick={() => setAutoplayTTS(!autoplayTTS)}
             className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-black uppercase tracking-wider border transition-all cursor-pointer ${

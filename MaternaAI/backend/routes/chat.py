@@ -124,18 +124,47 @@ def speak():
     except:
         user_id = 1
 
-    # Transcribe audio using OpenRouter models or resilient fallback transcription since GEMINI_API_KEY is removed
-    from services.rag import or_client
-    try:
-        # Since audio file is passed, we attempt a clean fallback description or transcribing using multimodal / whisper models if needed.
-        # As a safe default when direct keys are cleaned up:
-        transcribed_text = "[অডিও বার্তা গ্রহণ করা হয়েছে - Audio message received]"
-    except Exception as e:
-        print(f"Transcription failed, using fallback: {str(e)}")
-        transcribed_text = "[অডিও অস্পষ্ট - Audio unclear]"
+    # 1. Retrieve client-side transcription if provided by the Web Speech API
+    transcribed_text = request.form.get("client_transcribed_text", "").strip()
+
+    # 2. Server-side Gemini transcription as fallback
+    if not transcribed_text:
+        import google.generativeai as genai
+        from config import GEMINI_API_KEY
         
+        try:
+            if GEMINI_API_KEY:
+                genai.configure(api_key=GEMINI_API_KEY)
+                model = genai.GenerativeModel("gemini-1.5-flash")
+                prompt = (
+                    "You are an expert audio transcriber. Transcribe this audio recording precisely. "
+                    "If the audio is in Bengali (or its local spoken dialects), write the transcription entirely in standard Bengali script. "
+                    "If the audio is in English, transcribe it in English. "
+                    "Do not translate. Just transcribe the exact words spoken. "
+                    "Return ONLY the plain text transcript. Do not include any introductory or conversational text, and do not wrap it in quotes or markdown formatting. "
+                    "If the audio is completely silent or contains no clear speech, return '[অডিও অস্পষ্ট - Audio unclear]'."
+                )
+                response = model.generate_content([
+                    {
+                        "mime_type": mime_type,
+                        "data": audio_bytes
+                    },
+                    prompt
+                ])
+                if response and response.text:
+                    transcribed_text = response.text.strip()
+        except Exception as e:
+            print(f"Server-side Gemini transcription failed: {str(e)}")
+
     if not transcribed_text:
         transcribed_text = "[অডিও অস্পষ্ট - Audio unclear]"
+
+    # Clean up any trailing quotes or markdown wraps
+    transcribed_text = transcribed_text.replace('"', '').replace("'", "").strip()
+    if transcribed_text.startswith("```"):
+        lines = transcribed_text.splitlines()
+        cleaned_lines = [line for line in lines if not line.strip().startswith("```")]
+        transcribed_text = "".join(cleaned_lines).strip()
 
     # Auto-detect language
     lang = 'bn' if is_bengali(transcribed_text) else 'en'
@@ -153,9 +182,19 @@ def speak():
     # Save assistant response to database
     save_chat_message(user_id, 'assistant', response, intent=mode, language=lang)
 
+    # Secondary extraction ONLY if we are in nutrition mode
+    extracted_nutrients = {"iron": 0.0, "folate": 0.0, "calcium": 0.0, "protein": 0.0}
+    if mode == "nutrition" and transcribed_text and transcribed_text != "[অডিও অস্পষ্ট - Audio unclear]":
+        from services.rag import extract_nutrition_metrics
+        try:
+            extracted_nutrients = extract_nutrition_metrics(transcribed_text, response)
+        except Exception as e:
+            print("Failed to extract nutrition metrics in speak route:", e)
+
     return jsonify({
         "transcribed_text": transcribed_text,
         "response": response,
+        "extractedNutrients": extracted_nutrients,
         "mode": mode
     })
 
@@ -207,9 +246,9 @@ def tts():
     if not text:
         return jsonify({"error": "No text provided"}), 400
 
-    # 'bn' = Bangla Neural voice, 'en' = English Neural voice, default = 'bn'
-    lang = request.args.get("lang", "bn")
-    if lang not in ("bn", "en"):
-        lang = "bn"
+    # 'bn' = Bangla Neural voice, 'en' = English Neural voice, None = auto-detect from text
+    lang = request.args.get("lang", None)
+    if lang not in ("bn", "en", None):
+        lang = None  # Fall back to auto-detect if unrecognized value
 
     return Response(generate_tts_stream(text, lang=lang), mimetype="audio/mpeg")
