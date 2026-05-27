@@ -173,7 +173,7 @@ def extract_nutrition_metrics(user_input: str, assistant_response: str) -> dict:
     
     try:
         if GEMINI_API_KEY:
-            model = genai.GenerativeModel("gemini-1.5-flash")
+            model = genai.GenerativeModel("gemini-2.5-flash")
             extraction_res = model.generate_content(
                 extraction_prompt,
                 generation_config={
