@@ -174,7 +174,7 @@ the field of maternal care, verified by AI. We match a doctor for you based on y
                 To facilitate the maximum benefits for our rural audience, 
 we provide support in Bengali.
             </p>
-            <button className="mt-8 px-6 py-3 rounded-xl bg-[#C78FB3] text-white font-medium hover:opacity-90 transition">
+            <button className="mt-8 px-6 py-3 rounded-xl bg-[#C78FB3] text-white font-medium hover:opacity-70 transition">
       Learn More
     </button>
         <h4 style={{color:"#733F57",fontWeight:"bold",fontSize:"1.4rem"}}>
@@ -183,7 +183,7 @@ we provide support in Bengali.
             <p style={{color:"#733F57"}}>
                Our voice-based AI-powered assistant is always there to help — providing instant support, personalized maternal care guidance, timely reminders, and answers whenever mothers need them, ensuring comfort and care at every step of the journey.
             </p>
-            <button className="mt-8 px-6 py-3 rounded-xl bg-[#C78FB3] text-white font-medium hover:opacity-90 transition">
+            <button className="mt-8 px-6 py-3 rounded-xl bg-[#C78FB3] text-white font-medium hover:opacity-70 transition">
       Learn More
     </button>
 
@@ -204,7 +204,7 @@ we provide support in Bengali.
             <p style={{color:"#733F57"}}>
                 We also provide service via SMS through trusted mobile network service providers.
             </p>
-            <button className="mt-8 px-6 py-3 rounded-xl bg-[#C78FB3] text-white font-medium hover:opacity-90 transition">
+            <button className="mt-8 px-6 py-3 rounded-xl bg-[#C78FB3] text-white font-medium hover:opacity-70 transition">
       Learn More
     </button>
   </div>
