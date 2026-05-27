@@ -6,7 +6,7 @@ import {
   Sparkles, Heart, Eye, EyeOff, ChevronUp, ChevronDown,
   CheckCircle2, Info
 } from 'lucide-react';
-
+import Logo from '../components/assets/Logo.png'
 // Validation Helpers
 const BD_PHONE_REGEX = /^(\+8801|01)[3-9]\d{8}$/;
 const NAME_REGEX = /^[a-zA-Z\u0980-\u09FF\s'-]{2,60}$/;
@@ -295,12 +295,25 @@ const Register = () => {
 
         {/* Brand */}
         <div className="flex flex-col items-center mb-6">
-          <svg className="w-12 h-12 mb-2" viewBox="0 0 100 100">
-            <path d="M10,80 C10,30 35,30 40,55 C45,80 55,80 60,55 C65,30 90,30 90,80"
-              stroke="#ab7397" strokeWidth="12" fill="none" strokeLinecap="round" />
-            <circle cx="20" cy="40" r="6" fill="#e1a4c4" />
-            <circle cx="80" cy="40" r="6" fill="#e1a4c4" />
-          </svg>
+          <div className="flex items-center">
+                    <img
+                      src={Logo}
+                      alt="MaternaAI Logo"
+                      style={{
+                        width: "50px",
+                        height: "50px",
+                        objectFit: "contain",
+                        marginRight: "-12px",
+                      }}
+                    />
+          
+                    <span
+                      className="font-sans text-xl tracking-tight"
+                      style={{ color: "#6B2E50", fontWeight: 500 }}
+                    >
+                      Materna<span className="text-pink-100">AI</span>
+                    </span>
+                  </div>
           <h2 className="text-2xl font-black tracking-tight text-text-dark">Create Account</h2>
           <p className="text-xs font-bold text-text-muted mt-1 uppercase tracking-wider">Join the MaternaAI care circle</p>
         </div>
