@@ -36,6 +36,9 @@ app.register_blueprint(birth_plan_bp, url_prefix="/api/birth_plan")
 from routes.sos import sos_bp
 app.register_blueprint(sos_bp, url_prefix="/api/sos")
 
+from routes.notifications import notifications_bp
+app.register_blueprint(notifications_bp, url_prefix="/api/notifications")
+
 @app.route("/")
 def home():
     return {"status": "MaternaAI backend is running"}

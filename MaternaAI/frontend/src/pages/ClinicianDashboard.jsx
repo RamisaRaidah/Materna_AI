@@ -27,7 +27,11 @@ const ClinicianDashboard = () => {
           setStats(JSON.parse(cachedStats));
         }
         if (cachedAlerts) {
-          setAlerts(JSON.parse(cachedAlerts));
+          const parsedAlerts = JSON.parse(cachedAlerts);
+          const safeCachedAlerts = Array.isArray(parsedAlerts)
+            ? parsedAlerts.filter((alert) => alert.alert_type !== 'sos')
+            : [];
+          setAlerts(safeCachedAlerts);
         }
         if (cachedStats || cachedAlerts) {
           setLoading(false);
@@ -48,7 +52,9 @@ const ClinicianDashboard = () => {
           return;
         }
         const safeStats = statsData || { total_patients: 0, active_alerts: 0, high_risk_week: 0 };
-        const safeAlerts = Array.isArray(alertsData) ? alertsData : [];
+        const safeAlerts = Array.isArray(alertsData)
+          ? alertsData.filter((alert) => alert.alert_type !== 'sos')
+          : [];
         setStats(safeStats);
         setAlerts(safeAlerts);
         localStorage.setItem(STATS_CACHE_KEY, JSON.stringify(safeStats));

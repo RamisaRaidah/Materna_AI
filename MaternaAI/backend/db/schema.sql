@@ -160,7 +160,22 @@ CREATE TABLE clinician_alerts (
     title TEXT NOT NULL,
     body TEXT,
     meta TEXT,
+    status VARCHAR(20) DEFAULT 'open',
+    assigned_to INTEGER REFERENCES users(id),
+    assigned_at TIMESTAMPTZ,
     is_dismissed BOOLEAN DEFAULT FALSE,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Notifications
+CREATE TABLE notifications (
+    id SERIAL PRIMARY KEY,
+    user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+    title TEXT NOT NULL,
+    body TEXT NOT NULL,
+    type VARCHAR(30) DEFAULT 'info',
+    data JSONB,
+    is_read BOOLEAN DEFAULT FALSE,
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 

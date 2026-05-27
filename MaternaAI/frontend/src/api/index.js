@@ -192,6 +192,29 @@ export const clinicianAPI = {
   getContacts: async (role = 'patient') => {
     const response = await api.get('/api/clinician/contacts', { params: { role } });
     return response.data;
+  },
+  getSosAlerts: async () => {
+    const response = await api.get('/api/clinician/alerts/sos');
+    return response.data;
+  },
+  assignAlert: async (alertId) => {
+    const response = await api.patch(`/api/clinician/alerts/${alertId}/assign`);
+    return response.data;
+  },
+  getSosMetrics: async () => {
+    const response = await api.get('/api/clinician/sos/metrics');
+    return response.data;
+  }
+};
+
+export const notificationsAPI = {
+  getNotifications: async (limit = 10) => {
+    const response = await api.get('/api/notifications', { params: { limit } });
+    return response.data;
+  },
+  markRead: async (notificationId) => {
+    const response = await api.patch(`/api/notifications/${notificationId}/read`);
+    return response.data;
   }
 };
 
