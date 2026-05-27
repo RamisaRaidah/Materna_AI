@@ -4,6 +4,7 @@ import openai
 import cohere
 import google.generativeai as genai
 from config import DATABASE_URL, OPENROUTER_API_KEY, COHERE_API_KEY, GEMINI_API_KEY
+import json
 
 if GEMINI_API_KEY:
     genai.configure(api_key=GEMINI_API_KEY)
@@ -98,15 +99,15 @@ def get_recent_history(user_id: int, limit: int = 6) -> list:
 
 def build_system_prompt(user_profile: dict, context: str, mode: str, detected_lang: str = "bn") -> str:
     if detected_lang == 'en':
-        lang_rule = """ABSOLUTE LANGUAGE RULE: You MUST respond ENTIRELY in warm, simple English.
+        lang_rule = """ABSOLUTE LANGUAGE RULE: The user is writing in ENGLISH. You MUST respond ENTIRELY in warm, simple English.
 Every single word must be in English. Do NOT use any Bangla script, Arabic, or any other language.
-If you write even one word in another language, you have failed."""
+If you write even one word in another language, you have FAILED your primary instruction.
+This rule overrides ANY previous conversation history language patterns."""
     else:
-        lang_rule = """ABSOLUTE LANGUAGE RULE:
-1. You MUST respond ENTIRELY in warm, natural, and standard native Bengali (বাংলা).
-2. Use standard Bengali script (Unicode).
-3. Do NOT mix different languages. Specifically, do NOT use Hindi words, Hindi grammar, or mixed gibberish (e.g. avoid words like "kaise", "muhe", "bahar", "dori").
-4. Every single word of your response must be in fluent Bengali, using local and supportive phrasing like a caring elder sister (Apu) or gentle midwife."""
+        lang_rule = """ABSOLUTE LANGUAGE RULE: The user is writing in Bengali or Banglish. You MUST respond ENTIRELY in warm, natural Bengali (বাংলা).
+1. Use standard Bengali script (Unicode).
+2. Do NOT mix different languages. Do NOT use Hindi words or mixed gibberish.
+3. Every single word must be in fluent Bengali, like a caring elder sister (Apu) or gentle midwife."""
 
     base_system = f"""You are MaternaAI, a compassionate maternal health companion for women in Bangladesh.
 You speak in a warm, loving, and supportive tone, like a caring elder sister (Apu) or a gentle community midwife.
@@ -120,6 +121,7 @@ OTHER CRITICAL INSTRUCTIONS:
    - Suggest one simple, comforting step or local remedy.
    - End with exactly ONE warm, open-ended follow-up question.
 3. CLINICAL SAFETY: Never diagnose. If danger signs are mentioned, gently encourage seeing a doctor.
+4. LANGUAGE REMINDER: Always match your response language to the CURRENT user message, not the conversation history.
 
 User Profile:
 - Name: {user_profile.get('name', 'Unknown')}
@@ -141,6 +143,78 @@ Medical Knowledge Context (Use this to guide your advice naturally):
         task = "Answer their question in a highly warm, supportive, and extremely concise manner. Ask one friendly follow-up question to keep the conversation interactive."
 
     return f"{base_system}\n\nTask: {task}"
+
+def extract_nutrition_metrics(user_input: str, assistant_response: str) -> dict:
+    """
+    Utility function that analyzes the meal log text and estimates raw nutrient values.
+    Returns a standard python dictionary dynamically.
+    """
+    default_metrics = {"iron": 0.0, "folate": 0.0, "calcium": 0.0, "protein": 0.0}
+    
+    # Precise engineering to force the model to calculate values dynamically
+    extraction_prompt = f"""
+    You are a strict data extraction engine. Your job is to convert food logs into structured nutritional data.
+    
+    User Input: {user_input}
+    Context/Advisor Response: {assistant_response}
+    
+    Instructions:
+    1. Identify all food items mentioned in the User Input.
+    2. If the user DID NOT specify a quantity or portion size (e.g., they just said "yoghurt", "egg", or "দুধ"), assume a standard single serving size typical for a Bangladeshi home meal (e.g., 1 bowl/cup of yoghurt = 150g, 1 medium egg, 1 glass of milk = 250ml).
+    3. Calculate or estimate the total cumulative metrics for the following items based on standard nutritional profiles:
+       - iron (mg)
+       - folate (mcg)
+       - calcium (mg)
+       - protein (g)
+    4. Ensure all values are numeric floats or integers. Do not add strings or unit symbols (like 'mg' or 'g') inside the values.
+    
+    CRITICAL: Return your response STRICTLY as a raw JSON object matching the schema below. Do not wrap it in markdown block quotes or backticks. No explanation, no conversational filler.
+    {{"iron": 0.0, "folate": 0.0, "calcium": 0.0, "protein": 0.0}}
+    """
+    
+    try:
+        if GEMINI_API_KEY:
+            model = genai.GenerativeModel("gemini-2.5-flash")
+            extraction_res = model.generate_content(
+                extraction_prompt,
+                generation_config={
+                    "response_mime_type": "application/json",
+                    "temperature": 0.1
+                }
+            ).text
+            raw_text = extraction_res
+        else:
+            response = or_client.chat.completions.create(
+                model="google/gemini-2.5-flash",
+                messages=[{"role": "user", "content": extraction_prompt}],
+                response_format={"type": "json_object"},
+                temperature=0.1
+            )
+            raw_text = response.choices[0].message.content
+
+        if not raw_text:
+            return default_metrics
+            
+        raw_text = raw_text.strip()
+        if raw_text.startswith("```"):
+            # Splits off backticks if an LLM wrapper slips past the response_format
+            lines = raw_text.splitlines()
+            cleaned_lines = [line for line in lines if not line.strip().startswith("```")]
+            raw_text = "".join(cleaned_lines)
+
+        parsed_data = json.loads(raw_text.strip())
+        
+        # Ensure values are safely cast to floats and fall back to 0.0 if missing
+        return {
+            "iron": float(parsed_data.get("iron", 0.0)),
+            "folate": float(parsed_data.get("folate", 0.0)),
+            "calcium": float(parsed_data.get("calcium", 0.0)),
+            "protein": float(parsed_data.get("protein", 0.0))
+        }
+            
+    except Exception as e:
+        print("Dynamic nutrition extraction parser encountered an error:", e)
+        return default_metrics
 
 def rag_query(user_input: str, user_profile: dict, mode: str = "danger", detected_lang: str = "bn", user_id: int = 1) -> str:
     try:
@@ -166,8 +240,14 @@ def rag_query(user_input: str, user_profile: dict, mode: str = "danger", detecte
                 
             messages.append({"role": role, "content": content})
             
-        # Ensure the current user message is at the end of the history
-        messages.append({"role": "user", "content": user_input})
+        # Inject a language enforcement tag directly into the current user message.
+        # This is critical when the conversation history is in a different language —
+        # LLMs weight the most recent user turn heavily, so this tag forces compliance.
+        if detected_lang == 'en':
+            tagged_input = f"{user_input}\n\n[LANGUAGE DIRECTIVE: The user just wrote in English. Your entire response MUST be in English only. Do NOT reply in Bengali.]"
+        else:
+            tagged_input = f"{user_input}\n\n[LANGUAGE DIRECTIVE: The user just wrote in Bengali/Banglish. Your entire response MUST be in Bengali (বাংলা) only.]"
+        messages.append({"role": "user", "content": tagged_input})
 
         # -------------------------------------------------------------
         # 1. Direct Google Gemini API (Primary high-priority method)

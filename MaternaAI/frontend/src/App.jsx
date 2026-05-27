@@ -9,14 +9,22 @@ import Chat from './pages/Chat';
 import HealthTracker from './pages/HealthTracker';
 import PPD from './pages/PPD';
 import Community from './pages/Community';
+import ClinicianChat from './pages/ClinicianChat';
 import Nutrition from './pages/Nutrition';
 import BirthPlan from './pages/BirthPlan';
 import ClinicianDashboard from './pages/ClinicianDashboard';
+import ClinicianVitals from './pages/ClinicianVitals';
+import ClinicianPPD from './pages/ClinicianPPD';
+import ClinicianCommunity from './pages/ClinicianCommunity';
 import ClinicianSOS from './pages/ClinicianSOS';
 import ClinicianFollowUps from './pages/ClinicianFollowUps';
 import ClinicianProfile from './pages/ClinicianProfile';
+<<<<<<< HEAD
 import Landing from './pages/Landing'
 import Logo from './components/assets/Logo.png'
+=======
+import ClinicianAssistant from './pages/ClinicianAssistant';
+>>>>>>> 3453b7791b34a0aa57feb0ddf10192a27461c8ec
 
 const PrivateRoute = ({ children }) => {
   const { isAuthenticated, loading } = useAuth();
@@ -54,9 +62,14 @@ function App() {
         <Route path="health" element={<HealthTracker />} />
         <Route path="ppd" element={<PPD />} />
         <Route path="community" element={<Community />} />
+        <Route path="clinician-chat" element={<ClinicianChat />} />
         <Route path="nutrition" element={<Nutrition />} />
         <Route path="birth-plan" element={<BirthPlan />} />
         <Route path="clinician" element={<ClinicianDashboard />} />
+        <Route path="clinician/assistant" element={<ClinicianAssistant />} />
+        <Route path="clinician/vitals" element={<ClinicianVitals />} />
+        <Route path="clinician/ppd" element={<ClinicianPPD />} />
+        <Route path="clinician/community" element={<ClinicianCommunity />} />
         <Route path="clinician/sos" element={<ClinicianSOS />} />
         <Route path="clinician/follow-ups" element={<ClinicianFollowUps />} />
         <Route path="clinician/profile" element={<ClinicianProfile />} />

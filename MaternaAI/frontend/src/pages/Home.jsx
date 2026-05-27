@@ -105,12 +105,59 @@ const Home = () => {
 
   // Determine baby size information dynamically
   const getBabySizeInfo = (w) => {
-    if (w < 12) return { emoji: '🍋', name: 'Lime', desc: 'Baby is growing taste buds and tiny fingernails!' };
-    if (w < 20) return { emoji: '🥑', name: 'Avocado', desc: 'Your baby can now hear your heartbeat and move coordinates!' };
-    if (w < 28) return { emoji: '🍈', name: 'Cantaloupe', desc: 'Lungs are developing rapidly, and baby is highly active!' };
-    if (w < 36) return { emoji: '🍍', name: 'Pineapple', desc: 'Rapid weight gain phase. Baby is growing beautiful soft hair!' };
-    return { emoji: '🍉', name: 'Watermelon', desc: 'Fully formed and preparing for safe birth beginnings!' };
+  const weekData = {
+    1: { emoji: '🫧', name: 'Tiny Bubble',desc: 'Fertilization may be happening now as the journey of development begins.' },
+    2: { emoji: '🌱', name: 'Sesame Seed', desc: 'Cells are rapidly dividing and beginning to organize into the earliest structures.' },
+    3: { emoji: '🌾', name: 'Poppy Seed', desc: 'Baby has implanted in the uterus and the foundations of the placenta are beginning to form.' },
+
+    4:  { emoji: '🌱', name: 'Poppy Seed', desc: 'Baby is beginning to form the neural tube, which becomes the brain and spinal cord.' },
+    5:  { emoji: '🍎', name: 'Apple Seed', desc: 'Tiny heart cells are starting to beat for the very first time.' },
+    6:  { emoji: '🫐', name: 'Blueberry', desc: 'Facial features are beginning to take shape, and little arm buds are growing.' },
+    7:  { emoji: '🫒', name: 'Olive', desc: 'Baby’s hands and feet are starting to develop, though still tiny and paddle-like.' },
+    8:  { emoji: '🍇', name: 'Grape', desc: 'Tiny fingers are forming, and baby is beginning little spontaneous movements.' },
+    9:  { emoji: '🍒', name: 'Cherry', desc: 'Eyelids are forming and the heart is now beating strongly and rhythmically.' },
+    10: { emoji: '🍓', name: 'Strawberry', desc: 'Baby is growing fingernails and tooth buds beneath the gums.' },
+    11: { emoji: '🍋', name: 'Lime', desc: 'Baby can kick, stretch, and move around, even if you can’t feel it yet.' },
+
+    12: { emoji: '🍑', name: 'Plum', desc: 'Reflexes are developing quickly, and baby may be opening and closing tiny fingers.' },
+    13: { emoji: '🍋', name: 'Lemon', desc: 'Vocal cords are forming, and fingerprints are beginning to develop.' },
+    14: { emoji: '🍊', name: 'Orange', desc: 'Baby can now make facial expressions like squinting and frowning.' },
+    15: { emoji: '🍎', name: 'Apple', desc: 'Bones are hardening and baby may start sensing light through closed eyelids.' },
+    16: { emoji: '🥑', name: 'Avocado', desc: 'Baby can hear muffled sounds, including your heartbeat and voice.' },
+    17: { emoji: '🥔', name: 'Potato', desc: 'Fat stores are beginning to form under the skin for warmth and energy.' },
+    18: { emoji: '🫑', name: 'Bell Pepper', desc: 'Baby can yawn, hiccup, and may even suck a thumb.' },
+    19: { emoji: '🥭', name: 'Mango', desc: 'Sensory development is growing rapidly—touch, smell, hearing, taste, and vision are all developing.' },
+
+    20: { emoji: '🍌', name: 'Banana', desc: 'Baby is practicing swallowing and may be kicking strongly enough to feel.' },
+    21: { emoji: '🥕', name: 'Carrot', desc: 'Eyebrows and tiny eyelashes are becoming more visible.' },
+    22: { emoji: '🌽', name: 'Corn Cob', desc: 'Baby’s grip is getting stronger and sleep cycles are beginning to form.' },
+    23: { emoji: '🍈', name: 'Grapefruit', desc: 'Tiny lungs are developing air sacs in preparation for breathing.' },
+    24: { emoji: '🌽', name: 'Ear of Corn', desc: 'Baby can respond to sounds and may recognize your voice.' },
+    25: { emoji: '🥬', name: 'Rutabaga', desc: 'Baby’s skin is smoothing out as more fat develops underneath.' },
+    26: { emoji: '🥒', name: 'Zucchini', desc: 'Eyes can begin opening, and baby may respond to bright light.' },
+    27: { emoji: '🥦', name: 'Cauliflower', desc: 'Brain development is accelerating rapidly and baby is very active.' },
+
+    28: { emoji: '🍆', name: 'Eggplant', desc: 'Baby is blinking now and dreaming during sleep cycles.' },
+    29: { emoji: '🎃', name: 'Butternut Squash', desc: 'Muscles and lungs continue maturing as baby gains weight quickly.' },
+    30: { emoji: '🥥', name: 'Coconut', desc: 'Baby can regulate body temperature better with growing fat stores.' },
+    31: { emoji: '🍍', name: 'Pineapple', desc: 'Baby can turn their head side to side and react to familiar voices.' },
+    32: { emoji: '🥒', name: 'Squash', desc: 'Toenails are fully formed and baby is practicing breathing motions.' },
+    33: { emoji: '🥬', name: 'Celery Bunch', desc: 'Bones are hardening, though still soft enough for birth.' },
+    34: { emoji: '🍈', name: 'Melon', desc: 'Baby’s nervous system is maturing and lungs are nearly ready.' },
+    35: { emoji: '🍯', name: 'Honeydew Melon', desc: 'Baby is gaining about half a pound each week now.' },
+
+    36: { emoji: '🥬', name: 'Romaine Lettuce', desc: 'Baby is likely moving into a head-down position for birth.' },
+    37: { emoji: '🥒', name: 'Swiss Chard', desc: 'Baby is considered early term and continues practicing breathing.' },
+    38: { emoji: '🍉', name: 'Mini Watermelon', desc: 'Baby’s organs are fully developed and ready for life outside the womb.' },
+    39: { emoji: '🍉', name: 'Watermelon', desc: 'Baby is full term and continuing to gain weight and strength.' },
+    40: { emoji: '🎉', name: 'Pumpkin', desc: 'Fully formed and ready to meet you any day now 💛' }
   };
+
+  
+  if (w < 1) return weekData[1];
+  if (w > 40) return weekData[40];
+  return weekData[w];
+};
 
   const babySize = getBabySizeInfo(weeks);
 

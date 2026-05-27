@@ -28,6 +28,7 @@ const Sidebar = ({ isOpen, setIsOpen }) => {
       items: [
         { name: 'Home', path: '/', icon: Home },
         { name: 'AI Voice Assistant', path: '/chat', icon: MessageSquare },
+        { name: 'Chat with Clinician', path: '/clinician-chat', icon: MessageSquare },
         { name: 'Vitals & Health', path: '/health', icon: Activity },
         { name: 'PPD EPDS Screen', path: '/ppd', icon: Smile },
       ]
@@ -47,6 +48,11 @@ const Sidebar = ({ isOpen, setIsOpen }) => {
       title: 'Clinician Console',
       items: [
         { name: 'Home / Dashboard', path: '/clinician', icon: LayoutDashboard },
+        { name: 'AI Clinical Assistant', path: '/clinician/assistant', icon: MessageSquare },
+        { name: 'Vitals & Summary', path: '/clinician/vitals', icon: Activity },
+        { name: 'PPD Screening', path: '/clinician/ppd', icon: Smile },
+        { name: 'Community Direct', path: '/clinician/community', icon: Users },
+        { name: 'Home', path: '/clinician', icon: LayoutDashboard },
         { name: 'SOS Dispatches', path: '/clinician/sos', icon: ShieldAlert },
       ]
     },

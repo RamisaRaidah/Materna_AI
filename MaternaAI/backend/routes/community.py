@@ -1,4 +1,6 @@
-from flask import Blueprint, request, jsonify
+from flask import Blueprint, request, jsonify, g
+from db import query
+from services.auth import require_auth
 from services.rag import get_db
 
 community_bp = Blueprint("community", __name__)
@@ -60,6 +62,25 @@ def _row_to_dm(row):
 # ─────────────────────────────────────────────
 # GROUPS
 # ─────────────────────────────────────────────
+
+@community_bp.route("/contacts", methods=["GET"])
+@require_auth
+def list_contacts():
+    """List contacts by role for direct messaging."""
+    role_filter = request.args.get("role", "clinician")
+    if role_filter not in ("patient", "clinician"):
+        return jsonify({"error": "role must be patient or clinician"}), 400
+
+    contacts = query(
+        """
+        SELECT id, name, phone, role, location, created_at
+        FROM users
+        WHERE role = %s AND id != %s
+        ORDER BY created_at DESC
+        """,
+        (role_filter, g.user["id"])
+    )
+    return jsonify(contacts)
 
 @community_bp.route("/groups", methods=["GET"])
 def list_groups():
