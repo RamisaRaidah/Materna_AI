@@ -154,6 +154,10 @@ export const communityAPI = {
     const response = await api.post(`/api/community/dm/${receiverId}`, dmData);
     return response.data;
   },
+  getContacts: async (role = 'clinician') => {
+    const response = await api.get('/api/community/contacts', { params: { role } });
+    return response.data;
+  },
 };
 
 export const clinicianAPI = {
@@ -175,6 +179,14 @@ export const clinicianAPI = {
   },
   getStats: async () => {
     const response = await api.get('/api/clinician/stats');
+    return response.data;
+  },
+  getPatientsOverview: async (limit = 25) => {
+    const response = await api.get('/api/clinician/patients/overview', { params: { limit } });
+    return response.data;
+  },
+  getContacts: async (role = 'patient') => {
+    const response = await api.get('/api/clinician/contacts', { params: { role } });
     return response.data;
   }
 };

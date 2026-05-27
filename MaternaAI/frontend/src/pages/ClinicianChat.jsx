@@ -1,14 +1,11 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { MessageCircle, MessageSquare, Search, ShieldCheck, Users } from 'lucide-react';
+import { MessageSquare, Search } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
-import { clinicianAPI, communityAPI } from '../api';
+import { communityAPI } from '../api';
 
-const ClinicianCommunity = () => {
+const ClinicianChat = () => {
   const { user } = useAuth();
-  const [groups, setGroups] = useState([]);
   const [contacts, setContacts] = useState([]);
-  const [inbox, setInbox] = useState([]);
-  const [activeTab, setActiveTab] = useState('clinician');
   const [activeContact, setActiveContact] = useState(null);
   const [thread, setThread] = useState([]);
   const [message, setMessage] = useState('');
@@ -20,26 +17,20 @@ const ClinicianCommunity = () => {
   useEffect(() => {
     let isActive = true;
 
-    const loadOverview = async () => {
+    const loadContacts = async () => {
       try {
         setLoading(true);
-        const [groupData, contactData, inboxData] = await Promise.all([
-          communityAPI.getGroups(),
-          clinicianAPI.getContacts(activeTab),
-          user?.id ? communityAPI.getInbox(user.id) : Promise.resolve([]),
-        ]);
+        const data = await communityAPI.getContacts('clinician');
         if (!isActive) {
           return;
         }
-        setGroups(Array.isArray(groupData) ? groupData : []);
-        setContacts(Array.isArray(contactData) ? contactData : []);
-        setInbox(Array.isArray(inboxData) ? inboxData : []);
+        setContacts(Array.isArray(data) ? data : []);
         setError('');
       } catch (err) {
         if (!isActive) {
           return;
         }
-        setError('Unable to load clinician community data.');
+        setError('Unable to load clinician contacts.');
       } finally {
         if (isActive) {
           setLoading(false);
@@ -47,11 +38,11 @@ const ClinicianCommunity = () => {
       }
     };
 
-    loadOverview();
+    loadContacts();
     return () => {
       isActive = false;
     };
-  }, [activeTab, user]);
+  }, []);
 
   useEffect(() => {
     let isActive = true;
@@ -85,18 +76,6 @@ const ClinicianCommunity = () => {
     };
   }, [activeContact, user]);
 
-  const stats = useMemo(() => {
-    return groups.reduce(
-      (acc, group) => {
-        acc.total += 1;
-        acc.members += group.member_count || 0;
-        acc.private += group.is_private ? 1 : 0;
-        return acc;
-      },
-      { total: 0, members: 0, private: 0 }
-    );
-  }, [groups]);
-
   const filteredContacts = useMemo(() => {
     const needle = search.trim().toLowerCase();
     if (!needle) {
@@ -106,10 +85,6 @@ const ClinicianCommunity = () => {
       `${contact.name || ''} ${contact.phone || ''}`.toLowerCase().includes(needle)
     );
   }, [contacts, search]);
-
-  const selectContact = (contact) => {
-    setActiveContact(contact);
-  };
 
   const handleSend = async (event) => {
     event.preventDefault();
@@ -133,35 +108,14 @@ const ClinicianCommunity = () => {
     <div className="p-4 md:p-8 max-w-7xl mx-auto space-y-6 font-sans">
       <div className="bg-white border border-primary-mauve/10 rounded-2xl p-6 shadow-premium flex items-center justify-between gap-4">
         <div>
-          <h1 className="text-xl font-black text-text-dark">Clinician Community Direct</h1>
+          <h1 className="text-xl font-black text-text-dark">Chat with Clinician</h1>
           <p className="text-xs font-semibold text-text-muted mt-1">
-            Secure clinician-to-clinician and clinician-to-patient messaging.
+            Secure one-to-one messaging with verified clinicians.
           </p>
         </div>
         <div className="w-12 h-12 rounded-xl bg-primary-mauve/10 text-primary-mauve flex items-center justify-center">
           <MessageSquare className="w-6 h-6" />
         </div>
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        {[
-          { label: 'Active Groups', value: stats.total, icon: Users },
-          { label: 'Members Covered', value: stats.members, icon: MessageCircle },
-          { label: 'Private Cohorts', value: stats.private, icon: ShieldCheck },
-        ].map((card) => {
-          const Icon = card.icon;
-          return (
-            <div key={card.label} className="bg-white border border-primary-mauve/10 rounded-2xl p-4 shadow-premium flex items-center gap-3">
-              <div className="w-10 h-10 rounded-lg bg-primary-mauve/10 text-primary-mauve flex items-center justify-center">
-                <Icon className="w-5 h-5" />
-              </div>
-              <div>
-                <p className="text-xs font-bold text-text-muted uppercase tracking-wider">{card.label}</p>
-                <p className="text-lg font-black text-text-dark">{card.value}</p>
-              </div>
-            </div>
-          );
-        })}
       </div>
 
       {error && (
@@ -173,7 +127,7 @@ const ClinicianCommunity = () => {
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch">
         <div className="lg:col-span-4 bg-white border border-primary-mauve/10 rounded-2xl p-5 shadow-premium flex flex-col min-h-[520px]">
           <div className="flex items-center justify-between gap-3">
-            <h3 className="text-xs font-black uppercase tracking-wider text-text-dark">Direct Contacts</h3>
+            <h3 className="text-xs font-black uppercase tracking-wider text-text-dark">Clinician List</h3>
             <div className="relative">
               <Search className="w-4 h-4 text-text-muted absolute left-3 top-1/2 -translate-y-1/2" />
               <input
@@ -185,74 +139,30 @@ const ClinicianCommunity = () => {
             </div>
           </div>
 
-          <div className="mt-4 flex items-center gap-2">
-            {['clinician', 'patient'].map((tab) => (
-              <button
-                key={tab}
-                onClick={() => setActiveTab(tab)}
-                className={`px-3 py-1.5 rounded-full text-[10px] font-black uppercase tracking-wider border ${
-                  activeTab === tab
-                    ? 'bg-primary-mauve text-white border-primary-mauve'
-                    : 'bg-bg-rose-white text-text-muted border-primary-mauve/15'
-                }`}
-              >
-                {tab === 'clinician' ? 'Clinicians' : 'Patients'}
-              </button>
-            ))}
-          </div>
-
           <div className="mt-4 space-y-2 flex-1 min-h-[220px] overflow-y-auto">
             {loading ? (
-              <div className="text-xs font-semibold text-text-muted">Loading contacts...</div>
+              <div className="text-xs font-semibold text-text-muted">Loading clinicians...</div>
             ) : filteredContacts.length === 0 ? (
-              <div className="text-xs font-semibold text-text-muted">No contacts found.</div>
+              <div className="text-xs font-semibold text-text-muted">No clinicians found.</div>
             ) : (
               filteredContacts.map((contact) => (
                 <button
                   key={contact.id}
                   type="button"
-                  onClick={() => selectContact(contact)}
+                  onClick={() => setActiveContact(contact)}
                   className={`w-full text-left p-3 rounded-xl border transition-all ${
                     activeContact?.id === contact.id
                       ? 'border-primary-mauve bg-primary-mauve/5'
                       : 'border-primary-mauve/10 bg-bg-rose-white hover:border-primary-mauve/30'
                   }`}
                 >
-                  <p className="text-sm font-bold text-text-dark">{contact.name || 'Contact'}</p>
+                  <p className="text-sm font-bold text-text-dark">{contact.name || 'Clinician'}</p>
                   <p className="text-[11px] font-semibold text-text-muted">
                     {contact.phone || 'No phone'} · {contact.location || 'Location unknown'}
                   </p>
                 </button>
               ))
             )}
-          </div>
-
-          <div className="mt-6">
-            <h4 className="text-[11px] font-black uppercase tracking-wider text-text-muted">Recent Inbox</h4>
-            <div className="mt-3 space-y-2 max-h-[200px] overflow-y-auto">
-              {inbox.length === 0 ? (
-                <div className="text-[11px] font-semibold text-text-muted">No recent conversations.</div>
-              ) : (
-                inbox.map((item) => (
-                  <button
-                    key={item.partner_id}
-                    type="button"
-                    onClick={() => selectContact({ id: item.partner_id, name: item.partner_name })}
-                    className="w-full text-left p-3 rounded-xl border border-primary-mauve/10 bg-bg-rose-white hover:border-primary-mauve/30"
-                  >
-                    <div className="flex items-center justify-between">
-                      <p className="text-sm font-bold text-text-dark">{item.partner_name}</p>
-                      {item.unread_count > 0 && (
-                        <span className="px-2 py-0.5 rounded-full bg-danger/10 text-danger text-[9px] font-bold">
-                          {item.unread_count} new
-                        </span>
-                      )}
-                    </div>
-                    <p className="text-[11px] font-semibold text-text-muted mt-1 truncate">{item.last_message}</p>
-                  </button>
-                ))
-              )}
-            </div>
           </div>
         </div>
 
@@ -261,7 +171,7 @@ const ClinicianCommunity = () => {
             <div>
               <h3 className="font-sans font-black text-sm uppercase tracking-wider text-text-dark">Conversation</h3>
               <p className="text-[11px] font-semibold text-text-muted">
-                {activeContact ? `Messaging ${activeContact.name || 'contact'}` : 'Select a contact to start'}
+                {activeContact ? `Messaging ${activeContact.name || 'clinician'}` : 'Select a clinician to start'}
               </p>
             </div>
             <span className="text-[10px] font-extrabold text-text-muted bg-white border border-primary-mauve/10 px-2.5 py-1 rounded-lg">
@@ -277,7 +187,7 @@ const ClinicianCommunity = () => {
                 </div>
                 <h4 className="font-extrabold text-sm text-text-dark">No Active Conversation</h4>
                 <p className="text-[11px] font-medium text-text-muted leading-relaxed">
-                  Choose a clinician or patient to begin a secure discussion.
+                  Choose a clinician to begin a secure conversation.
                 </p>
               </div>
             ) : loadingThread ? (
@@ -292,7 +202,7 @@ const ClinicianCommunity = () => {
                     <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 text-sm font-bold shadow-xs ${
                       isSelf ? 'bg-primary-mauve text-white' : 'bg-bg-rose-white text-text-dark border border-primary-mauve/10'
                     }`}>
-                      {isSelf ? '🩺' : '👤'}
+                      {isSelf ? '🤰' : '🩺'}
                     </div>
                     <div className="flex flex-col max-w-[80%] space-y-1">
                       <div className={`p-4 rounded-2xl border text-sm font-medium leading-relaxed ${
@@ -338,4 +248,4 @@ const ClinicianCommunity = () => {
   );
 };
 
-export default ClinicianCommunity;
+export default ClinicianChat;

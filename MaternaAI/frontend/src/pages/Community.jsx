@@ -55,6 +55,7 @@ const Community = () => {
   // DM states
   const [showDMDrawer, setShowDMDrawer] = useState(false);
   const [inboxConversations, setInboxConversations] = useState([]);
+  const [clinicianContacts, setClinicianContacts] = useState([]);
   const [activePartnerId, setActivePartnerId] = useState(null);
   const [activePartnerName, setActivePartnerName] = useState('');
   const [dmMessages, setDmMessages] = useState([]);
@@ -323,8 +324,12 @@ const Community = () => {
     if (!user?.id) return;
     setIsDMLoading(true);
     try {
-      const data = await communityAPI.getInbox(user.id);
-      setInboxConversations(data || []);
+      const [inboxData, clinicianData] = await Promise.all([
+        communityAPI.getInbox(user.id),
+        communityAPI.getContacts('clinician')
+      ]);
+      setInboxConversations(inboxData || []);
+      setClinicianContacts(clinicianData || []);
     } catch (err) {
       console.error("Failed to load DMs inbox:", err);
     } finally {
@@ -909,6 +914,41 @@ const Community = () => {
                       </button>
                     ))
                   )}
+
+                  <div className="pt-4">
+                    <p className="text-[10px] font-black uppercase tracking-wider text-text-muted px-1">
+                      Available Clinicians
+                    </p>
+                    <div className="mt-2 space-y-2">
+                      {clinicianContacts.length === 0 ? (
+                        <div className="text-[10px] font-semibold text-text-muted px-1">
+                          No clinicians available right now.
+                        </div>
+                      ) : (
+                        clinicianContacts.map((contact) => (
+                          <button
+                            key={contact.id}
+                            onClick={() => handleSelectDMPartner(contact.id, contact.name)}
+                            className="w-full text-left p-3.5 rounded-xl border border-primary-mauve/5 bg-bg-rose-white/30 hover:bg-bg-rose-white hover:border-primary-mauve/20 transition-all flex justify-between items-start cursor-pointer"
+                          >
+                            <div className="flex gap-3 overflow-hidden pr-2">
+                              <div className="w-8.5 h-8.5 rounded-full bg-primary-mauve/10 flex items-center justify-center text-sm font-bold shrink-0">
+                                🩺
+                              </div>
+                              <div className="truncate">
+                                <span className="text-[11px] font-black text-text-dark block leading-none">
+                                  {contact.name || 'Clinician'}
+                                </span>
+                                <span className="text-[9px] font-medium text-text-muted mt-2 block truncate">
+                                  {contact.location || 'Location unavailable'}
+                                </span>
+                              </div>
+                            </div>
+                          </button>
+                        ))
+                      )}
+                    </div>
+                  </div>
                 </div>
               ) : (
                 /* View 2: Active DM thread chat log */
