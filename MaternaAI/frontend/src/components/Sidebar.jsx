@@ -17,7 +17,7 @@ import {
   ClipboardList,
   UserRound
 } from 'lucide-react';
-
+import Logo from './assets/Logo.png'
 const Sidebar = ({ isOpen, setIsOpen }) => {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
@@ -52,6 +52,7 @@ const Sidebar = ({ isOpen, setIsOpen }) => {
         { name: 'Vitals & Summary', path: '/clinician/vitals', icon: Activity },
         { name: 'PPD Screening', path: '/clinician/ppd', icon: Smile },
         { name: 'Community Direct', path: '/clinician/community', icon: Users },
+        { name: 'Home', path: '/clinician', icon: LayoutDashboard },
         { name: 'SOS Dispatches', path: '/clinician/sos', icon: ShieldAlert },
       ]
     },
@@ -120,12 +121,8 @@ const Sidebar = ({ isOpen, setIsOpen }) => {
         <div>
           {/* Logo / Header */}
           <div className="flex items-center justify-between p-6 border-b border-primary-mauve/5">
-            <div className="flex items-center gap-3 cursor-pointer" onClick={() => { navigate('/'); setIsOpen(false); }}>
-              <svg className="w-9 h-9" viewBox="0 0 100 100">
-                <path d="M10,80 C10,30 35,30 40,55 C45,80 55,80 60,55 C65,30 90,30 90,80" stroke="#ab7397" strokeWidth="12" fill="none" strokeLinecap="round" />
-                <circle cx="20" cy="40" r="6" fill="#e1a4c4" />
-                <circle cx="80" cy="40" r="6" fill="#e1a4c4" />
-              </svg>
+            <div className="flex items-center cursor-pointer" onClick={() => { navigate('/'); setIsOpen(false); }}>
+              <img  className="block -mr-2" src={Logo}  style={{width:"50px", height:"40px",paddingRight:"2px",margin:"-12px"}}/>
               <span className="font-sans font-extrabold text-xl tracking-tight text-text-dark">
                 aterna<span className="text-primary-mauve">AI</span>
               </span>

@@ -90,8 +90,15 @@ def analyze():
     # Save assistant response to database
     save_chat_message(user_id, 'assistant', response, intent=mode, language=lang)
 
+    # Secondary extraction ONLY if we are in nutrition mode
+    extracted_nutrients = {"iron": 0.0, "folate": 0.0, "calcium": 0.0, "protein": 0.0}
+    if mode == "nutrition":
+        from services.rag import extract_nutrition_metrics
+        extracted_nutrients = extract_nutrition_metrics(user_input, response)
+
     return jsonify({
         "response": response,
+        "extractedNutrients": extracted_nutrients,
         "mode": mode
     })
 
