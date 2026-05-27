@@ -265,6 +265,9 @@ const Nutrition = () => {
     setCurrentPlaybackMessageId(null);
   };
 
+  // Detect if text is primarily Bengali (Unicode range \u0980-\u09FF)
+  const isBengaliText = (text) => /[\u0980-\u09FF]/.test(text);
+
   const playTTS = (text, messageIndex) => {
     if (currentPlaybackMessageId === messageIndex) {
       stopTTS();
@@ -272,7 +275,9 @@ const Nutrition = () => {
     }
     stopTTS();
     try {
-      const audioUrl = `/api/chat/tts?text=${encodeURIComponent(text)}&lang=bn`;
+      // Auto-detect language: use Bengali TTS voice if text has Bengali script, else English
+      const lang = isBengaliText(text) ? 'bn' : 'en';
+      const audioUrl = `/api/chat/tts?text=${encodeURIComponent(text)}&lang=${lang}`;
       const audio = new Audio(audioUrl);
       activeAudioRef.current = audio;
       setCurrentPlaybackMessageId(messageIndex);
@@ -560,7 +565,13 @@ const Nutrition = () => {
         }),
       });
       const data = await res.json();
-      setMessages(prev => [...prev, { role: 'ai', text: data.response || 'কোন উত্তর পাওয়া যায়নি।' }]);
+      const responseText = data.response || 'কোন উত্তর পাওয়া যায়নি।';
+      setMessages(prev => {
+        const updated = [...prev, { role: 'ai', text: responseText }];
+        // Auto-play TTS for the new assistant message in its detected language
+        setTimeout(() => playTTS(responseText, updated.length - 1), 200);
+        return updated;
+      });
     } catch {
       setMessages(prev => [...prev, { role: 'ai', text: 'সার্ভারের সাথে সংযোগ স্থাপন করা সম্ভব হয়নি।' }]);
     } finally {

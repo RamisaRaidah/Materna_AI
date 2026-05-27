@@ -155,7 +155,9 @@ const Chat = () => {
     stopTTS();
 
     try {
-      const audioUrl = `/api/chat/tts?text=${encodeURIComponent(text)}`;
+      // Explicitly detect language: Bengali script → bn voice, otherwise → en voice
+      const lang = /[\u0980-\u09FF]/.test(text) ? 'bn' : 'en';
+      const audioUrl = `/api/chat/tts?text=${encodeURIComponent(text)}&lang=${lang}`;
       const audio = new Audio(audioUrl);
       activeAudioRef.current = audio;
       setCurrentPlaybackMessageId(messageIndex);

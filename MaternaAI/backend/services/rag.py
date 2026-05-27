@@ -99,15 +99,15 @@ def get_recent_history(user_id: int, limit: int = 6) -> list:
 
 def build_system_prompt(user_profile: dict, context: str, mode: str, detected_lang: str = "bn") -> str:
     if detected_lang == 'en':
-        lang_rule = """ABSOLUTE LANGUAGE RULE: You MUST respond ENTIRELY in warm, simple English.
+        lang_rule = """ABSOLUTE LANGUAGE RULE: The user is writing in ENGLISH. You MUST respond ENTIRELY in warm, simple English.
 Every single word must be in English. Do NOT use any Bangla script, Arabic, or any other language.
-If you write even one word in another language, you have failed."""
+If you write even one word in another language, you have FAILED your primary instruction.
+This rule overrides ANY previous conversation history language patterns."""
     else:
-        lang_rule = """ABSOLUTE LANGUAGE RULE:
-1. You MUST respond ENTIRELY in warm, natural, and standard native Bengali (বাংলা).
-2. Use standard Bengali script (Unicode).
-3. Do NOT mix different languages. Specifically, do NOT use Hindi words, Hindi grammar, or mixed gibberish (e.g. avoid words like "kaise", "muhe", "bahar", "dori").
-4. Every single word of your response must be in fluent Bengali, using local and supportive phrasing like a caring elder sister (Apu) or gentle midwife."""
+        lang_rule = """ABSOLUTE LANGUAGE RULE: The user is writing in Bengali or Banglish. You MUST respond ENTIRELY in warm, natural Bengali (বাংলা).
+1. Use standard Bengali script (Unicode).
+2. Do NOT mix different languages. Do NOT use Hindi words or mixed gibberish.
+3. Every single word must be in fluent Bengali, like a caring elder sister (Apu) or gentle midwife."""
 
     base_system = f"""You are MaternaAI, a compassionate maternal health companion for women in Bangladesh.
 You speak in a warm, loving, and supportive tone, like a caring elder sister (Apu) or a gentle community midwife.
@@ -121,6 +121,7 @@ OTHER CRITICAL INSTRUCTIONS:
    - Suggest one simple, comforting step or local remedy.
    - End with exactly ONE warm, open-ended follow-up question.
 3. CLINICAL SAFETY: Never diagnose. If danger signs are mentioned, gently encourage seeing a doctor.
+4. LANGUAGE REMINDER: Always match your response language to the CURRENT user message, not the conversation history.
 
 User Profile:
 - Name: {user_profile.get('name', 'Unknown')}
@@ -239,8 +240,14 @@ def rag_query(user_input: str, user_profile: dict, mode: str = "danger", detecte
                 
             messages.append({"role": role, "content": content})
             
-        # Ensure the current user message is at the end of the history
-        messages.append({"role": "user", "content": user_input})
+        # Inject a language enforcement tag directly into the current user message.
+        # This is critical when the conversation history is in a different language —
+        # LLMs weight the most recent user turn heavily, so this tag forces compliance.
+        if detected_lang == 'en':
+            tagged_input = f"{user_input}\n\n[LANGUAGE DIRECTIVE: The user just wrote in English. Your entire response MUST be in English only. Do NOT reply in Bengali.]"
+        else:
+            tagged_input = f"{user_input}\n\n[LANGUAGE DIRECTIVE: The user just wrote in Bengali/Banglish. Your entire response MUST be in Bengali (বাংলা) only.]"
+        messages.append({"role": "user", "content": tagged_input})
 
         # -------------------------------------------------------------
         # 1. Direct Google Gemini API (Primary high-priority method)

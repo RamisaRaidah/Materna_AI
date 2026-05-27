@@ -6,40 +6,64 @@ import re
 def is_bengali(text: str) -> bool:
     if not text:
         return False
-    # 1. Native Bangla script characters
+    # 1. Native Bangla script characters — definitive signal
     if re.search(r"[\u0980-\u09FF]", text):
         return True
     
-    # 2. Banglish detection (Bangla words written in English alphabet)
-    # Common Banglish phonetic words/patterns
+    # 2. Banglish detection (Bangla phonetically written in English alphabet)
+    # IMPORTANT: Only include keywords that are UNIQUELY Banglish and would NEVER
+    # appear in a normal English sentence. Short/ambiguous words like "to", "na",
+    # "ha", "ma", "pet", "mon", "bon", "vomit" have been intentionally removed.
     banglish_keywords = [
-        # Pronouns, basic particles, and question words
-        "ami", "amr", "amar", "aamar", "amra", "apni", "apnr", "apnar", "apnara", "tumi", "tomar", "tui", "tomra",
-        "ki", "keno", "kothay", "kothai", "kokhon", "kibhabe", "kivabe", "kar", "ke", "kemne", "kmne",
-        "tai", "toh", "to", "na", "ha", "ji", "jee", "kintu", "ebong", "athoba", "chai",
-        # Greetings & feelings
-        "ki korbo", "betha", "byatha", "batha", "kore", "korche", "korse", "korsen", "korchen", "koira", 
-        "kemoi", "kemon", "bhalo", "bhala", "valo", "ache", "achen", "ase", "asen", "asundor", "shundor", 
-        "sundor", "matha", "ghuraitse", "ghuracche", "pet", "pete",
-        # Common verbs & particles
-        "hobe", "hobe na", "khabo", "khaite", "khaitese", "khamu", "ashche", "aschhe", "hacche", "hoy", "hoye", 
-        "kora", "korbo", "korben", "koren", "koro", "koris", "hoise", "hoyse", "hoiyeche", "hoyeche", "giyese", 
-        "geche", "gese", "dorkar", "proyojon", "lagbe", "bolen", "bolben", "bujhte", "parchi", "parsi", "janen", 
-        "shunben", "onek", "khub", "shomossa", "somossa", "bujhi", "jani",
-        # Safety, family, & maternal terms
-        "baccha", "bacha", "bachha", "shishu", "sishu", "gorbho", "gorvoboti", "ma", "maa", "baba",
-        "shami", "sami", "daktar", "dakter", "apa", "apu", "bon", "nani", "dadi", "bhaia", "bhaiya", "bhai",
-        # Mental state / feelings
-        "chinta", "voy", "bhoy", "kosto", "mon", "kharap", "kanna", "hashi", "ghum", "khide", "khida",
-        # Danger / health terms
-        "rokto", "rokto-khoron", "srab", "jhor", "jor", "bomi", "vomit", "kashi", "shash", "sas"
+        # Pronouns — very distinctive
+        "ami", "amr", "amar", "aamar", "amra",
+        "apni", "apnr", "apnar", "apnara",
+        "tumi", "tomar", "tui", "tomra",
+        # Question words — distinctive phonetics
+        "keno", "kothay", "kothai", "kokhon", "kibhabe", "kivabe", "kemne", "kmne",
+        "ki korbo", "kemon", "kemoi",
+        # Conjunctions / particles — distinctive enough
+        "kintu", "ebong", "athoba",
+        # Feelings / greetings — safe multi-syllable Banglish
+        "betha", "byatha", "batha",
+        "bhalo", "bhala", "valo",
+        "ache", "achen", "asen",
+        "asundor", "shundor",
+        "matha", "ghuraitse", "ghuracche",
+        # Verbs — very distinctive Banglish phonetics
+        "hobe", "khabo", "khaite", "khaitese", "khamu",
+        "ashche", "aschhe", "hacche", "hoye",
+        "kora", "korbo", "korben", "koren", "koro", "koris",
+        "korche", "korse", "korsen", "korchen", "koira",
+        "hoise", "hoyse", "hoiyeche", "hoyeche",
+        "giyese", "geche", "gese",
+        "dorkar", "proyojon", "lagbe",
+        "bolen", "bolben", "bujhte", "parchi", "parsi",
+        "janen", "shunben", "onek", "khub",
+        "shomossa", "somossa", "bujhi", "jani",
+        # Family / maternal — safe multi-syllable terms
+        "baccha", "bacha", "bachha", "shishu", "sishu",
+        "gorbho", "gorvoboti",
+        "maa", "baba", "shami", "sami",
+        "daktar", "dakter", "apu",
+        "nani", "dadi", "bhaia", "bhaiya", "bhai",
+        # Mental / emotional — distinctive
+        "chinta", "bhoy", "kosto", "kharap",
+        "kanna", "hashi", "ghum", "khide", "khida",
+        # Health / danger — distinctive Banglish
+        "rokto", "rokto-khoron", "srab", "jhor",
+        "kashi", "shash",
     ]
     
     lower_text = text.lower()
+    match_count = 0
     for word in banglish_keywords:
-        # Match word boundaries to prevent matching subsets of English words
         if re.search(r'\b' + re.escape(word) + r'\b', lower_text):
-            return True
+            match_count += 1
+            # Require at least 2 keyword matches for short texts,
+            # or 1 match if the keyword is a multi-word phrase (more specific)
+            if match_count >= 2 or ' ' in word:
+                return True
             
     return False
 

@@ -246,9 +246,9 @@ def tts():
     if not text:
         return jsonify({"error": "No text provided"}), 400
 
-    # 'bn' = Bangla Neural voice, 'en' = English Neural voice, default = 'bn'
-    lang = request.args.get("lang", "bn")
-    if lang not in ("bn", "en"):
-        lang = "bn"
+    # 'bn' = Bangla Neural voice, 'en' = English Neural voice, None = auto-detect from text
+    lang = request.args.get("lang", None)
+    if lang not in ("bn", "en", None):
+        lang = None  # Fall back to auto-detect if unrecognized value
 
     return Response(generate_tts_stream(text, lang=lang), mimetype="audio/mpeg")
