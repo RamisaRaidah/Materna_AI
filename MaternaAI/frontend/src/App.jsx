@@ -19,12 +19,8 @@ import ClinicianCommunity from './pages/ClinicianCommunity';
 import ClinicianSOS from './pages/ClinicianSOS';
 import ClinicianFollowUps from './pages/ClinicianFollowUps';
 import ClinicianProfile from './pages/ClinicianProfile';
-<<<<<<< HEAD
 import Landing from './pages/Landing'
 import Logo from './components/assets/Logo.png'
-=======
-import ClinicianAssistant from './pages/ClinicianAssistant';
->>>>>>> 3453b7791b34a0aa57feb0ddf10192a27461c8ec
 
 const PrivateRoute = ({ children }) => {
   const { isAuthenticated, loading } = useAuth();
