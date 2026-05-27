@@ -46,7 +46,7 @@ const Sidebar = ({ isOpen, setIsOpen }) => {
     {
       title: 'Clinician Console',
       items: [
-        { name: 'Home / Dashboard', path: '/clinician', icon: LayoutDashboard },
+        { name: 'Home', path: '/clinician', icon: LayoutDashboard },
         { name: 'SOS Dispatches', path: '/clinician/sos', icon: ShieldAlert },
       ]
     },
