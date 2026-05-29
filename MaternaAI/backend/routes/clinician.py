@@ -52,6 +52,13 @@ def get_alerts():
 def dismiss_alert(alert_id):
 
     role = g.user.get("role", "patient")
+    alert = query(
+        "SELECT id, patient_id, title FROM clinician_alerts WHERE id=%s",
+        (alert_id,),
+        fetch="one"
+    )
+    if not alert:
+        return jsonify({"error": "Alert not found"}), 404
 
     if role in ("clinician", "admin"):
         query(
@@ -66,7 +73,17 @@ def dismiss_alert(alert_id):
             fetch="none"
         )
 
-    return jsonify({"message": "Alert dismissed"})
+    if role in ("clinician", "admin"):
+        problem_name = alert.get("title") or "your concern"
+        _create_notification(
+            alert.get("patient_id"),
+            "Clinician Assigned",
+            f"Don't worry. Our clinician is ready to resolve your problem: {problem_name}.",
+            "alert_resolved",
+            {"alert_id": alert_id}
+        )
+
+    return jsonify({"message": "Alert resolved"})
 
 @clinician_bp.route("/alerts/sos", methods=["GET"])
 @require_auth

@@ -53,6 +53,7 @@ const HealthTracker = () => {
 
   // UI state
   const [isVitalsSubmitting, setIsVitalsSubmitting] = useState(false);
+  const [isVitalsSyncing, setIsVitalsSyncing] = useState(false);
   const [isKicksSubmitting, setIsKicksSubmitting] = useState(false);
   const [isDangerSubmitting, setIsDangerSubmitting] = useState(false);
   
@@ -89,7 +90,11 @@ const HealthTracker = () => {
 
   const handleVitalsSubmit = async (e) => {
     e.preventDefault();
+    if (isVitalsSyncing) {
+      return;
+    }
     setIsVitalsSubmitting(true);
+    setIsVitalsSyncing(true);
     setVitalsMessage(null);
     setErrorMessage(null);
 
@@ -100,6 +105,23 @@ const HealthTracker = () => {
       weight_gain: weight ? parseFloat(weight) : null,
       water_intake: water ? parseFloat(water) : null
     };
+
+    const hasDangerBp = payload.bp_systolic && payload.bp_systolic >= 140;
+    const hasWarningBp = payload.bp_systolic && payload.bp_systolic >= 130;
+    const hasDangerGlucose = payload.blood_glucose && payload.blood_glucose >= 7.8;
+    const optimisticDanger = hasDangerBp || hasDangerGlucose ? 'danger' : hasWarningBp ? 'warning' : 'safe';
+    setVitalsMessage({
+      type: optimisticDanger === 'danger' ? 'danger' : optimisticDanger === 'warning' ? 'warning' : 'success',
+      text: optimisticDanger === 'danger'
+        ? '🚨 Vitals captured. Critical readings detected. Clinician alerts are being dispatched.'
+        : optimisticDanger === 'warning'
+          ? '⚠️ Vitals captured. Elevated readings detected. Keep monitoring symptoms closely.'
+          : '✅ Vitals captured successfully. Syncing to your dossier now.'
+    });
+
+    const fastUiTimer = setTimeout(() => {
+      setIsVitalsSubmitting(false);
+    }, 500);
 
     try {
       const res = await healthAPI.logVitals(payload);
@@ -115,8 +137,11 @@ const HealthTracker = () => {
     } catch (err) {
       console.error("Vitals submission error:", err);
       setErrorMessage("Could not register vitals log. Ensure connection is stable.");
+      setVitalsMessage(null);
     } finally {
+      clearTimeout(fastUiTimer);
       setIsVitalsSubmitting(false);
+      setIsVitalsSyncing(false);
     }
   };
 
@@ -362,7 +387,7 @@ const HealthTracker = () => {
             <button 
               type="submit"
               disabled={isVitalsSubmitting}
-              className="w-full py-3 bg-primary-mauve text-white rounded-xl text-xs font-black uppercase tracking-widest hover:bg-bg-dark-mauve cursor-pointer shadow-glow transition-all flex items-center justify-center gap-2"
+              className="w-full py-3 bg-primary-mauve text-white rounded-xl text-xs font-black uppercase tracking-widest hover:bg-bg-dark-mauve cursor-pointer shadow-glow transition-all flex items-center justify-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed"
             >
               {isVitalsSubmitting ? (
                 <>

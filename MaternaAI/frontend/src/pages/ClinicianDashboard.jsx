@@ -10,6 +10,7 @@ const ClinicianDashboard = () => {
   const [alerts, setAlerts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [resolvingIds, setResolvingIds] = useState([]);
 
   const recommendations = useMemo(() => ([
     'Prompt daily folate pills and track swelling metrics.',
@@ -41,9 +42,11 @@ const ClinicianDashboard = () => {
       }
     };
 
-    const loadDashboard = async () => {
+    const loadDashboard = async ({ silent = false } = {}) => {
       try {
-        setLoading(true);
+        if (!silent) {
+          setLoading(true);
+        }
         const [statsData, alertsData] = await Promise.all([
           clinicianAPI.getStats(),
           clinicianAPI.getAlerts(),
@@ -66,7 +69,7 @@ const ClinicianDashboard = () => {
         }
         setError('Unable to load clinician dashboard data. Please try again.');
       } finally {
-        if (isActive) {
+        if (isActive && !silent) {
           setLoading(false);
         }
       }
@@ -74,17 +77,32 @@ const ClinicianDashboard = () => {
 
     loadFromCache();
     loadDashboard();
+    const pollId = setInterval(() => {
+      loadDashboard({ silent: true });
+    }, 3000);
     return () => {
       isActive = false;
+      clearInterval(pollId);
     };
   }, []);
 
-  const handleDismiss = async (alertId) => {
+  const handleResolve = async (alertId) => {
+    if (resolvingIds.includes(alertId)) {
+      return;
+    }
+    const currentAlerts = alerts;
+    const nextAlerts = currentAlerts.filter((alert) => alert.id !== alertId);
+    setResolvingIds((prev) => [...prev, alertId]);
+    setAlerts(nextAlerts);
+    localStorage.setItem(ALERTS_CACHE_KEY, JSON.stringify(nextAlerts));
     try {
       await clinicianAPI.dismissAlert(alertId);
-      setAlerts((prev) => prev.filter((alert) => alert.id !== alertId));
     } catch (err) {
-      setError('Failed to dismiss alert. Please retry.');
+      setAlerts(currentAlerts);
+      localStorage.setItem(ALERTS_CACHE_KEY, JSON.stringify(currentAlerts));
+      setError('Failed to resolve alert. Please retry.');
+    } finally {
+      setResolvingIds((prev) => prev.filter((id) => id !== alertId));
     }
   };
 
@@ -165,10 +183,11 @@ const ClinicianDashboard = () => {
                         {alert.created_at ? new Date(alert.created_at).toLocaleString() : 'Just now'}
                       </span>
                       <button
-                        onClick={() => handleDismiss(alert.id)}
-                        className="px-3 py-1.5 rounded-full bg-white text-[10px] font-black uppercase tracking-wider border border-danger/20 text-danger hover:bg-danger hover:text-white transition-colors"
+                        onClick={() => handleResolve(alert.id)}
+                        disabled={resolvingIds.includes(alert.id)}
+                        className="px-3 py-1.5 rounded-full bg-white text-[10px] font-black uppercase tracking-wider border border-danger/20 text-danger hover:bg-danger hover:text-white transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
                       >
-                        Dismiss
+                        {resolvingIds.includes(alert.id) ? 'Resolving...' : 'Resolve'}
                       </button>
                     </div>
                   </div>

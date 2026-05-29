@@ -12,13 +12,24 @@ import {
   FileText, 
   LogOut,
   X,
+  Bell,
   AlertTriangle,
   LayoutDashboard,
   ClipboardList,
   UserRound
 } from 'lucide-react';
 import Logo from './assets/Logo.png'
-const Sidebar = ({ isOpen, setIsOpen }) => {
+const Sidebar = ({
+  isOpen,
+  setIsOpen,
+  notifications = [],
+  unreadCount = 0,
+  showNotifications = false,
+  setShowNotifications,
+  loadingNotifications = false,
+  acknowledgingIds = [],
+  onAcknowledge
+}) => {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
 
@@ -130,14 +141,81 @@ const Sidebar = ({ isOpen, setIsOpen }) => {
                 aterna<span className="text-primary-mauve">AI</span>
               </span>
             </div>
-            {/* Close Button on Mobile */}
-            <button 
-              className="p-1 text-text-muted hover:text-text-dark lg:hidden" 
-              onClick={() => setIsOpen(false)}
-            >
-              <X className="w-6 h-6" />
-            </button>
+            <div className="flex items-center gap-2">
+              {user?.role === 'patient' && (
+                <button
+                  type="button"
+                  onClick={() => setShowNotifications?.((prev) => !prev)}
+                  className="relative p-2 rounded-full text-text-muted hover:text-primary-mauve hover:bg-primary-mauve/10 transition-colors"
+                  aria-label="Notifications"
+                >
+                  <Bell className="w-5 h-5" />
+                  {unreadCount > 0 && (
+                    <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 rounded-full bg-primary-mauve text-white text-[10px] font-black flex items-center justify-center">
+                      {unreadCount}
+                    </span>
+                  )}
+                </button>
+              )}
+
+              {/* Close Button on Mobile */}
+              <button 
+                className="p-1 text-text-muted hover:text-text-dark lg:hidden" 
+                onClick={() => setIsOpen(false)}
+              >
+                <X className="w-6 h-6" />
+              </button>
+            </div>
           </div>
+
+          {user?.role === 'patient' && showNotifications && (
+            <div className="fixed left-6 top-24 z-50 w-[320px] max-h-[420px] overflow-hidden">
+              <div className="bg-white border border-primary-mauve/20 rounded-2xl shadow-premium p-4 flex flex-col gap-3">
+                <div className="flex items-center justify-between">
+                  <p className="text-xs font-black uppercase tracking-wider text-primary-mauve">Notifications</p>
+                  <button
+                    onClick={() => setShowNotifications?.(false)}
+                    className="text-[10px] font-black uppercase tracking-wider text-text-muted hover:text-text-dark"
+                  >
+                    Close
+                  </button>
+                </div>
+                <div className="space-y-2 max-h-[320px] overflow-y-auto">
+                  {notifications.length === 0 ? (
+                    <div className="text-[11px] font-semibold text-text-muted">No notifications yet.</div>
+                  ) : (
+                    notifications.map((note) => (
+                      <div
+                        key={note.id}
+                        className={`p-3 rounded-xl border ${note.is_read ? 'border-primary-mauve/10 bg-bg-rose-white' : 'border-primary-mauve/30 bg-primary-mauve/5'}`}
+                      >
+                        <p className="text-[11px] font-black text-text-dark">{note.title}</p>
+                        <p className="text-[10px] font-semibold text-text-muted mt-1 leading-relaxed">
+                          {note.body}
+                        </p>
+                        <div className="mt-2 flex items-center justify-between text-[9px] font-bold text-text-muted">
+                          <span>
+                            {note.created_at
+                              ? new Date(note.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                              : 'Just now'}
+                          </span>
+                          {!note.is_read && (
+                            <button
+                              onClick={() => onAcknowledge?.(note.id)}
+                              className="px-2.5 py-1 rounded-full bg-primary-mauve text-white text-[9px] font-black uppercase tracking-wider hover:bg-bg-dark-mauve disabled:opacity-60 disabled:cursor-not-allowed"
+                              disabled={acknowledgingIds.includes(note.id)}
+                            >
+                              {acknowledgingIds.includes(note.id) ? 'Marking...' : 'Mark Read'}
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* User Persona Capsule */}
           <div className="mx-4 my-5 p-4 rounded-xl bg-bg-rose-white border border-primary-mauve/5 flex items-center gap-3">

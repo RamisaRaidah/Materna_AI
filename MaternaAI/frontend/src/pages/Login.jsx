@@ -23,8 +23,9 @@ const Login = () => {
     setIsSubmitting(true);
 
     try {
-      await login(phone, password);
-      navigate('/');
+      const user = await login(phone, password);
+      const nextPath = user?.role === 'clinician' ? '/clinician' : '/';
+      navigate(nextPath);
     } catch (err) {
       setError(err);
     } finally {

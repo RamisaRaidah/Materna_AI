@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useMemo, useState, useEffect, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { communityAPI } from '../api';
 import {
@@ -75,6 +75,20 @@ const Community = () => {
 
   // Scroll ref for DM Thread
   const dmThreadEndRef = useRef(null);
+
+  const sortedClinicianContacts = useMemo(() => {
+    return [...clinicianContacts].sort((first, second) => {
+      const firstName = (first.name || '').trim();
+      const secondName = (second.name || '').trim();
+      const nameCompare = firstName.localeCompare(secondName, undefined, { sensitivity: 'base' });
+      if (nameCompare !== 0) {
+        return nameCompare;
+      }
+      const firstPhone = (first.phone || '').trim();
+      const secondPhone = (second.phone || '').trim();
+      return firstPhone.localeCompare(secondPhone, undefined, { sensitivity: 'base' });
+    });
+  }, [clinicianContacts]);
 
   // 1. Initial Load: Fetch Groups on Mount
   useEffect(() => {
@@ -920,12 +934,12 @@ const Community = () => {
                       Available Clinicians
                     </p>
                     <div className="mt-2 space-y-2">
-                      {clinicianContacts.length === 0 ? (
+                      {sortedClinicianContacts.length === 0 ? (
                         <div className="text-[10px] font-semibold text-text-muted px-1">
                           No clinicians available right now.
                         </div>
                       ) : (
-                        clinicianContacts.map((contact) => (
+                        sortedClinicianContacts.map((contact) => (
                           <button
                             key={contact.id}
                             onClick={() => handleSelectDMPartner(contact.id, contact.name)}

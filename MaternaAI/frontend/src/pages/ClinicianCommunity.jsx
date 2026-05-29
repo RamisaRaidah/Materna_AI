@@ -99,12 +99,23 @@ const ClinicianCommunity = () => {
 
   const filteredContacts = useMemo(() => {
     const needle = search.trim().toLowerCase();
-    if (!needle) {
-      return contacts;
-    }
-    return contacts.filter((contact) =>
-      `${contact.name || ''} ${contact.phone || ''}`.toLowerCase().includes(needle)
-    );
+    const baseList = needle
+      ? contacts.filter((contact) =>
+          `${contact.name || ''} ${contact.phone || ''}`.toLowerCase().includes(needle)
+        )
+      : contacts;
+
+    return [...baseList].sort((first, second) => {
+      const firstName = (first.name || '').trim();
+      const secondName = (second.name || '').trim();
+      const nameCompare = firstName.localeCompare(secondName, undefined, { sensitivity: 'base' });
+      if (nameCompare !== 0) {
+        return nameCompare;
+      }
+      const firstPhone = (first.phone || '').trim();
+      const secondPhone = (second.phone || '').trim();
+      return firstPhone.localeCompare(secondPhone, undefined, { sensitivity: 'base' });
+    });
   }, [contacts, search]);
 
   const selectContact = (contact) => {
