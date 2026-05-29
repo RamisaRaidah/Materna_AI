@@ -72,7 +72,7 @@ export const chatAPI = {
     if (clientTranscribedText) {
       formData.append('client_transcribed_text', clientTranscribedText);
     }
-    
+
     const response = await api.post('/api/chat/speak', formData, {
       headers: {
         'Content-Type': 'multipart/form-data',
@@ -97,6 +97,25 @@ export const healthAPI = {
   },
   logKickSession: async (kickCount, elapsedSecs) => {
     const response = await api.post('/api/health/kick', { kick_count: kickCount, elapsed_secs: elapsedSecs });
+    return response.data;
+  },
+  analyzeReport: async (file = null, preset = '') => {
+    if (file) {
+      const formData = new FormData();
+      formData.append('file', file);
+      const response = await api.post('/api/health/analyze-report', formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      });
+      return response.data;
+    } else {
+      const response = await api.post('/api/health/analyze-report', { preset });
+      return response.data;
+    }
+  },
+  generateCarePlan: async (vitalsData) => {
+    const response = await api.post('/api/health/care-plan', vitalsData);
     return response.data;
   },
 };

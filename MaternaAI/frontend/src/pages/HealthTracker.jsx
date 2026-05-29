@@ -25,24 +25,31 @@ import {
 
 const HealthTracker = () => {
   const { user } = useAuth();
-  
+
   // Vitals Log States
   const [systolic, setSystolic] = useState('120');
   const [diastolic, setDiastolic] = useState('80');
   const [glucose, setGlucose] = useState('5.4');
   const [weight, setWeight] = useState('6.2');
   const [water, setWater] = useState('1.5');
-  
+
   // Vitals History state
   const [historyLogs, setHistoryLogs] = useState([]);
-  
+
   // Kick Counter States
   const [kickCount, setKickCount] = useState(0);
   const [elapsedSecs, setElapsedSecs] = useState(0);
   const [isCounterRunning, setIsCounterRunning] = useState(false);
   const [kickFeedback, setKickFeedback] = useState(null);
   const [kickResultType, setKickResultType] = useState(null);
-  
+
+  // Health Report States
+  const [reportFile, setReportFile] = useState(null);
+  const [reportResult, setReportResult] = useState(null);
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [reportError, setReportError] = useState(null);
+  const [reportAddedToPlan, setReportAddedToPlan] = useState(false);
+
   // Danger signs checkbox states
   const [dangerSigns, setDangerSigns] = useState({
     bleeding: false,
@@ -55,7 +62,7 @@ const HealthTracker = () => {
   const [isVitalsSubmitting, setIsVitalsSubmitting] = useState(false);
   const [isKicksSubmitting, setIsKicksSubmitting] = useState(false);
   const [isDangerSubmitting, setIsDangerSubmitting] = useState(false);
-  
+
   const [vitalsMessage, setVitalsMessage] = useState(null);
   const [dangerMessage, setDangerMessage] = useState(null);
   const [errorMessage, setErrorMessage] = useState(null);
@@ -105,7 +112,7 @@ const HealthTracker = () => {
       const res = await healthAPI.logVitals(payload);
       setVitalsMessage({
         type: res.danger_level === 'danger' ? 'danger' : res.danger_level === 'warning' ? 'warning' : 'success',
-        text: res.danger_level === 'danger' 
+        text: res.danger_level === 'danger'
           ? '🚨 Danger signs recorded! Critical vitals updated. Clinical alerts dispatched.'
           : res.danger_level === 'warning'
             ? '⚠️ Vitals logged. Warning: elevated metrics detected. Monitor symptoms closely.'
@@ -117,6 +124,28 @@ const HealthTracker = () => {
       setErrorMessage("Could not register vitals log. Ensure connection is stable.");
     } finally {
       setIsVitalsSubmitting(false);
+    }
+  };
+
+
+  const handleAnalyzeReport = async () => {
+    setReportError(null);
+
+    if (!reportFile) {
+      setReportError('⚠️ Please upload a prescription or scan file before analyzing.');
+      return;
+    }
+
+    setIsAnalyzing(true);
+    setReportResult(null);
+    try {
+      const data = await healthAPI.analyzeReport(reportFile, '');
+      setReportResult(data);
+    } catch (err) {
+      console.error('Report analysis failed:', err);
+      setReportError('❌ Analysis failed. Please check the file and try again.');
+    } finally {
+      setIsAnalyzing(false);
     }
   };
 
@@ -136,7 +165,7 @@ const HealthTracker = () => {
         type: 'danger',
         text: `🚨 EMERGENCYSOS ACTIVE. Severity level categorized: ${res.danger_level.toUpperCase()}. Midwife dispatch dispatches are currently processing.`
       });
-      
+
       // Clear inputs
       setDangerSigns({ bleeding: false, vision: false, swelling: false, fever: false });
       fetchHistory();
@@ -159,7 +188,12 @@ const HealthTracker = () => {
 
   const incrementKicks = () => {
     if (!isCounterRunning) startKickCounter();
-    setKickCount(prev => prev + 1);
+    const nextCount = kickCount + 1;
+    setKickCount(nextCount);
+    if (nextCount >= 10) {
+      setIsCounterRunning(false);
+      handleKickSubmit(nextCount, elapsedSecs);
+    }
   };
 
   const resetKickCounter = () => {
@@ -170,11 +204,13 @@ const HealthTracker = () => {
     setKickResultType(null);
   };
 
-  const handleKickSubmit = async () => {
-    if (kickCount === 0 && elapsedSecs === 0) return;
+  const handleKickSubmit = async (overrideCount = null, overrideElapsed = null) => {
+    const finalCount = overrideCount !== null ? overrideCount : kickCount;
+    const finalElapsed = overrideElapsed !== null ? overrideElapsed : elapsedSecs;
+    if (finalCount === 0 && finalElapsed === 0) return;
     setIsKicksSubmitting(true);
     try {
-      const res = await healthAPI.logKickSession(kickCount, elapsedSecs);
+      const res = await healthAPI.logKickSession(finalCount, finalElapsed);
       setKickFeedback(res.ai_feedback);
       setKickResultType(res.result); // "normal" or "reduced"
     } catch (err) {
@@ -198,7 +234,7 @@ const HealthTracker = () => {
 
   return (
     <div className="p-4 md:p-8 max-w-7xl mx-auto space-y-6 font-sans">
-      
+
       {/* Page Header */}
       <div className="bg-white rounded-2xl p-5 border border-primary-mauve/10 shadow-premium flex items-center justify-between">
         <div>
@@ -217,12 +253,12 @@ const HealthTracker = () => {
 
       {/* Main Responsive Grid Layout (laptop: side-by-side, mobile: stacked) */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch">
-        
+
         {/* LEFT PANEL (Col Span 7): Vitals Logger & Danger symptoms */}
         <div className="lg:col-span-7 flex flex-col gap-6">
-          
+
           {/* Vitals Form */}
-          <form 
+          <form
             onSubmit={handleVitalsSubmit}
             className="bg-white border border-primary-mauve/10 rounded-2xl p-6 shadow-premium space-y-5"
           >
@@ -235,14 +271,14 @@ const HealthTracker = () => {
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              
+
               {/* BP Systolic */}
               <div>
                 <label className="block text-[10px] font-black text-text-muted uppercase tracking-wider mb-1.5 pl-0.5">
                   Systolic Blood Pressure (mmHg)
                 </label>
-                <input 
-                  type="number" 
+                <input
+                  type="number"
                   value={systolic}
                   onChange={(e) => setSystolic(e.target.value)}
                   placeholder="e.g. 120"
@@ -265,8 +301,8 @@ const HealthTracker = () => {
                 <label className="block text-[10px] font-black text-text-muted uppercase tracking-wider mb-1.5 pl-0.5">
                   Diastolic Blood Pressure (mmHg)
                 </label>
-                <input 
-                  type="number" 
+                <input
+                  type="number"
                   value={diastolic}
                   onChange={(e) => setDiastolic(e.target.value)}
                   placeholder="e.g. 80"
@@ -279,8 +315,8 @@ const HealthTracker = () => {
                 <label className="block text-[10px] font-black text-text-muted uppercase tracking-wider mb-1.5 pl-0.5">
                   Blood Glucose (mmol/L)
                 </label>
-                <input 
-                  type="number" 
+                <input
+                  type="number"
                   step="0.1"
                   value={glucose}
                   onChange={(e) => setGlucose(e.target.value)}
@@ -299,8 +335,8 @@ const HealthTracker = () => {
                 <label className="block text-[10px] font-black text-text-muted uppercase tracking-wider mb-1.5 pl-0.5">
                   Weight Gain (Total +kg)
                 </label>
-                <input 
-                  type="number" 
+                <input
+                  type="number"
                   step="0.1"
                   value={weight}
                   onChange={(e) => setWeight(e.target.value)}
@@ -318,7 +354,7 @@ const HealthTracker = () => {
                   <span className="text-xs font-black text-primary-mauve">{water} / 2.5 L</span>
                 </div>
                 <div className="flex items-center gap-3">
-                  <input 
+                  <input
                     type="range"
                     min="0"
                     max="3.5"
@@ -342,13 +378,12 @@ const HealthTracker = () => {
 
             {/* Vitals logs notifications */}
             {vitalsMessage && (
-              <div className={`p-4 rounded-xl text-xs font-bold leading-relaxed border animate-fadeIn ${
-                vitalsMessage.type === 'danger'
-                  ? 'bg-danger/10 border-danger/25 text-danger'
-                  : vitalsMessage.type === 'warning'
-                    ? 'bg-warning/10 border-warning/25 text-warning'
-                    : 'bg-success/10 border-success/25 text-success'
-              }`}>
+              <div className={`p-4 rounded-xl text-xs font-bold leading-relaxed border animate-fadeIn ${vitalsMessage.type === 'danger'
+                ? 'bg-danger/10 border-danger/25 text-danger'
+                : vitalsMessage.type === 'warning'
+                  ? 'bg-warning/10 border-warning/25 text-warning'
+                  : 'bg-success/10 border-success/25 text-success'
+                }`}>
                 {vitalsMessage.text}
               </div>
             )}
@@ -359,7 +394,7 @@ const HealthTracker = () => {
               </div>
             )}
 
-            <button 
+            <button
               type="submit"
               disabled={isVitalsSubmitting}
               className="w-full py-3 bg-primary-mauve text-white rounded-xl text-xs font-black uppercase tracking-widest hover:bg-bg-dark-mauve cursor-pointer shadow-glow transition-all flex items-center justify-center gap-2"
@@ -394,15 +429,14 @@ const HealthTracker = () => {
                 { id: 'swelling', title: 'Extreme Swelling (Hands/Face)', desc: 'Water retention check for hypertensive spikes.' },
                 { id: 'fever', title: 'High Fever & Chills', desc: 'Possible internal gestational infection warning.' }
               ].map((sym) => (
-                <label 
+                <label
                   key={sym.id}
-                  className={`flex items-start gap-3 p-3.5 rounded-xl border transition-all duration-300 cursor-pointer select-none ${
-                    dangerSigns[sym.id]
-                      ? 'bg-danger/10 border-danger/25 text-danger'
-                      : 'border-primary-mauve/5 hover:bg-bg-rose-white'
-                  }`}
+                  className={`flex items-start gap-3 p-3.5 rounded-xl border transition-all duration-300 cursor-pointer select-none ${dangerSigns[sym.id]
+                    ? 'bg-danger/10 border-danger/25 text-danger'
+                    : 'border-primary-mauve/5 hover:bg-bg-rose-white'
+                    }`}
                 >
-                  <input 
+                  <input
                     type="checkbox"
                     checked={dangerSigns[sym.id]}
                     onChange={() => setDangerSigns(prev => ({ ...prev, [sym.id]: !prev[sym.id] }))}
@@ -417,13 +451,12 @@ const HealthTracker = () => {
             </div>
 
             {dangerMessage && (
-              <div className={`p-4 rounded-xl text-xs font-bold border leading-relaxed animate-fadeIn ${
-                dangerMessage.type === 'danger'
-                  ? 'bg-danger/10 border-danger/25 text-danger animate-pulse-slow'
-                  : dangerMessage.type === 'warning'
-                    ? 'bg-warning/10 border-warning/25 text-warning'
-                    : 'bg-danger/10 border-danger/25 text-danger'
-              }`}>
+              <div className={`p-4 rounded-xl text-xs font-bold border leading-relaxed animate-fadeIn ${dangerMessage.type === 'danger'
+                ? 'bg-danger/10 border-danger/25 text-danger animate-pulse-slow'
+                : dangerMessage.type === 'warning'
+                  ? 'bg-warning/10 border-warning/25 text-warning'
+                  : 'bg-danger/10 border-danger/25 text-danger'
+                }`}>
                 {dangerMessage.text}
               </div>
             )}
@@ -431,11 +464,10 @@ const HealthTracker = () => {
             <button
               onClick={handleDangerSignsSubmit}
               disabled={isDangerSubmitting || !Object.values(dangerSigns).some(s => s)}
-              className={`w-full py-3 rounded-xl text-xs font-black uppercase tracking-widest transition-all cursor-pointer select-none flex items-center justify-center gap-2 ${
-                Object.values(dangerSigns).some(s => s)
-                  ? 'bg-danger text-white hover:bg-bg-dark-mauve shadow-glow animate-pulse-slow'
-                  : 'bg-gray-100 text-gray-400 border border-gray-200 cursor-not-allowed'
-              }`}
+              className={`w-full py-3 rounded-xl text-xs font-black uppercase tracking-widest transition-all cursor-pointer select-none flex items-center justify-center gap-2 ${Object.values(dangerSigns).some(s => s)
+                ? 'bg-danger text-white hover:bg-bg-dark-mauve shadow-glow animate-pulse-slow'
+                : 'bg-gray-100 text-gray-400 border border-gray-200 cursor-not-allowed'
+                }`}
             >
               {isDangerSubmitting ? (
                 <>
@@ -452,7 +484,7 @@ const HealthTracker = () => {
 
         {/* RIGHT PANEL (Col Span 5): Kick Counter & History */}
         <div className="lg:col-span-5 flex flex-col gap-6">
-          
+
           {/* Cardiff Kick Counter Dashboard */}
           <div className="bg-white border border-primary-mauve/10 rounded-2xl p-6 shadow-premium space-y-5">
             <div className="flex items-center justify-between border-b border-primary-mauve/5 pb-2.5">
@@ -473,23 +505,23 @@ const HealthTracker = () => {
 
             {/* Counter visualizer */}
             <div className="flex flex-col items-center py-2 space-y-4">
-              
+
               <div className="relative w-40 h-40 flex items-center justify-center">
-                
+
                 {/* SVG circular track progress */}
                 <svg className="w-full h-full transform -rotate-90">
-                  <circle 
-                    cx="80" 
-                    cy="80" 
-                    r="70" 
+                  <circle
+                    cx="80"
+                    cy="80"
+                    r="70"
                     stroke="rgba(171, 115, 151, 0.08)"
                     strokeWidth="8"
                     fill="transparent"
                   />
-                  <circle 
-                    cx="80" 
-                    cy="80" 
-                    r="70" 
+                  <circle
+                    cx="80"
+                    cy="80"
+                    r="70"
                     stroke="#ab7397"
                     strokeWidth="8"
                     fill="transparent"
@@ -503,9 +535,8 @@ const HealthTracker = () => {
                 {/* Counter button orb */}
                 <button
                   onClick={incrementKicks}
-                  className={`absolute w-30 h-30 rounded-full flex flex-col items-center justify-center border-4 border-primary-mauve/10 hover:border-primary-mauve bg-bg-rose-white hover:bg-white text-primary-mauve transition-all duration-300 shadow-premium cursor-pointer ${
-                    isCounterRunning ? 'scale-103' : ''
-                  }`}
+                  className={`absolute w-30 h-30 rounded-full flex flex-col items-center justify-center border-4 border-primary-mauve/10 hover:border-primary-mauve bg-bg-rose-white hover:bg-white text-primary-mauve transition-all duration-300 shadow-premium cursor-pointer ${isCounterRunning ? 'scale-103' : ''
+                    }`}
                 >
                   <Baby className={`w-8 h-8 ${isCounterRunning ? 'animate-bounce' : ''}`} />
                   <span className="text-2xl font-black mt-1 leading-none">{kickCount}</span>
@@ -522,7 +553,7 @@ const HealthTracker = () => {
               {/* Counter Controller Panel */}
               <div className="flex gap-2 w-full">
                 {isCounterRunning ? (
-                  <button 
+                  <button
                     type="button"
                     onClick={pauseKickCounter}
                     className="flex-1 flex items-center justify-center gap-1.5 py-2.5 border border-primary-mauve/25 text-primary-mauve rounded-xl text-[10px] font-black uppercase tracking-wider hover:bg-bg-rose-white cursor-pointer select-none"
@@ -531,7 +562,7 @@ const HealthTracker = () => {
                     <span>PAUSE TIMER</span>
                   </button>
                 ) : (
-                  <button 
+                  <button
                     type="button"
                     onClick={startKickCounter}
                     className="flex-1 flex items-center justify-center gap-1.5 py-2.5 bg-primary-mauve text-white rounded-xl text-[10px] font-black uppercase tracking-wider hover:bg-bg-dark-mauve cursor-pointer shadow-glow select-none"
@@ -540,8 +571,8 @@ const HealthTracker = () => {
                     <span>START SESSION</span>
                   </button>
                 )}
-                
-                <button 
+
+                <button
                   type="button"
                   onClick={resetKickCounter}
                   className="flex items-center justify-center p-2.5 border border-primary-mauve/10 text-text-muted rounded-xl hover:bg-bg-rose-white hover:text-text-dark cursor-pointer select-none"
@@ -551,15 +582,28 @@ const HealthTracker = () => {
                 </button>
               </div>
 
+              {kickCount > 0 && kickCount < 10 && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsCounterRunning(false);
+                    handleKickSubmit();
+                  }}
+                  className="w-full py-2 flex items-center justify-center gap-1.5 bg-primary-mauve/10 border border-primary-mauve/25 text-primary-mauve rounded-xl text-[10px] font-black uppercase tracking-wider hover:bg-primary-mauve hover:text-white transition-all cursor-pointer select-none"
+                >
+                  <Sparkles className="w-3.5 h-3.5 animate-pulse" />
+                  <span>Analyze Current Count Early</span>
+                </button>
+              )}
+
               <button
                 type="button"
-                onClick={handleKickSubmit}
+                onClick={() => handleKickSubmit()}
                 disabled={isKicksSubmitting || (kickCount === 0 && elapsedSecs === 0)}
-                className={`w-full py-2.5 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all flex items-center justify-center gap-2 cursor-pointer select-none ${
-                  kickCount > 0 || elapsedSecs > 0
-                    ? 'bg-primary-mauve/10 border border-primary-mauve/20 text-primary-mauve hover:bg-primary-mauve hover:text-white'
-                    : 'bg-gray-50 border border-gray-100 text-gray-300 cursor-not-allowed'
-                }`}
+                className={`w-full py-2.5 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all flex items-center justify-center gap-2 cursor-pointer select-none ${kickCount > 0 || elapsedSecs > 0
+                  ? 'bg-primary-mauve/10 border border-primary-mauve/20 text-primary-mauve hover:bg-primary-mauve hover:text-white'
+                  : 'bg-gray-50 border border-gray-100 text-gray-300 cursor-not-allowed'
+                  }`}
               >
                 {isKicksSubmitting ? (
                   <Loader2 className="w-3.5 h-3.5 animate-spin" />
@@ -572,15 +616,24 @@ const HealthTracker = () => {
 
             {/* Kick Feedback analysis card */}
             {kickFeedback && (
-              <div className={`p-4 rounded-xl border text-[11px] font-semibold leading-relaxed animate-fadeIn ${
-                kickResultType === 'reduced'
-                  ? 'bg-danger/10 border-danger/25 text-danger animate-pulse-slow'
-                  : 'bg-success/10 border-success/25 text-success'
-              }`}>
+              <div className={`p-4 rounded-xl border text-[11px] font-semibold leading-relaxed animate-fadeIn ${kickResultType === 'reduced'
+                ? 'bg-danger/10 border-danger/25 text-danger animate-pulse-slow'
+                : 'bg-success/15 border-success/30 text-success'
+                }`}>
                 <h4 className="text-xs font-black uppercase tracking-wide mb-1 flex items-center gap-1.5">
-                  {kickResultType === 'reduced' ? '⚠️ Fetal Movement Reduced' : '✨ Cardiff Session Reassured'}
+                  {kickResultType === 'reduced' ? (
+                    <>
+                      <AlertTriangle className="w-4 h-4 text-danger animate-pulse" />
+                      <span>⚠️ Fetal Movement Reduced</span>
+                    </>
+                  ) : (
+                    <>
+                      <Sparkles className="w-4 h-4 text-success animate-bounce" />
+                      <span>✨ AI Clinical Insights (Cardiff Reassured)</span>
+                    </>
+                  )}
                 </h4>
-                <p>{kickFeedback}</p>
+                <p className="mt-1">{kickFeedback}</p>
               </div>
             )}
           </div>
@@ -606,21 +659,20 @@ const HealthTracker = () => {
               ) : (
                 historyLogs.map((log, index) => {
                   const date = new Date(log.created_at).toLocaleDateString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
-                  
+
                   return (
-                    <div 
+                    <div
                       key={index}
                       className="p-3.5 rounded-xl border border-primary-mauve/5 bg-bg-rose-white/50 space-y-2.5 animate-fadeIn"
                     >
                       <div className="flex justify-between items-center">
                         <span className="text-[9px] font-black text-text-muted">{date}</span>
-                        <span className={`inline-block px-2 py-0.5 rounded-full text-[8px] font-extrabold uppercase tracking-wide border ${
-                          log.danger_level === 'danger'
-                            ? 'bg-danger/10 border-danger/20 text-danger'
-                            : log.danger_level === 'warning'
-                              ? 'bg-warning/10 border-warning/20 text-warning'
-                              : 'bg-success/10 border-success/20 text-success'
-                        }`}>
+                        <span className={`inline-block px-2 py-0.5 rounded-full text-[8px] font-extrabold uppercase tracking-wide border ${log.danger_level === 'danger'
+                          ? 'bg-danger/10 border-danger/20 text-danger'
+                          : log.danger_level === 'warning'
+                            ? 'bg-warning/10 border-warning/20 text-warning'
+                            : 'bg-success/10 border-success/20 text-success'
+                          }`}>
                           {log.danger_level.toUpperCase()}
                         </span>
                       </div>
@@ -648,6 +700,140 @@ const HealthTracker = () => {
                 })
               )}
             </div>
+          </div>
+
+          {/* ─── AI Report Analyzer ─────────────────────────────── */}
+          <div className="bg-white border border-primary-mauve/10 rounded-2xl p-6 shadow-premium space-y-5">
+            <div className="flex items-center justify-between border-b border-primary-mauve/5 pb-3">
+              <h3 className="font-sans font-black text-sm uppercase tracking-wider text-text-dark flex items-center gap-2">
+                <Clipboard className="w-5 h-5 text-primary-mauve" />
+                AI Medical Report & Prescription Analyzer
+              </h3>
+              <span className="text-[9px] font-black bg-primary-mauve text-white px-2 py-0.5 rounded-full uppercase">
+                OCR + Gemini
+              </span>
+            </div>
+
+            {/* Preset buttons */}
+            <div>
+              <p className="text-[10px] font-black text-text-muted uppercase tracking-wider mb-2">Quick Presets</p>
+              <div className="flex gap-2 flex-wrap">
+                {['prescription', 'ultrasound'].map(preset => (
+                  <button
+                    key={preset}
+                    onClick={() => handleAnalyzeReport(null, preset)}
+                    disabled={isAnalyzing}
+                    className="px-4 py-2 rounded-lg border border-primary-mauve/20 text-primary-mauve text-xs font-black hover:bg-primary-mauve hover:text-white transition-all cursor-pointer capitalize"
+                  >
+                    {preset === 'prescription' ? '💊 Antenatal Prescription' : '🔬 Ultrasound Scan'}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* File upload */}
+            {/* File upload */}
+            <div>
+              <p className="text-[10px] font-black text-text-muted uppercase tracking-wider mb-2">
+                Upload Prescription or Scan (PDF / Image)
+              </p>
+              <label className="flex flex-col items-center justify-center gap-2 p-6 border-2 border-dashed border-primary-mauve/20 rounded-xl cursor-pointer hover:border-primary-mauve/50 hover:bg-bg-rose-white transition-all">
+                <Sparkles className="w-6 h-6 text-primary-mauve/50" />
+                <span className="text-xs font-semibold text-text-muted">
+                  {reportFile ? reportFile.name : 'Click to select a prescription or scan'}
+                </span>
+                <input
+                  type="file"
+                  accept=".pdf,image/*"
+                  className="hidden"
+                  onChange={(e) => {
+                    setReportFile(e.target.files[0] || null);
+                    setReportResult(null);  // clear previous result on new file
+                    setReportError(null);
+                    setReportAddedToPlan(false);
+                  }}
+                />
+              </label>
+
+              {reportError && (
+                <p className="text-[11px] font-bold text-danger mt-2">{reportError}</p>
+              )}
+
+              <button
+                onClick={handleAnalyzeReport}
+                disabled={isAnalyzing}
+                className="mt-3 w-full py-2.5 bg-primary-mauve text-white rounded-xl text-xs font-black uppercase tracking-wider hover:bg-bg-dark-mauve cursor-pointer shadow-glow transition-all flex items-center justify-center gap-2"
+              >
+                {isAnalyzing
+                  ? <><Loader2 className="w-4 h-4 animate-spin" /> Analyzing...</>
+                  : <span>Analyze with AI</span>
+                }
+              </button>
+            </div>
+
+            {isAnalyzing && (
+              <div className="flex items-center gap-2 text-xs font-bold text-text-muted">
+                <Loader2 className="w-4 h-4 animate-spin text-primary-mauve" />
+                Analyzing document with Gemini OCR...
+              </div>
+            )}
+
+            {/* Result */}
+            {reportResult && (
+              <div className="space-y-4 animate-fadeIn">
+                <div className="p-4 bg-bg-rose-white border border-primary-mauve/10 rounded-xl">
+                  <h4 className="font-black text-sm text-text-dark">{reportResult.title}</h4>
+                  <p className="text-[10px] font-bold text-text-muted mt-1">{reportResult.date}</p>
+                  <div
+                    className="text-xs font-medium text-text-dark mt-3 leading-relaxed"
+                    dangerouslySetInnerHTML={{ __html: reportResult.findings }}
+                  />
+                </div>
+
+                {reportResult.meds?.map((med, i) => (
+                  <div
+                    key={i}
+                    className={`p-4 rounded-xl border space-y-1.5 ${med.danger ? 'border-danger/25 bg-danger/5' : 'border-primary-mauve/10 bg-bg-rose-white'
+                      }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-black text-text-dark">{med.name}</span>
+                      <span className={`text-[9px] font-black px-2 py-0.5 rounded-full ${med.danger ? 'bg-danger/15 text-danger' : 'bg-success/15 text-success'
+                        }`}>{med.safety}</span>
+                    </div>
+                    <p className="text-[11px] font-bold text-primary-mauve">{med.purpose}</p>
+                    <p className="text-[11px] font-semibold text-text-dark">{med.timing}</p>
+                    <p className="text-[11px] font-bold text-warning">⚠️ {med.warning}</p>
+                  </div>
+                ))}
+
+                {/* Add to Care Plan button */}
+                <button
+                  onClick={() => {
+                    if (!reportResult?.meds?.length) return;
+                    const importedItems = reportResult.meds.map((med, i) => ({
+                      id: `imported-${Date.now()}-${i}`,
+                      title: med.name,
+                      desc: `${med.purpose} — ${med.timing} | ⚠️ ${med.warning}`,
+                      isImported: true,
+                    }));
+                    localStorage.setItem('imported_medications', JSON.stringify(importedItems));
+                    window.dispatchEvent(new Event('imported_medications_updated'));
+                    setReportAddedToPlan(true);
+                  }}
+                  disabled={reportAddedToPlan}
+                  className={`w-full py-2.5 rounded-xl text-xs font-black uppercase tracking-wider transition-all flex items-center justify-center gap-2 ${reportAddedToPlan
+                      ? 'bg-success/10 border border-success/25 text-success cursor-default'
+                      : 'bg-primary-mauve text-white hover:bg-bg-dark-mauve cursor-pointer shadow-glow'
+                    }`}
+                >
+                  {reportAddedToPlan
+                    ? '✅ Added to AI Pregnancy Care Advisor'
+                    : '+ Add Instructions to Care Plan'
+                  }
+                </button>
+              </div>
+            )}
           </div>
 
         </div>
