@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { Phone, Lock, Eye, EyeOff, AlertCircle } from 'lucide-react';
-
+import Logo from '../components/assets/Logo.png'
 const Login = () => {
   const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
@@ -45,14 +45,25 @@ const Login = () => {
         
         {/* Brand Banner */}
         <div className="flex flex-col items-center mb-8">
-          <svg className="w-16 h-16 mb-3 drop-shadow-md" viewBox="0 0 100 100">
-            <path d="M10,80 C10,30 35,30 40,55 C45,80 55,80 60,55 C65,30 90,30 90,80" stroke="#ab7397" strokeWidth="12" fill="none" strokeLinecap="round" />
-            <circle cx="20" cy="40" r="6" fill="#e1a4c4" />
-            <circle cx="80" cy="40" r="6" fill="#e1a4c4" />
-          </svg>
-          <h2 className="text-3xl font-black tracking-tight text-text-dark">
-            aterna<span className="text-primary-mauve">AI</span>
-          </h2>
+          <div className="flex items-center">
+          <img
+            src={Logo}
+            alt="MaternaAI Logo"
+            style={{
+              width: "50px",
+              height: "50px",
+              objectFit: "contain",
+              marginRight: "-12px",
+            }}
+          />
+
+          <span
+            className="font-sans text-xl tracking-tight"
+            style={{ color: "#6B2E50", fontWeight: 500 }}
+          >
+            Materna<span className="text-pink-100">AI</span>
+          </span>
+        </div>
           <p className="text-xs font-bold tracking-wider text-text-muted mt-1 uppercase">
             Safe Births, Healthy Beginnings
           </p>
