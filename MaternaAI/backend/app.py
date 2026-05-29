@@ -1,12 +1,12 @@
 from flask import Flask
 from flask_cors import CORS
-from config import SECRET_KEY
+from config import SECRET_KEY, CORS_ORIGINS
 
 app = Flask(__name__)
 app.config["SECRET_KEY"] = SECRET_KEY
 CORS(app, resources={
-    r"/api/*": {"origins": ["http://localhost:5173", "http://127.0.0.1:5173"]},
-    r"/auth/*": {"origins": ["http://localhost:5173", "http://127.0.0.1:5173"]},
+    r"/api/*": {"origins": CORS_ORIGINS},
+    r"/auth/*": {"origins": CORS_ORIGINS},
 })
 
 # ─────────────────────────────────────────────
