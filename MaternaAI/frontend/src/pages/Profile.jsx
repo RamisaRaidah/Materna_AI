@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
+import SavedBirthPlans from './SavedBirthPlans';
 import { 
   User, Phone, Calendar, MapPin, Heart, Sparkles, 
-  CheckCircle2, AlertCircle, Save, Edit2, Shield, KeyRound, Trash2
+  CheckCircle2, AlertCircle, Save, Edit2, Shield, KeyRound, Trash2, FileText, ChevronDown, ChevronUp
 } from 'lucide-react';
 
 const BANGLADESH_LOCATIONS = {
@@ -19,64 +20,121 @@ const BANGLADESH_LOCATIONS = {
 
 const BD_PHONE_REGEX = /^(\+8801|01)[3-9]\d{8}$/;
 
-const inputCls = (isEditable) => 
-  `w-full bg-white/50 border ${isEditable ? 'border-primary-mauve/30 focus:border-primary-mauve focus:ring-1 focus:ring-primary-mauve' : 'border-gray-200 bg-gray-50/50 text-text-muted cursor-not-allowed'} outline-none text-text-dark text-sm px-4 py-2.5 rounded-lg transition-all`;
+const classes = {
+  input: (isEditable) => `w-full bg-white/50 border ${
+    isEditable 
+      ? 'border-primary-mauve/30 focus:border-primary-mauve focus:ring-1 focus:ring-primary-mauve' 
+      : 'border-gray-200 bg-gray-50/50 text-text-muted cursor-not-allowed'
+  } outline-none text-text-dark text-sm px-4 py-2.5 rounded-lg transition-all`,
+  label: "text-[10px] font-black text-text-muted uppercase tracking-wider block mb-1",
+  sectionTitle: "text-xs font-black uppercase text-primary-mauve tracking-widest flex items-center gap-2 mb-2",
+  card: "bg-white/80 backdrop-blur-sm border border-primary-mauve/10 rounded-2xl p-6 shadow-sm"
+};
 
 const Profile = () => {
   const { user, updateUserLocalContext, logout } = useAuth();
   const navigate = useNavigate();
+  
+  // UI Panel Controls
   const [isEditing, setIsEditing] = useState(false);
+  const [showSecurityFields, setShowSecurityFields] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [msg, setMsg] = useState({ text: '', type: '' });
 
-  // Profile Form States
-  const [name, setName] = useState('');
-  const [age, setAge] = useState('');
-  const [division, setDivision] = useState('');
-  const [district, setDistrict] = useState('');
-  const [subArea, setSubArea] = useState('');
-  const [emergencyContact, setEmergencyContact] = useState('');
-  const [weeksPregnant, setWeeksPregnant] = useState('');
-  const [isPostpartum, setIsPostpartum] = useState(false);
-  const [persona, setPersona] = useState('pregnant');
+  // Birth Plan Specialized Global Lists
+  const [birthPlans, setBirthPlans] = useState([]);
+  const [expandedPlanId, setExpandedPlanId] = useState(null);
+  const [plansLoading, setPlansLoading] = useState(true);
 
-  // Security Panel States
-  const [showSecurityFields, setShowSecurityFields] = useState(false);
-  const [currentPassword, setCurrentPassword] = useState('');
-  const [newPassword, setNewPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
+  // Core Form Demographics states
+  const [formData, setFormData] = useState({
+    name: '', age: '', division: '', district: '', subArea: '', emergencyContact: '', weeksPregnant: '', isPostpartum: false, persona: 'pregnant'
+  });
+
+  // Security input contexts
+  const [securityData, setSecurityData] = useState({ currentPassword: '', newPassword: '', confirmPassword: '' });
   const [deleteConfirmationText, setDeleteConfirmationText] = useState('');
 
-  // Hydrate form fields with existing user context data on load
+  // Hydrate Profile fields from session auth context
   useEffect(() => {
     if (user) {
-      setName(user.name || '');
-      setAge(user.age || '');
-      setDivision(user.division || '');
-      setDistrict(user.district || '');
-      setSubArea(user.area || '');
-      setEmergencyContact(user.emergency_contact || '');
-      setWeeksPregnant(user.weeks_pregnant || '');
-      setIsPostpartum(user.is_postpartum || false);
-      setPersona(user.persona || 'pregnant');
+      setFormData({
+        name: user.name || '',
+        age: user.age || '',
+        division: user.division || '',
+        district: user.district || '',
+        subArea: user.area || '',
+        emergencyContact: user.emergency_contact || '',
+        weeksPregnant: user.weeks_pregnant || '',
+        isPostpartum: user.is_postpartum || false,
+        persona: user.persona || 'pregnant'
+      });
     }
   }, [user]);
 
-  const handlePostpartumToggle = (checked) => {
-    setIsPostpartum(checked);
-    if (checked) {
-      setPersona('postpartum');
-      setWeeksPregnant('');
-    } else {
-      setPersona('pregnant');
+  // --- FETCH BIRTH PLANS DIRECTLY INSIDE PROFILE ---
+  useEffect(() => {
+    const fetchUserBirthPlans = async () => {
+      if (!user?.id) return;
+      try {
+        const res = await fetch(`/api/birth_plan/${user.id}`, {
+          headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+        });
+        if (res.ok) {
+          const data = await res.json();
+          setBirthPlans(data);
+        }
+      } catch (err) {
+        console.error("Failed to compile profile metrics:", err);
+      } finally {
+        setPlansLoading(false);
+      }
+    };
+    fetchUserBirthPlans();
+  }, [user?.id]);
+
+  const handlePlanDelete = async (e, planId) => {
+    e.stopPropagation();
+    const verify = window.confirm("Are you absolutely sure you want to permanently clear this birth plan matrix from your profile and remote database logs?");
+    if (!verify) return;
+
+    try {
+      const res = await fetch(`/api/birth_plan/${planId}`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+      });
+      if (res.ok) {
+        setBirthPlans(prev => prev.filter(p => p.id !== planId));
+        if (expandedPlanId === planId) setExpandedPlanId(null);
+        setMsg({ text: 'Birth plan erased from clinical node networks.', type: 'success' });
+      } else {
+        setMsg({ text: 'Server rejected data mutation operations.', type: 'danger' });
+      }
+    } catch (err) {
+      setMsg({ text: 'Network request error during data purging.', type: 'danger' });
     }
+  };
+
+  const handleInputChange = (field, value) => setFormData(prev => ({ ...prev, [field]: value }));
+  const resetMessages = () => setMsg({ text: '', type: '' });
+
+  const handlePostpartumToggle = (checked) => {
+    setFormData(prev => ({
+      ...prev, isPostpartum: checked, persona: checked ? 'postpartum' : 'pregnant', weeksPregnant: checked ? '' : prev.weeksPregnant
+    }));
+  };
+
+  const handlePersonaChange = (value) => {
+    setFormData(prev => ({
+      ...prev, persona: value, isPostpartum: value === 'postpartum', weeksPregnant: value === 'postpartum' ? '' : prev.weeksPregnant
+    }));
   };
 
   const handleSave = async (e) => {
     e.preventDefault();
-    setMsg({ text: '', type: '' });
-    
+    resetMessages();
     const updatedPayload = {};
+    const { name, age, division, district, subArea, emergencyContact, weeksPregnant, isPostpartum, persona } = formData;
     
     if (name.trim() && name.trim() !== user?.name) updatedPayload.name = name.trim();
     if (age && parseInt(age) !== user?.age) updatedPayload.age = parseInt(age);
@@ -87,16 +145,14 @@ const Profile = () => {
     if (emergencyContact.trim() && emergencyContact.trim() !== user?.emergency_contact) {
       const formattedPhone = emergencyContact.replace(/\s/g, '');
       if (!BD_PHONE_REGEX.test(formattedPhone)) {
-        setMsg({ text: 'Provide a valid Bangladeshi cell number for emergency contacts.', type: 'danger' });
+        setMsg({ text: 'Provide a valid Bangladeshi mobile number for emergency contacts.', type: 'danger' });
         return;
       }
       updatedPayload.emergency_contact = formattedPhone;
     }
 
     if (user?.role === 'patient') {
-      if (weeksPregnant !== user?.weeks_pregnant) {
-        updatedPayload.weeks_pregnant = weeksPregnant ? parseInt(weeksPregnant) : null;
-      }
+      if (weeksPregnant !== user?.weeks_pregnant) updatedPayload.weeks_pregnant = weeksPregnant ? parseInt(weeksPregnant) : null;
       if (isPostpartum !== user?.is_postpartum) updatedPayload.is_postpartum = isPostpartum;
       if (persona !== user?.persona) updatedPayload.persona = persona;
     }
@@ -107,7 +163,6 @@ const Profile = () => {
     }
 
     setIsSubmitting(true);
-
     try {
       const response = await fetch('/auth/me', {
         method: 'PATCH',
@@ -117,9 +172,7 @@ const Profile = () => {
         },
         body: JSON.stringify(updatedPayload)
       });
-
       const data = await response.json();
-
       if (response.ok) {
         if (updateUserLocalContext) updateUserLocalContext(data.user); 
         setMsg({ text: 'Profile metrics updated successfully!', type: 'success' });
@@ -128,7 +181,7 @@ const Profile = () => {
         setMsg({ text: data.error || 'Server refused processing parameters.', type: 'danger' });
       }
     } catch (err) {
-      setMsg({ text: 'Network dispatch failure. Check your connection server.', type: 'danger' });
+      setMsg({ text: 'Network dispatch failure.', type: 'danger' });
     } finally {
       setIsSubmitting(false);
     }
@@ -136,54 +189,34 @@ const Profile = () => {
 
   const handlePasswordChange = async (e) => {
     e.preventDefault();
+    const { currentPassword, newPassword, confirmPassword } = securityData;
     if (!currentPassword || !newPassword || !confirmPassword) {
-      setMsg({ text: 'Please fill in all security fields to proceed.', type: 'danger' });
-      return;
+      setMsg({ text: 'Please fill in all security fields to proceed.', type: 'danger' }); return;
     }
     if (newPassword !== confirmPassword) {
-      setMsg({ text: 'New password inputs do not match.', type: 'danger' });
-      return;
+      setMsg({ text: 'New password inputs do not match.', type: 'danger' }); return;
     }
-    if (newPassword.length < 8) {
-      setMsg({ text: 'Security requirement: Password must be at least 8 characters long.', type: 'danger' });
-      return;
-    }
-
-    const hasNumber = /\d/.test(newPassword);
-    const hasUppercase = /[A-Z]/.test(newPassword);
-
-    if (!hasNumber || !hasUppercase) {
-      setMsg({ 
-        text: 'Weak password structure! Your new password must contain a combination of both uppercase letters and numbers.', 
-        type: 'danger' 
-      });
-      return;
+    if (newPassword.length < 8 || !/\d/.test(newPassword) || !/[A-Z]/.test(newPassword)) {
+      setMsg({ text: 'Weak password structure! Requirements: 8+ characters, uppercase letter, and a digit.', type: 'danger' }); return;
     }
 
     setIsSubmitting(true);
     try {
       const response = await fetch('/auth/me/password', {
         method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        },
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('token')}` },
         body: JSON.stringify({ currentPassword, newPassword })
       });
-
       const data = await response.json();
-
       if (response.ok) {
         setMsg({ text: 'Security credentials updated successfully.', type: 'success' });
-        setCurrentPassword('');
-        setNewPassword('');
-        setConfirmPassword('');
+        setSecurityData({ currentPassword: '', newPassword: '', confirmPassword: '' });
         setShowSecurityFields(false);
       } else {
         setMsg({ text: data.error || 'Incorrect original password verification.', type: 'danger' });
       }
     } catch (err) {
-      setMsg({ text: 'Failed to connect to the security endpoint.', type: 'danger' });
+      setMsg({ text: 'Failed to connect to security server node.', type: 'danger' });
     } finally {
       setIsSubmitting(false);
     }
@@ -192,29 +225,22 @@ const Profile = () => {
   const handleDeleteAccount = async (e) => {
     e.preventDefault();
     if (deleteConfirmationText !== 'DELETE') {
-      setMsg({ text: 'Please type "DELETE" exactly to confirm your choice.', type: 'danger' });
-      return;
+      setMsg({ text: 'Please type "DELETE" exactly to confirm your choice.', type: 'danger' }); return;
     }
-
-    const finalVerification = window.confirm("🚨 LAST WARNING: Are you absolutely certain you want to permanently close your account? This will scrub your medical analytics and log histories permanently.");
+    const finalVerification = window.confirm("🚨 LAST WARNING: Permanently delete your account?");
     if (!finalVerification) return;
 
     setIsSubmitting(true);
     try {
       const response = await fetch('/auth/me', {
         method: 'DELETE',
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        }
+        headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
       });
-
       if (response.ok) {
-        alert("Your account has been wiped successfully. Redirecting to login.");
-        logout();
-        navigate('/login');
+        alert("Account wiped successfully."); logout(); navigate('/login');
       } else {
         const data = await response.json();
-        setMsg({ text: data.error || 'Failed to request data purging from system nodes.', type: 'danger' });
+        setMsg({ text: data.error || 'Failed to request data purging.', type: 'danger' });
       }
     } catch (err) {
       setMsg({ text: 'Network exception during secure delete execution.', type: 'danger' });
@@ -225,7 +251,7 @@ const Profile = () => {
 
   return (
     <div className="p-6 max-w-4xl mx-auto space-y-6">
-      {/* Upper Profile Header Card Component */}
+      {/* Upper Profile Header Card */}
       <div className="bg-gradient-to-r from-primary-mauve to-bg-dark-mauve rounded-2xl p-6 text-white shadow-premium flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
         <div className="flex items-center gap-4">
           <div className="w-14 h-14 rounded-full bg-white/20 backdrop-blur-md flex items-center justify-center text-2xl">
@@ -234,21 +260,21 @@ const Profile = () => {
           <div>
             <h2 className="text-xl font-black tracking-tight">{user?.name || 'User Profile'}</h2>
             <p className="text-xs text-white/80 font-medium tracking-wide mt-0.5 uppercase">
-              {user?.role === 'clinician' ? 'Registered Clinical Expert' : `Maternal Care Circle • ${persona} mode`}
+              {user?.role === 'clinician' ? 'Registered Clinical Expert' : `Maternal Care Circle • ${formData.persona} mode`}
             </p>
           </div>
         </div>
         <div className="flex gap-2">
           <button
             type="button"
-            onClick={() => { setShowSecurityFields(!showSecurityFields); setIsEditing(false); setMsg({text:'', type:''}); }}
-            className="flex items-center gap-2 px-4 py-2 bg-white/10 text-white hover:bg-white/20 font-black text-xs uppercase tracking-wider rounded-xl transition-all cursor-pointer border border-white/20"
+            onClick={() => { setShowSecurityFields(!showSecurityFields); setIsEditing(false); resetMessages(); }}
+            className="flex items-center gap-2 px-4 py-2 bg-white/10 text-white hover:bg-white/20 font-black text-xs uppercase tracking-wider rounded-xl cursor-pointer border border-white/20"
           >
-            <KeyRound className="w-3.5 h-3.5" /> Security & Privacy
+            <KeyRound className="w-3.5 h-3.5" /> Security
           </button>
           <button
             type="button"
-            onClick={() => { setIsEditing(!isEditing); setShowSecurityFields(false); setMsg({text:'', type:''}); }}
+            onClick={() => { setIsEditing(!isEditing); setShowSecurityFields(false); resetMessages(); }}
             className="flex items-center gap-2 px-4 py-2 bg-white text-primary-mauve font-black text-xs uppercase tracking-wider rounded-xl shadow-md hover:bg-bg-rose-white transition-all cursor-pointer"
           >
             {isEditing ? 'Cancel' : <><Edit2 className="w-3.5 h-3.5" /> Edit Info</>}
@@ -256,80 +282,51 @@ const Profile = () => {
         </div>
       </div>
 
-      {/* Dynamic Messaging Window */}
+      {/* Messages */}
       {msg.text && (
-        <div className={`p-4 rounded-xl border flex items-center gap-3 text-xs font-bold ${msg.type === 'success' ? 'bg-green-50 border-green-200 text-green-700' : 'bg-danger/10 border-danger/20 text-danger'}`}>
+        <div className={`p-4 rounded-xl border flex items-center gap-3 text-xs font-bold ${
+          msg.type === 'success' ? 'bg-green-50 border-green-200 text-green-700' : 'bg-danger/10 border-danger/20 text-danger'
+        }`}>
           {msg.type === 'success' ? <CheckCircle2 className="w-4 h-4 shrink-0" /> : <AlertCircle className="w-4 h-4 shrink-0" />}
           <span>{msg.text}</span>
         </div>
       )}
 
-      {/* Security & Data Privacy Zone */}
+      {/* Security Panels */}
       {showSecurityFields && (
         <div className="space-y-6">
-          {/* Password Rotator Form Element */}
-          <div className="bg-white/80 backdrop-blur-sm border border-primary-mauve/10 rounded-2xl p-6 space-y-4 shadow-sm">
-            <h3 className="text-xs font-black uppercase text-primary-mauve tracking-widest flex items-center gap-2 mb-2">
-              <KeyRound className="w-4 h-4" /> Change Account Password
-            </h3>
+          <div className={classes.card}>
+            <h3 className={classes.sectionTitle}><KeyRound className="w-4 h-4" /> Change Account Password</h3>
             <form onSubmit={handlePasswordChange} className="grid grid-cols-1 sm:grid-cols-3 gap-4 items-end">
               <div>
-                <label className="text-[10px] font-black text-text-muted uppercase tracking-wider block mb-1">Present Password</label>
-                <input type="password" value={currentPassword} onChange={e => setCurrentPassword(e.target.value)} className={inputCls(true)} placeholder="••••••••" />
+                <label className={classes.label}>Present Password</label>
+                <input type="password" value={securityData.currentPassword} onChange={e => setSecurityData(prev => ({ ...prev, currentPassword: e.target.value }))} className={classes.input(true)} placeholder="••••••••" />
               </div>
               <div>
-                <label className="text-[10px] font-black text-text-muted uppercase tracking-wider block mb-1">New Password</label>
-                <input type="password" value={newPassword} onChange={e => setNewPassword(e.target.value)} className={inputCls(true)} placeholder="Min 8 characters" />
+                <label className={classes.label}>New Password</label>
+                <input type="password" value={securityData.newPassword} onChange={e => setSecurityData(prev => ({ ...prev, newPassword: e.target.value }))} className={classes.input(true)} placeholder="Min 8 chars" />
               </div>
               <div>
-                <label className="text-[10px] font-black text-text-muted uppercase tracking-wider block mb-1">Confirm New Password</label>
-                <input type="password" value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} className={inputCls(true)} placeholder="••••••••" />
+                <label className={classes.label}>Confirm Password</label>
+                <input type="password" value={securityData.confirmPassword} onChange={e => setSecurityData(prev => ({ ...prev, confirmPassword: e.target.value }))} className={classes.input(true)} placeholder="••••••••" />
               </div>
               <div className="sm:col-span-3 flex justify-end pt-2">
-                <button
-                  type="submit"
-                  disabled={isSubmitting}
-                  className="px-6 py-2.5 bg-primary-mauve text-white text-xs font-black tracking-widest uppercase rounded-xl hover:bg-bg-dark-mauve shadow-md transition-all disabled:opacity-50 cursor-pointer"
-                >
-                  {isSubmitting ? 'Verifying...' : 'Update Password'}
-                </button>
+                <button type="submit" disabled={isSubmitting} className="px-6 py-2.5 bg-primary-mauve text-white text-xs font-black tracking-widest uppercase rounded-xl hover:bg-bg-dark-mauve transition-all disabled:opacity-50 cursor-pointer">Update</button>
               </div>
             </form>
           </div>
 
-          {/* Account Deletion & Danger Panel */}
-          <div className="bg-red-50/50 backdrop-blur-sm border border-red-200 rounded-2xl p-6 space-y-4 shadow-sm">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-red-100 pb-4">
-              <div>
-                <h3 className="text-xs font-black uppercase text-danger tracking-widest flex items-center gap-2 mb-1">
-                  <Trash2 className="w-4 h-4" /> Danger Zone
-                </h3>
-                <p className="text-xs text-text-muted font-medium">
-                  Closing your account permanently deletes all your personal data and history. This cannot be undone.
-                </p>
-              </div>
+          <div className="bg-red-50/50 border border-red-200 rounded-2xl p-6 space-y-4 shadow-sm">
+            <div>
+              <h3 className="text-xs font-black uppercase text-danger tracking-widest flex items-center gap-2 mb-1"><Trash2 className="w-4 h-4" /> Danger Zone</h3>
+              <p className="text-xs text-text-muted font-medium">Permanently deletes all data metrics.</p>
             </div>
-
             <form onSubmit={handleDeleteAccount} className="flex flex-col sm:flex-row items-end sm:items-center justify-between gap-4">
               <div className="w-full sm:max-w-xs">
-                <label className="text-[10px] font-black text-red-700 uppercase tracking-wider block mb-1">
-                  Type <span className="underline font-extrabold">DELETE</span> to authorize
-                </label>
-                <input 
-                  type="text" 
-                  value={deleteConfirmationText} 
-                  onChange={e => setDeleteConfirmationText(e.target.value)} 
-                  className="w-full bg-white border border-red-200 focus:border-danger focus:ring-1 focus:ring-danger outline-none text-text-dark text-sm px-4 py-2.5 rounded-lg transition-all" 
-                  placeholder="Type DELETE" 
-                />
+                <label className="text-[10px] font-black text-red-700 uppercase tracking-wider block mb-1">Type DELETE to authorize</label>
+                <input type="text" value={deleteConfirmationText} onChange={e => setDeleteConfirmationText(e.target.value)} className="w-full bg-white border border-red-200 text-sm px-4 py-2.5 rounded-lg" placeholder="Type DELETE" />
               </div>
-              <button
-                type="submit"
-                disabled={isSubmitting || deleteConfirmationText !== 'DELETE'}
-                className="px-6 py-3 bg-danger text-white text-xs font-black tracking-widest uppercase rounded-xl hover:bg-red-700 shadow-md transition-all disabled:opacity-30 disabled:cursor-not-allowed flex items-center gap-2 shrink-0 cursor-pointer"
-              >
-                <Trash2 className="w-4 h-4" /> Delete Account
-              </button>
+              <button type="submit" disabled={isSubmitting || deleteConfirmationText !== 'DELETE'} className="px-6 py-3 bg-danger text-white text-xs font-black tracking-widest uppercase rounded-xl hover:bg-red-700 transition-all flex items-center gap-2 cursor-pointer">Delete Account</button>
             </form>
           </div>
         </div>
@@ -338,121 +335,171 @@ const Profile = () => {
       {/* Main Core Profile Metadata Input Form */}
       {!showSecurityFields && (
         <form onSubmit={handleSave} className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          
-          <div className="md:col-span-2 bg-white/80 backdrop-blur-sm border border-primary-mauve/10 rounded-2xl p-6 space-y-4 shadow-sm">
-            <h3 className="text-xs font-black uppercase text-primary-mauve tracking-widest flex items-center gap-2 mb-2">
-              <Shield className="w-4 h-4" /> Personal Demographics
-            </h3>
-            
+          <div className="md:col-span-2 space-y-4 bg-white/80 backdrop-blur-sm border border-primary-mauve/10 rounded-2xl p-6 shadow-sm">
+            <h3 className={classes.sectionTitle}><Shield className="w-4 h-4" /> Personal Demographics</h3>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
-                <label className="text-[10px] font-black text-text-muted uppercase tracking-wider block mb-1">Full Identity *</label>
+                <label className={classes.label}>Full Identity *</label>
                 <div className="relative">
                   <User className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-text-muted" />
-                  <input type="text" value={name} onChange={e => setName(e.target.value)} disabled={!isEditing} className={`${inputCls(isEditing)} pl-10`} />
+                  <input type="text" value={formData.name} onChange={e => handleInputChange('name', e.target.value)} disabled={!isEditing} className={`${classes.input(isEditing)} pl-10`} />
                 </div>
               </div>
-
               <div>
-                <label className="text-[10px] font-black text-text-muted uppercase tracking-wider block mb-1">Age Bracket</label>
+                <label className={classes.label}>Age Bracket</label>
                 <div className="relative">
                   <Calendar className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-text-muted" />
-                  <input type="number" value={age} onChange={e => setAge(e.target.value)} disabled={!isEditing} className={`${inputCls(isEditing)} pl-10`} />
+                  <input type="number" value={formData.age} onChange={e => handleInputChange('age', e.target.value)} disabled={!isEditing} className={`${classes.input(isEditing)} pl-10`} />
                 </div>
               </div>
-
               <div>
-                <label className="text-[10px] font-black text-text-muted uppercase tracking-wider block mb-1">Primary Mobile (Account ID)</label>
+                <label className={classes.label}>Primary Mobile</label>
                 <div className="relative">
                   <Phone className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-text-muted" />
-                  <input type="text" value={user?.phone || ''} disabled className={`${inputCls(false)} pl-10`} />
+                  <input type="text" value={user?.phone || ''} disabled className={`${classes.input(false)} pl-10`} />
                 </div>
               </div>
-
               <div>
-                <label className="text-[10px] font-black text-text-muted uppercase tracking-wider block mb-1">Emergency Point-of-Contact *</label>
+                <label className={classes.label}>Emergency Contact *</label>
                 <div className="relative">
                   <Heart className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-text-muted" />
-                  <input type="tel" value={emergencyContact} onChange={e => setEmergencyContact(e.target.value)} disabled={!isEditing} className={`${inputCls(isEditing)} pl-10`} />
+                  <input type="tel" value={formData.emergencyContact} onChange={e => handleInputChange('emergencyContact', e.target.value)} disabled={!isEditing} className={`${classes.input(isEditing)} pl-10`} />
                 </div>
               </div>
             </div>
 
-            {/* Geographical Hierarchy Segment */}
+            {/* Geography Setup */}
             <div className="border-t border-dashed border-primary-mauve/10 pt-4 mt-2 space-y-4">
-              <h3 className="text-xs font-black uppercase text-primary-mauve tracking-widest flex items-center gap-2">
-                <MapPin className="w-4 h-4" /> Location Assignment
-              </h3>
+              <h3 className="text-xs font-black uppercase text-primary-mauve tracking-widest flex items-center gap-2"><MapPin className="w-4 h-4" /> Location Assignment</h3>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <label className="text-[10px] font-black text-text-muted uppercase tracking-wider block mb-1">Division *</label>
-                  <select value={division} onChange={e => { setDivision(e.target.value); setDistrict(''); setSubArea(''); }} disabled={!isEditing} className={inputCls(isEditing)}>
+                  <label className={classes.label}>Division *</label>
+                  <select value={formData.division} onChange={e => setFormData(prev => ({ ...prev, division: e.target.value, district: '', subArea: '' }))} disabled={!isEditing} className={classes.input(isEditing)}>
                     <option value="">Select Division...</option>
                     {Object.keys(BANGLADESH_LOCATIONS).map(div => <option key={div} value={div}>{div}</option>)}
                   </select>
                 </div>
-
                 <div>
-                  <label className="text-[10px] font-black text-text-muted uppercase tracking-wider block mb-1">District / Zila *</label>
-                  <select value={district} onChange={e => { setDistrict(e.target.value); setSubArea(''); }} disabled={!isEditing || !division} className={inputCls(isEditing && division)}>
+                  <label className={classes.label}>District *</label>
+                  <select value={formData.district} onChange={e => setFormData(prev => ({ ...prev, district: e.target.value, subArea: '' }))} disabled={!isEditing || !formData.division} className={classes.input(isEditing && formData.division)}>
                     <option value="">Select District...</option>
-                    {division && BANGLADESH_LOCATIONS[division].map(dist => <option key={dist} value={dist}>{dist}</option>)}
+                    {formData.division && BANGLADESH_LOCATIONS[formData.division].map(dist => <option key={dist} value={dist}>{dist}</option>)}
                   </select>
                 </div>
-
                 <div className="sm:col-span-2">
-                  <label className="text-[10px] font-black text-text-muted uppercase tracking-wider block mb-1">Area / Neighborhood Line *</label>
-                  <input type="text" value={subArea} onChange={e => setSubArea(e.target.value)} disabled={!isEditing || !district} placeholder="e.g. Dhanmondi" className={inputCls(isEditing && district)} />
+                  <label className={classes.label}>Area Neighborhood Line *</label>
+                  <input type="text" value={formData.subArea} onChange={e => handleInputChange('subArea', e.target.value)} disabled={!isEditing || !formData.district} placeholder="e.g. Dhanmondi" className={classes.input(isEditing && formData.district)} />
                 </div>
               </div>
             </div>
           </div>
 
-          {/* Maternal Metrics Right Column Control Pane */}
+          {/* Sidebar controls */}
           <div className="space-y-6">
             {user?.role === 'patient' && (
-              <div className="bg-white/80 backdrop-blur-sm border border-primary-mauve/10 rounded-2xl p-6 space-y-4 shadow-sm">
-                <h3 className="text-xs font-black uppercase text-primary-mauve tracking-widest flex items-center gap-2">
-                  <Sparkles className="w-4 h-4" /> Maternal Metrics
-                </h3>
-
-                <label className="flex items-center gap-3 cursor-pointer select-none p-3 rounded-xl bg-bg-rose-white border border-primary-mauve/5">
-                  <input type="checkbox" checked={isPostpartum} onChange={e => handlePostpartumToggle(e.target.checked)} disabled={!isEditing} className="w-4 h-4 accent-primary-mauve" />
+              <div className={classes.card}>
+                <h3 className="text-xs font-black uppercase text-primary-mauve tracking-widest flex items-center gap-2 mb-4"><Sparkles className="w-4 h-4" /> Maternal Metrics</h3>
+                <label className="flex items-center gap-3 cursor-pointer select-none p-3 rounded-xl bg-bg-rose-white border border-primary-mauve/5 mb-4">
+                  <input type="checkbox" checked={formData.isPostpartum} onChange={e => handlePostpartumToggle(e.target.checked)} disabled={!isEditing} className="w-4 h-4 accent-primary-mauve" />
                   <div>
                     <span className="text-xs font-black text-text-dark block">Postpartum Mode</span>
-                    <span className="text-[9px] font-bold text-text-muted block mt-0.5">Delivery complete</span>
                   </div>
                 </label>
-
-                {!isPostpartum && (
-                  <div>
-                    <label className="text-[10px] font-black text-text-muted uppercase tracking-wider block mb-1">Gestation Timeline (Weeks)</label>
-                    <input type="number" min="1" max="42" value={weeksPregnant} onChange={e => setWeeksPregnant(e.target.value)} disabled={!isEditing} className={inputCls(isEditing)} />
+                {!formData.isPostpartum && (
+                  <div className="mb-4">
+                    <label className={classes.label}>Gestation Timeline (Weeks)</label>
+                    <input type="number" min="1" max="42" value={formData.weeksPregnant} onChange={e => handleInputChange('weeksPregnant', e.target.value)} disabled={!isEditing} className={classes.input(isEditing)} />
                   </div>
                 )}
-
                 <div>
-                  <label className="text-[10px] font-black text-text-muted uppercase tracking-wider block mb-1">Active Care Persona Target</label>
-                  <select value={persona} onChange={e => setPersona(e.target.value)} disabled={!isEditing} className={inputCls(isEditing)}>
-                    <option value="pregnant">Expecting Mother (Pregnancy Mode)</option>
-                    <option value="postpartum">New Mother 0–12m (Postpartum)</option>
-                    <option value="recovery">Recovery Mode (SOS / Active Tracking)</option>
+                  <label className={classes.label}>Active Care Persona Target</label>
+                  <select value={formData.persona} onChange={e => handlePersonaChange(e.target.value)} disabled={!isEditing} className={classes.input(isEditing)}>
+                    <option value="pregnant">Expecting Mother (Pregnancy)</option>
+                    <option value="postpartum">New Mother (Postpartum)</option>
+                    <option value="recovery">Recovery Mode (SOS)</option>
                   </select>
                 </div>
               </div>
             )}
-
             {isEditing && (
-              <button
-                type="submit"
-                disabled={isSubmitting}
-                className="w-full py-3 bg-primary-mauve hover:bg-bg-dark-mauve text-white text-xs font-black tracking-widest uppercase rounded-xl shadow-glow transition-all duration-300 flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
-              >
-                {isSubmitting ? 'Syncing...' : <><Save className="w-4 h-4" /> Commit Profile Updates</>}
+              <button type="submit" disabled={isSubmitting} className="w-full py-3 bg-primary-mauve text-white text-xs font-black tracking-widest uppercase rounded-xl hover:bg-bg-dark-mauve transition-all flex items-center justify-center gap-2 cursor-pointer">
+                <Save className="w-4 h-4" /> Commit Profile Updates
               </button>
             )}
           </div>
         </form>
+      )}
+
+      {/* INDIVIDUAL SUMMARY LIST DIRECTLY INSIDE PROFILE */}
+      {user?.role === 'patient' && !showSecurityFields && (
+        <div className="bg-white/80 backdrop-blur-sm border border-primary-mauve/10 rounded-2xl p-6 shadow-sm space-y-4">
+          <div>
+            <h4 className="text-xs font-black uppercase text-primary-mauve tracking-wider flex items-center gap-2">
+              <FileText className="w-4 h-4" /> Individual Saved Birth Plans
+            </h4>
+            <p className="text-[11px] text-text-muted font-medium mt-0.5">
+              Review active plan records. Click any hospital folder listed below to deploy full clinical layouts via expansion nodes.
+            </p>
+          </div>
+
+          {plansLoading ? (
+            <p className="text-xs text-text-muted animate-pulse">Parsing personal birth archives...</p>
+          ) : birthPlans.length === 0 ? (
+            <div className="text-center py-6 border border-dashed border-primary-mauve/20 rounded-xl bg-gray-50/50">
+              <p className="text-xs text-text-muted font-bold">No saved birth plans running on account history.</p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {birthPlans.map((plan) => {
+                const isSelected = expandedPlanId === plan.id;
+                return (
+                  <div key={plan.id} className="border border-primary-mauve/10 rounded-xl bg-white shadow-xs overflow-hidden transition-all">
+                    
+                    {/* Brief Summary Info Row */}
+                    <div 
+                      onClick={() => setExpandedPlanId(isSelected ? null : plan.id)}
+                      className={`p-4 flex items-center justify-between cursor-pointer transition-all ${
+                        isSelected ? 'bg-bg-rose-white' : 'bg-white hover:bg-bg-rose-white/20'
+                      }`}
+                    >
+                      <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-6">
+                        <div className="flex items-center gap-2">
+                          <div className="w-2 h-2 rounded-full bg-primary-mauve"></div>
+                          <span className="text-xs font-black text-text-dark">{plan.hospital_name}</span>
+                        </div>
+                        <div className="text-[11px] text-text-muted font-bold flex gap-4">
+                          <span>Companion: <b className="text-text-dark font-extrabold">{plan.support_person}</b></span>
+                          <span>Pain Relief: <b className="text-text-dark font-extrabold capitalize">{plan.pain_preference}</b></span>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-4">
+                        {/* THE DELETE OPTION: EXECUTED DIRECTLY HERE ON THE PROFILE CARD */}
+                        <button
+                          type="button"
+                          onClick={(e) => handlePlanDelete(e, plan.id)}
+                          className="p-1.5 rounded-lg text-text-muted hover:text-danger hover:bg-red-50 transition-all cursor-pointer z-10"
+                          title="Delete from Profile & Database"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                        {isSelected ? <ChevronUp className="w-4 h-4 text-text-muted" /> : <ChevronDown className="w-4 h-4 text-text-muted" />}
+                      </div>
+                    </div>
+
+                    {/* Sub-expansion layer passing downstream variables to child component */}
+                    {isSelected && (
+                      <div className="animate-fadeIn">
+                        <SavedBirthPlans activePlan={plan} />
+                      </div>
+                    )}
+
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
       )}
     </div>
   );

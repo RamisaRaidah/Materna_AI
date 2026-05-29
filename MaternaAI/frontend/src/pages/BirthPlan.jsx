@@ -9,7 +9,7 @@ const FACILITIES = [
   { value: 'Sir Salimullah Medical College Hospital', label: 'Sir Salimullah Medical College Hospital (Mitford)', tier: 'Tertiary', tags: ['NICU', 'Emergency Obstetric Care', 'Dhaka'] },
   { value: 'Maternal and Child Health Training Institute', label: 'Maternal & Child Health Training Institute (Azimpur MCHTI)', tier: 'Specialized', tags: ['Dedicated Maternal', 'ANC/PNC', 'Dhaka'] },
   { value: 'Upazila Health Complex – Baliakandi', label: 'Upazila Health Complex – Baliakandi (Rajbari)', tier: 'Secondary', tags: ['Basic EmONC', 'Emergency Referral', 'Rural'] },
-  
+
   // --- CHITTAGONG / COX'S BAZAR DIVISION ---
   { value: 'Chittagong Medical College Hospital', label: 'Chittagong Medical College Hospital (CMCH)', tier: 'Tertiary', tags: ['NICU', 'Advanced Neonatal Care', '24/7 OB'] },
   { value: 'Cox\'s Bazar District Hospital', label: 'Cox\'s Bazar District Hospital', tier: 'Secondary', tags: ['Comprehensive EmONC', 'C-Section Capable'] },
@@ -112,6 +112,7 @@ const BirthPlan = () => {
   const [emergencyContact1, setEmergencyContact1] = useState(user?.emergency_contact || '');
   const [emergencyContact2, setEmergencyContact2] = useState('');
 
+  const [generatedPlanText, setGeneratedPlanText] = useState('');
   const [generated, setGenerated] = useState(false);
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState({});
@@ -127,20 +128,65 @@ const BirthPlan = () => {
     if (!transport) e.transport = 'Please select an emergency transport plan';
     if (!emergencyContact1.trim()) e.ec1 = 'Primary emergency contact is required';
     setErrors(e);
-    return Object.keys(e).length === 0;
+    return { isValid: Object.keys(e).length === 0, currentErrors: e };
   };
 
-  const generate = () => {
-    if (!validate()) {
-      setActiveStep(Object.keys(errors)[0] === 'facility' ? 0 : Object.keys(errors)[0] === 'companion' ? 1 : Object.keys(errors)[0] === 'pain' ? 2 : 3);
+  const generate = async () => {
+    const { isValid, currentErrors } = validate();
+    if (!isValid) {
+      if (currentErrors.facility) setActiveStep(0);
+      else if (currentErrors.companion) setActiveStep(1);
+      else if (currentErrors.pain) setActiveStep(2);
+      else if (currentErrors.transport) setActiveStep(3);
+      else if (currentErrors.ec1) setActiveStep(4);
       return;
     }
     setLoading(true);
-    setTimeout(() => { setLoading(false); setGenerated(true); }, 1500);
+
+    const formattedContacts = [
+      { name: "Primary Contact", phone: emergencyContact1, relation: "Primary" }
+    ];
+    if (emergencyContact2.trim()) {
+      formattedContacts.push({ name: "Secondary Contact", phone: emergencyContact2, relation: "Secondary" });
+    }
+
+    const payload = {
+      user_id: user?.id || 1,
+      hospital_name: facility,
+      support_person: companion,
+      pain_preference: pain,
+      special_notes: `Transport strategy: ${transport}. Notes: ${specialNotes}`,
+      emergency_contacts: formattedContacts,
+      profile: {
+        weeks_pregnant: user?.weeks_pregnant || 24,
+        location: user?.location || "Unknown"
+      }
+    };
+
+    try {
+      const response = await fetch('/api/birth_plan/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to save birth plan to profile registry.');
+      }
+
+      const resData = await response.json();
+      setGeneratedPlanText(resData.generated_plan);
+      setGenerated(true);
+    } catch (err) {
+      setErrors({ global: err.message || 'Server infrastructure connection error.' });
+    } finally {
+      setLoading(false);
+    }
   };
 
   const reset = () => {
     setGenerated(false);
+    setGeneratedPlanText('');
     setFacility(''); setCompanion(''); setPain(''); setTransport('');
     setErrors({}); setActiveStep(0);
     setDeliveryPrefs(Object.fromEntries(DELIVERY_PREFS.map(p => [p.id, p.default])));
@@ -242,6 +288,18 @@ const BirthPlan = () => {
             </div>
           )}
 
+          {/* LLM Clinical AI Output Block */}
+          {generatedPlanText && (
+            <div className="p-4 rounded-xl bg-primary-mauve/5 border border-primary-mauve/15 space-y-2">
+              <p className="text-[10px] font-black text-primary-mauve uppercase tracking-wider flex items-center gap-1.5">
+                <Sparkles className="w-3.5 h-3.5" /> Clinical Guidance Details
+              </p>
+              <div className="text-xs font-medium text-text-dark leading-relaxed whitespace-pre-wrap">
+                {generatedPlanText}
+              </div>
+            </div>
+          )}
+
           {/* Stamp */}
           <div className="flex items-center justify-between pt-2 border-t border-primary-mauve/8">
             <div className="flex items-center gap-1.5 text-[9px] font-black text-success">
@@ -260,7 +318,7 @@ const BirthPlan = () => {
             className="flex items-center justify-center gap-2 py-3 rounded-xl border border-primary-mauve/20 text-primary-mauve font-black text-xs hover:bg-primary-mauve/5 cursor-pointer transition-all">
             <Printer className="w-4 h-4" /> Print Plan
           </button>
-          <button onClick={() => alert('Plan saved to your profile!')}
+          <button onClick={() => alert('Plan securely synced to your health database profile!')}
             className="flex items-center justify-center gap-2 py-3 rounded-xl bg-success text-white font-black text-xs hover:opacity-90 cursor-pointer transition-all shadow-xs">
             <Download className="w-4 h-4" /> Save to Profile
           </button>
@@ -422,11 +480,23 @@ const BirthPlan = () => {
               className="w-full px-4 py-3 border border-primary-mauve/15 rounded-xl text-xs font-bold text-text-dark focus:border-primary-mauve outline-none bg-bg-rose-white resize-none min-h-[80px]" />
           </div>
 
+          {errors.global && <p className="text-[10px] font-bold text-danger flex items-center gap-1"><AlertCircle className="w-3 h-3" /> {errors.global}</p>}
+
           <div className="flex gap-2">
             <button onClick={() => setActiveStep(3)} className="flex-1 py-3 border border-primary-mauve/20 text-primary-mauve rounded-xl text-xs font-black cursor-pointer">← Back</button>
             <button onClick={generate} disabled={loading}
               className="flex-1 py-3 bg-primary-mauve text-white rounded-xl text-xs font-black cursor-pointer hover:bg-bg-dark-mauve transition-all shadow-glow flex items-center justify-center gap-1.5 disabled:opacity-70">
-              {loading ? <><Loader2 className="w-4 h-4 animate-spin" /> Generating…</> : <><Sparkles className="w-4 h-4" /> Generate Birth Plan</>}
+              {loading ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Generating…
+                </>
+              ) : (
+                <>
+                  <Sparkles className="w-4 h-4" />
+                  Generate Birth Plan
+                </>
+              )}
             </button>
           </div>
         </div>

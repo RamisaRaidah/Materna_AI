@@ -74,3 +74,19 @@ def get_birth_plans(user_id):
         } for r in rows])
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+    
+@birth_plan_bp.route("/<int:plan_id>", methods=["DELETE"])
+def delete_birth_plan(plan_id):
+    try:
+        row = query("""
+            DELETE FROM birth_plans 
+            WHERE id = %s 
+            RETURNING id
+        """, (plan_id,), fetch="one")
+
+        if not row:
+            return jsonify({"error": "Birth plan records not found"}), 404
+
+        return jsonify({"message": "Birth plan successfully deleted from database records"}), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
