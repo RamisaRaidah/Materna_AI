@@ -22,7 +22,7 @@ import ClinicianProfile from './pages/ClinicianProfile';
 import Landing from './pages/Landing'
 import Logo from './components/assets/Logo.png'
 import ClinicianAssistant from './pages/ClinicianAssistant';
-
+import Profile from './pages/Profile';
 
 const PrivateRoute = ({ children }) => {
   const { isAuthenticated, loading } = useAuth();
@@ -63,6 +63,7 @@ function App() {
         <Route path="clinician-chat" element={<ClinicianChat />} />
         <Route path="nutrition" element={<Nutrition />} />
         <Route path="birth-plan" element={<BirthPlan />} />
+        <Route path="profile" element={<Profile />} />
         <Route path="clinician" element={<ClinicianDashboard />} />
         <Route path="clinician/assistant" element={<ClinicianAssistant />} />
         <Route path="clinician/vitals" element={<ClinicianVitals />} />

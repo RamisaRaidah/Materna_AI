@@ -75,8 +75,29 @@ def update_me():
  
     set_clause = ", ".join(f"{k} = %s" for k in updates)
     values = list(updates.values()) + [g.user["id"]]
-    query(f"UPDATE users SET {set_clause} WHERE id = %s", values, fetch="none")
-    return jsonify({"message": "Profile updated successfully!"})
+    updated_user = query(f"UPDATE users SET {set_clause} WHERE id = %s RETURNING *", values, fetch="one")
+    safe = {k: v for k, v in updated_user.items() if k != "password_hash"}
+    return jsonify({"message": "Profile updated successfully!", "user": safe})
+
+@auth_bp.route("/me/password", methods=["PATCH"])
+@require_auth
+def change_password():
+    data = request.get_json() or {}
+    current_password = data.get("currentPassword", "")
+    new_password = data.get("newPassword", "")
+
+    if not current_password or not new_password:
+        return jsonify({"error": "Current and new passwords are required"}), 400
+
+    if not check_password(current_password, g.user["password_hash"]):
+        return jsonify({"error": "Incorrect original password verification."}), 401
+
+    if len(new_password) < 6:
+        return jsonify({"error": "Security requirement: Password must be at least 6 characters long."}), 400
+
+    new_hash = hash_password(new_password)
+    query("UPDATE users SET password_hash = %s WHERE id = %s", (new_hash, g.user["id"]), fetch="none")
+    return jsonify({"message": "Security credentials rotated successfully."}), 200
 
 @auth_bp.route("/me", methods=["DELETE"])
 @require_auth

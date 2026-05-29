@@ -1,15 +1,15 @@
 import React from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { 
-  Home, 
-  MessageSquare, 
-  Activity, 
-  Smile, 
-  Users, 
-  Apple, 
-  ShieldAlert, 
-  FileText, 
+import {
+  Home,
+  MessageSquare,
+  Activity,
+  Smile,
+  Users,
+  Apple,
+  ShieldAlert,
+  FileText,
   LogOut,
   X,
   Bell,
@@ -51,6 +51,12 @@ const Sidebar = ({
         { name: 'Nutrition & Diet', path: '/nutrition', icon: Apple },
         { name: 'Birth Plan Compiler', path: '/birth-plan', icon: FileText },
       ]
+    },
+    {
+      title: 'My Account',
+      items: [
+        { name: 'My Profile', path: '/profile', icon: UserRound },
+      ]
     }
   ];
 
@@ -69,6 +75,11 @@ const Sidebar = ({
       title: 'Operations',
       items: [
         { name: 'Follow-ups', path: '/clinician/follow-ups', icon: ClipboardList },
+      ]
+    },
+    {
+      title: 'My Account',
+      items: [
         { name: 'My Profile', path: '/clinician/profile', icon: UserRound },
       ]
     }
@@ -118,7 +129,7 @@ const Sidebar = ({
     <>
       {/* Mobile Backdrop Overlay */}
       {isOpen && (
-        <div 
+        <div
           className="fixed inset-0 z-40 bg-text-dark/40 backdrop-blur-xs transition-opacity lg:hidden"
           onClick={() => setIsOpen(false)}
         />
@@ -136,7 +147,7 @@ const Sidebar = ({
           {/* Logo / Header */}
           <div className="flex items-center justify-between p-6 border-b border-primary-mauve/5">
             <div className="flex items-center cursor-pointer" onClick={() => { navigate('/'); setIsOpen(false); }}>
-              <img  className="block -mr-2" src={Logo}  style={{width:"50px", height:"40px",paddingRight:"2px",margin:"-12px"}}/>
+              <img className="block -mr-2" src={Logo} style={{ width: "50px", height: "40px", paddingRight: "2px", margin: "-12px" }} />
               <span className="font-sans font-extrabold text-xl tracking-tight text-text-dark">
                 aterna<span className="text-primary-mauve">AI</span>
               </span>
@@ -159,8 +170,8 @@ const Sidebar = ({
               )}
 
               {/* Close Button on Mobile */}
-              <button 
-                className="p-1 text-text-muted hover:text-text-dark lg:hidden" 
+              <button
+                className="p-1 text-text-muted hover:text-text-dark lg:hidden"
                 onClick={() => setIsOpen(false)}
               >
                 <X className="w-6 h-6" />
@@ -246,8 +257,8 @@ const Sidebar = ({
                       onClick={() => setIsOpen(false)}
                       className={({ isActive }) => `
                         flex items-center gap-3.5 px-4 py-3 rounded-lg text-sm font-bold tracking-wide transition-all
-                        ${isActive 
-                          ? 'bg-primary-mauve/8 text-primary-mauve shadow-xs border-l-4 border-primary-mauve pl-3' 
+                        ${isActive
+                          ? 'bg-primary-mauve/8 text-primary-mauve shadow-xs border-l-4 border-primary-mauve pl-3'
                           : 'text-text-muted hover:text-primary-mauve hover:bg-primary-mauve/4'}
                       `}
                     >
@@ -273,7 +284,7 @@ const Sidebar = ({
               <span>EMERGENCY DISPATCH</span>
             </button>
           ) : (
-            <button 
+            <button
               onClick={triggerSOS}
               className="w-full flex items-center justify-center gap-2.5 py-3 rounded-lg bg-danger/10 hover:bg-danger text-danger hover:text-white font-extrabold text-sm border border-danger/25 transition-all duration-300 shadow-glow animate-pulse"
             >
@@ -283,7 +294,7 @@ const Sidebar = ({
           )}
 
           {/* Logout Button */}
-          <button 
+          <button
             onClick={handleLogout}
             className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-bold text-text-muted hover:text-danger hover:bg-danger/5 transition-all"
           >
