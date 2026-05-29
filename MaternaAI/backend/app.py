@@ -4,7 +4,10 @@ from config import SECRET_KEY
 
 app = Flask(__name__)
 app.config["SECRET_KEY"] = SECRET_KEY
-CORS(app)
+CORS(app, resources={
+    r"/api/*": {"origins": ["http://localhost:5173", "http://127.0.0.1:5173"]},
+    r"/auth/*": {"origins": ["http://localhost:5173", "http://127.0.0.1:5173"]},
+})
 
 # ─────────────────────────────────────────────
 # Register Blueprints
