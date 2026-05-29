@@ -71,7 +71,7 @@ CREATE TABLE birth_plans (
 -- Nutrition plans
 CREATE TABLE nutrition_plans (
     id SERIAL PRIMARY KEY,
-    user_id INTEGER REFERENCES users(id),
+    user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
     trimester INTEGER,
     conditions TEXT[],                 -- ['anemia', 'gestational_diabetes']
     generated_plan TEXT,               -- LLM generated meal plan

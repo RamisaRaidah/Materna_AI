@@ -102,5 +102,5 @@ def change_password():
 @auth_bp.route("/me", methods=["DELETE"])
 @require_auth
 def delete_account():
-    query("DELETE FROM users WHERE id = %s", (g.user_id,))
+    query("DELETE FROM users WHERE id = %s", (g.user["id"],), fetch="none")
     return jsonify({"message": "Account permanently deleted"}), 200

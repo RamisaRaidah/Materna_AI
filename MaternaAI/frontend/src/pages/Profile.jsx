@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
+import { useNavigate } from 'react-router-dom';
 import { 
   User, Phone, Calendar, MapPin, Heart, Sparkles, 
-  CheckCircle2, AlertCircle, Save, Edit2, Shield, KeyRound
+  CheckCircle2, AlertCircle, Save, Edit2, Shield, KeyRound, Trash2
 } from 'lucide-react';
 
 const BANGLADESH_LOCATIONS = {
@@ -22,7 +23,8 @@ const inputCls = (isEditable) =>
   `w-full bg-white/50 border ${isEditable ? 'border-primary-mauve/30 focus:border-primary-mauve focus:ring-1 focus:ring-primary-mauve' : 'border-gray-200 bg-gray-50/50 text-text-muted cursor-not-allowed'} outline-none text-text-dark text-sm px-4 py-2.5 rounded-lg transition-all`;
 
 const Profile = () => {
-  const { user, updateUserLocalContext } = useAuth();
+  const { user, updateUserLocalContext, logout } = useAuth();
+  const navigate = useNavigate();
   const [isEditing, setIsEditing] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [msg, setMsg] = useState({ text: '', type: '' });
@@ -38,11 +40,12 @@ const Profile = () => {
   const [isPostpartum, setIsPostpartum] = useState(false);
   const [persona, setPersona] = useState('pregnant');
 
-  // Password Management States
-  const [showPasswordFields, setShowPasswordFields] = useState(false);
+  // Security Panel States
+  const [showSecurityFields, setShowSecurityFields] = useState(false);
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [deleteConfirmationText, setDeleteConfirmationText] = useState('');
 
   // Hydrate form fields with existing user context data on load
   useEffect(() => {
@@ -73,7 +76,6 @@ const Profile = () => {
     e.preventDefault();
     setMsg({ text: '', type: '' });
     
-    // 1. Isolate partial modifications by isolating ONLY fields that differ from current context
     const updatedPayload = {};
     
     if (name.trim() && name.trim() !== user?.name) updatedPayload.name = name.trim();
@@ -99,7 +101,6 @@ const Profile = () => {
       if (persona !== user?.persona) updatedPayload.persona = persona;
     }
 
-    // Guard Clause: Block request if no inputs were actually changed
     if (Object.keys(updatedPayload).length === 0) {
       setMsg({ text: 'No profile updates or changes detected to submit.', type: 'danger' });
       return;
@@ -143,8 +144,19 @@ const Profile = () => {
       setMsg({ text: 'New password inputs do not match.', type: 'danger' });
       return;
     }
-    if (newPassword.length < 6) {
-      setMsg({ text: 'Security requirement: Password must be at least 6 characters long.', type: 'danger' });
+    if (newPassword.length < 8) {
+      setMsg({ text: 'Security requirement: Password must be at least 8 characters long.', type: 'danger' });
+      return;
+    }
+
+    const hasNumber = /\d/.test(newPassword);
+    const hasUppercase = /[A-Z]/.test(newPassword);
+
+    if (!hasNumber || !hasUppercase) {
+      setMsg({ 
+        text: 'Weak password structure! Your new password must contain a combination of both uppercase letters and numbers.', 
+        type: 'danger' 
+      });
       return;
     }
 
@@ -156,10 +168,7 @@ const Profile = () => {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${localStorage.getItem('token')}`
         },
-        body: JSON.stringify({
-          currentPassword,
-          newPassword
-        })
+        body: JSON.stringify({ currentPassword, newPassword })
       });
 
       const data = await response.json();
@@ -169,12 +178,46 @@ const Profile = () => {
         setCurrentPassword('');
         setNewPassword('');
         setConfirmPassword('');
-        setShowPasswordFields(false);
+        setShowSecurityFields(false);
       } else {
         setMsg({ text: data.error || 'Incorrect original password verification.', type: 'danger' });
       }
     } catch (err) {
       setMsg({ text: 'Failed to connect to the security endpoint.', type: 'danger' });
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleDeleteAccount = async (e) => {
+    e.preventDefault();
+    if (deleteConfirmationText !== 'DELETE') {
+      setMsg({ text: 'Please type "DELETE" exactly to confirm your choice.', type: 'danger' });
+      return;
+    }
+
+    const finalVerification = window.confirm("🚨 LAST WARNING: Are you absolutely certain you want to permanently close your account? This will scrub your medical analytics and log histories permanently.");
+    if (!finalVerification) return;
+
+    setIsSubmitting(true);
+    try {
+      const response = await fetch('/auth/me', {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        }
+      });
+
+      if (response.ok) {
+        alert("Your account has been wiped successfully. Redirecting to login.");
+        logout();
+        navigate('/login');
+      } else {
+        const data = await response.json();
+        setMsg({ text: data.error || 'Failed to request data purging from system nodes.', type: 'danger' });
+      }
+    } catch (err) {
+      setMsg({ text: 'Network exception during secure delete execution.', type: 'danger' });
     } finally {
       setIsSubmitting(false);
     }
@@ -189,7 +232,7 @@ const Profile = () => {
             {user?.role === 'clinician' ? '🩺' : '🤰'}
           </div>
           <div>
-            <h2 className="text-xl font-black tracking-tight">{name || 'User Profile'}</h2>
+            <h2 className="text-xl font-black tracking-tight">{user?.name || 'User Profile'}</h2>
             <p className="text-xs text-white/80 font-medium tracking-wide mt-0.5 uppercase">
               {user?.role === 'clinician' ? 'Registered Clinical Expert' : `Maternal Care Circle • ${persona} mode`}
             </p>
@@ -198,14 +241,14 @@ const Profile = () => {
         <div className="flex gap-2">
           <button
             type="button"
-            onClick={() => { setShowPasswordFields(!showPasswordFields); setIsEditing(false); setMsg({text:'', type:''}); }}
+            onClick={() => { setShowSecurityFields(!showSecurityFields); setIsEditing(false); setMsg({text:'', type:''}); }}
             className="flex items-center gap-2 px-4 py-2 bg-white/10 text-white hover:bg-white/20 font-black text-xs uppercase tracking-wider rounded-xl transition-all cursor-pointer border border-white/20"
           >
-            <KeyRound className="w-3.5 h-3.5" /> Security
+            <KeyRound className="w-3.5 h-3.5" /> Security & Privacy
           </button>
           <button
             type="button"
-            onClick={() => { setIsEditing(!isEditing); setShowPasswordFields(false); setMsg({text:'', type:''}); }}
+            onClick={() => { setIsEditing(!isEditing); setShowSecurityFields(false); setMsg({text:'', type:''}); }}
             className="flex items-center gap-2 px-4 py-2 bg-white text-primary-mauve font-black text-xs uppercase tracking-wider rounded-xl shadow-md hover:bg-bg-rose-white transition-all cursor-pointer"
           >
             {isEditing ? 'Cancel' : <><Edit2 className="w-3.5 h-3.5" /> Edit Info</>}
@@ -221,40 +264,79 @@ const Profile = () => {
         </div>
       )}
 
-      {/* Password Rotator Form Element */}
-      {showPasswordFields && (
-        <div className="bg-white/80 backdrop-blur-sm border border-danger/20 rounded-2xl p-6 space-y-4 shadow-sm">
-          <h3 className="text-xs font-black uppercase text-danger tracking-widest flex items-center gap-2 mb-2">
-            <KeyRound className="w-4 h-4" /> Change Account Password
-          </h3>
-          <form onSubmit={handlePasswordChange} className="grid grid-cols-1 sm:grid-cols-3 gap-4 items-end">
-            <div>
-              <label className="text-[10px] font-black text-text-muted uppercase tracking-wider block mb-1">Present Password</label>
-              <input type="password" value={currentPassword} onChange={e => setCurrentPassword(e.target.value)} className={inputCls(true)} placeholder="••••••••" />
+      {/* Security & Data Privacy Zone */}
+      {showSecurityFields && (
+        <div className="space-y-6">
+          {/* Password Rotator Form Element */}
+          <div className="bg-white/80 backdrop-blur-sm border border-primary-mauve/10 rounded-2xl p-6 space-y-4 shadow-sm">
+            <h3 className="text-xs font-black uppercase text-primary-mauve tracking-widest flex items-center gap-2 mb-2">
+              <KeyRound className="w-4 h-4" /> Change Account Password
+            </h3>
+            <form onSubmit={handlePasswordChange} className="grid grid-cols-1 sm:grid-cols-3 gap-4 items-end">
+              <div>
+                <label className="text-[10px] font-black text-text-muted uppercase tracking-wider block mb-1">Present Password</label>
+                <input type="password" value={currentPassword} onChange={e => setCurrentPassword(e.target.value)} className={inputCls(true)} placeholder="••••••••" />
+              </div>
+              <div>
+                <label className="text-[10px] font-black text-text-muted uppercase tracking-wider block mb-1">New Password</label>
+                <input type="password" value={newPassword} onChange={e => setNewPassword(e.target.value)} className={inputCls(true)} placeholder="Min 8 characters" />
+              </div>
+              <div>
+                <label className="text-[10px] font-black text-text-muted uppercase tracking-wider block mb-1">Confirm New Password</label>
+                <input type="password" value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} className={inputCls(true)} placeholder="••••••••" />
+              </div>
+              <div className="sm:col-span-3 flex justify-end pt-2">
+                <button
+                  type="submit"
+                  disabled={isSubmitting}
+                  className="px-6 py-2.5 bg-primary-mauve text-white text-xs font-black tracking-widest uppercase rounded-xl hover:bg-bg-dark-mauve shadow-md transition-all disabled:opacity-50 cursor-pointer"
+                >
+                  {isSubmitting ? 'Verifying...' : 'Update Password'}
+                </button>
+              </div>
+            </form>
+          </div>
+
+          {/* Account Deletion & Danger Panel */}
+          <div className="bg-red-50/50 backdrop-blur-sm border border-red-200 rounded-2xl p-6 space-y-4 shadow-sm">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-red-100 pb-4">
+              <div>
+                <h3 className="text-xs font-black uppercase text-danger tracking-widest flex items-center gap-2 mb-1">
+                  <Trash2 className="w-4 h-4" /> Danger Zone
+                </h3>
+                <p className="text-xs text-text-muted font-medium">
+                  Closing your account permanently deletes all your personal data and history. This cannot be undone.
+                </p>
+              </div>
             </div>
-            <div>
-              <label className="text-[10px] font-black text-text-muted uppercase tracking-wider block mb-1">New Password</label>
-              <input type="password" value={newPassword} onChange={e => setNewPassword(e.target.value)} className={inputCls(true)} placeholder="Min 6 characters" />
-            </div>
-            <div>
-              <label className="text-[10px] font-black text-text-muted uppercase tracking-wider block mb-1">Confirm New Password</label>
-              <input type="password" value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} className={inputCls(true)} placeholder="••••••••" />
-            </div>
-            <div className="sm:col-span-3 flex justify-end pt-2">
+
+            <form onSubmit={handleDeleteAccount} className="flex flex-col sm:flex-row items-end sm:items-center justify-between gap-4">
+              <div className="w-full sm:max-w-xs">
+                <label className="text-[10px] font-black text-red-700 uppercase tracking-wider block mb-1">
+                  Type <span className="underline font-extrabold">DELETE</span> to authorize
+                </label>
+                <input 
+                  type="text" 
+                  value={deleteConfirmationText} 
+                  onChange={e => setDeleteConfirmationText(e.target.value)} 
+                  className="w-full bg-white border border-red-200 focus:border-danger focus:ring-1 focus:ring-danger outline-none text-text-dark text-sm px-4 py-2.5 rounded-lg transition-all" 
+                  placeholder="Type DELETE" 
+                />
+              </div>
               <button
                 type="submit"
-                disabled={isSubmitting}
-                className="px-6 py-2.5 bg-danger text-white text-xs font-black tracking-widest uppercase rounded-xl hover:bg-red-700 shadow-md transition-all disabled:opacity-50 cursor-pointer"
+                disabled={isSubmitting || deleteConfirmationText !== 'DELETE'}
+                className="px-6 py-3 bg-danger text-white text-xs font-black tracking-widest uppercase rounded-xl hover:bg-red-700 shadow-md transition-all disabled:opacity-30 disabled:cursor-not-allowed flex items-center gap-2 shrink-0 cursor-pointer"
               >
-                {isSubmitting ? 'Verifying...' : 'Update Password'}
+                <Trash2 className="w-4 h-4" /> Delete Account
               </button>
-            </div>
-          </form>
+            </form>
+          </div>
         </div>
       )}
 
       {/* Main Core Profile Metadata Input Form */}
-      {!showPasswordFields && (
+      {!showSecurityFields && (
         <form onSubmit={handleSave} className="grid grid-cols-1 md:grid-cols-3 gap-6">
           
           <div className="md:col-span-2 bg-white/80 backdrop-blur-sm border border-primary-mauve/10 rounded-2xl p-6 space-y-4 shadow-sm">
