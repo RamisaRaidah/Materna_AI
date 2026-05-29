@@ -13,7 +13,11 @@ CREATE TABLE users (
     is_postpartum BOOLEAN DEFAULT FALSE,
     persona VARCHAR(20) DEFAULT 'pregnant', -- pregnant | postpartum | recovery
     due_date DATE,
-    location VARCHAR(100),         -- district/division in Bangladesh
+    location VARCHAR(100),
+    division VARCHAR(50),
+    district VARCHAR(100),
+    area VARCHAR(100),
+    address_details TEXT,
     emergency_contact VARCHAR(20),
     created_at TIMESTAMPTZ DEFAULT NOW()
 );

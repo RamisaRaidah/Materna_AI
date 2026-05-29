@@ -12,8 +12,12 @@ def register():
     password = data.get("password", "")
     role = data.get("role", "patient")
 
-    if not name or not phone or not password:
-        return jsonify({"error": "name, phone and password are required"}), 400
+    division = data.get("division", "").strip()
+    district = data.get("district", "").strip()
+    area = data.get("area", "").strip()
+
+    if not name or not phone or not password or not division or not district or not area:
+        return jsonify({"error": "name, phone, password, division, district and area are required"}), 400
  
     existing = query("SELECT id FROM users WHERE phone = %s", (phone,), fetch="one")
     if existing:
@@ -22,14 +26,14 @@ def register():
     pw_hash = hash_password(password)
     user = query(
         """INSERT INTO users (name, phone, password_hash, role, age, weeks_pregnant,
-           is_postpartum, persona, location, emergency_contact)
-           VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+           is_postpartum, persona, division, district, area, emergency_contact)
+           VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
            RETURNING *""",
         (name, phone, pw_hash, role,
          data.get("age"), data.get("weeks_pregnant"),
          data.get("is_postpartum", False),
          data.get("persona", "pregnant"),
-         data.get("location", ""), data.get("emergency_contact", "")),
+         division, district, area, data.get("emergency_contact", "")),
         fetch="one"
     )
     token = create_token(user["id"], user["role"])
@@ -64,7 +68,7 @@ def me():
 def update_me():
     data = request.get_json() or {}
     allowed = ["name", "age", "weeks_pregnant", "is_postpartum", "persona",
-               "location", "emergency_contact", "due_date"]
+               "division", "district", "area", "emergency_contact", "due_date"]
     updates = {k: v for k, v in data.items() if k in allowed}
     if not updates:
         return jsonify({"error": "Nothing to update"}), 400
@@ -72,4 +76,10 @@ def update_me():
     set_clause = ", ".join(f"{k} = %s" for k in updates)
     values = list(updates.values()) + [g.user["id"]]
     query(f"UPDATE users SET {set_clause} WHERE id = %s", values, fetch="none")
-    return jsonify({"message": "Profile updated"})
+    return jsonify({"message": "Profile updated successfully!"})
+
+@auth_bp.route("/me", methods=["DELETE"])
+@require_auth
+def delete_account():
+    query("DELETE FROM users WHERE id = %s", (g.user_id,))
+    return jsonify({"message": "Account permanently deleted"}), 200

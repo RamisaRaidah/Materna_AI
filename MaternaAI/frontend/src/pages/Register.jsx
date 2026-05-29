@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import {
@@ -7,6 +7,7 @@ import {
   CheckCircle2, Info
 } from 'lucide-react';
 import Logo from '../components/assets/Logo.png'
+
 // Validation Helpers
 const BD_PHONE_REGEX = /^(\+8801|01)[3-9]\d{8}$/;
 const NAME_REGEX = /^[a-zA-Z\u0980-\u09FF\s'-]{2,60}$/;
@@ -45,12 +46,39 @@ function getBabyEmoji(weeks) {
   return '🍉';
 }
 
-const BANGLADESH_LOCATIONS = [
-  'Dhaka Division', 'Chittagong Division', 'Rajshahi Division', 'Khulna Division',
-  'Barisal Division', 'Sylhet Division', 'Rangpur Division', 'Mymensingh Division',
-  'Sreemangal – Tea Garden Hub', 'Cox\'s Bazar', 'Narayanganj', 'Gazipur',
-  'Cumilla', 'Bogura', 'Dinajpur', 'Jashore', 'Pabna', 'Other'
-];
+// 64-District Administrative Matrix mapping 
+const BANGLADESH_LOCATIONS = {
+  'Dhaka Division': [
+    'Dhaka', 'Gazipur', 'Narayanganj', 'Narsingdi', 'Manikganj', 
+    'Munshiganj', 'Faridpur', 'Gopalganj', 'Madaripur', 'Rajbari', 
+    'Shariatpur', 'Tangail', 'Kishoreganj'
+  ],
+  'Chittagong Division': [
+    'Chittagong', "Cox's Bazar", 'Cumilla', 'Feni', 'Noakhali', 
+    'Lakshmipur', 'Brahmanbaria', 'Chandpur', 'Rangamati', 'Khagrachhari', 'Bandarban'
+  ],
+  'Rajshahi Division': [
+    'Rajshahi', 'Bogura', 'Pabna', 'Natore', 'Naogaon', 
+    'Sirajganj', 'Chapai Nawabganj', 'Joypurhat'
+  ],
+  'Khulna Division': [
+    'Khulna', 'Jashore', 'Kushtia', 'Satkhira', 'Bagerhat', 
+    'Jhenaidah', 'Magura', 'Meherpur', 'Narail', 'Chuadanga'
+  ],
+  'Barisal Division': [
+    'Barisal', 'Bhola', 'Patuakhali', 'Pirojpur', 'Jhalokathi', 'Barguna'
+  ],
+  'Sylhet Division': [
+    'Sylhet', 'Moulvibazar', 'Habiganj', 'Sunamganj'
+  ],
+  'Rangpur Division': [
+    'Rangpur', 'Dinajpur', 'Kurigram', 'Gaibandha', 'Nilphamari', 
+    'Panchagarh', 'Thakurgaon', 'Lalmonirhat'
+  ],
+  'Mymensingh Division': [
+    'Mymensingh', 'Netrokona', 'Sherpur', 'Jamalpur'
+  ]
+};
 
 // Field-level validation
 function validateField(field, value, extra = {}) {
@@ -186,7 +214,12 @@ const Register = () => {
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [age, setAge] = useState('');
-  const [location, setLocation] = useState('');
+  
+  // Independent Structural Location States
+  const [division, setDivision] = useState('');
+  const [district, setDistrict] = useState('');
+  const [subArea, setSubArea] = useState(''); // Stores neighborhood text like Dhanmondi, Gulshan, etc.
+
   const [emergencyContact, setEmergencyContact] = useState('');
   const [weeksPregnant, setWeeksPregnant] = useState('');
   const [isPostpartum, setIsPostpartum] = useState(false);
@@ -210,6 +243,9 @@ const Register = () => {
     age: touched.age ? validateField('age', age) : '',
     weeks: touched.weeks ? validateField('weeks', weeksPregnant, { isPostpartum }) : '',
     emergency: touched.emergency ? validateField('emergency', emergencyContact, { phone }) : '',
+    division: touched.location && !division ? 'Division is required' : '',
+    district: touched.location && division && !district ? 'District is required' : '',
+    subArea: touched.location && district && !subArea.trim() ? 'Specific neighborhood / area is required' : ''
   };
 
   const touch = (field) => setTouched(p => ({ ...p, [field]: true }));
@@ -217,7 +253,6 @@ const Register = () => {
   const handleWeeksChange = (val) => {
     setWeeksPregnant(val);
     touch('weeks');
-    // Auto-set persona based on weeks
     if (!isPostpartum) {
       const w = parseInt(val) || 0;
       if (w >= 1 && w <= 42) setPersona('pregnant');
@@ -244,28 +279,34 @@ const Register = () => {
     if (role === 'patient' && !isPostpartum) {
       fieldErrors.push(validateField('weeks', weeksPregnant, { isPostpartum }));
     }
-    return fieldErrors.every(e => !e) && location;
+    
+    // Add structural location validity evaluation
+    const isLocationValid = division && district && subArea.trim();
+    
+    return fieldErrors.every(e => !e) && isLocationValid;
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    // Touch all fields to show errors
-    setTouched({ name: true, phone: true, password: true, age: true, weeks: true, emergency: true });
+    setTouched({ name: true, phone: true, password: true, age: true, weeks: true, emergency: true, location: true });
 
     if (!allValid()) {
-      setSubmitError('Please fix the errors above before submitting.');
+      setSubmitError('Please complete all fields correctly, including your full location details.');
       return;
     }
     setSubmitError('');
     setIsSubmitting(true);
 
+    // Matches your normalized multi-tier Flask architecture precisely
     const payload = {
       name: name.trim(),
       phone: phone.replace(/\s/g, ''),
       password,
       role,
       age: parseInt(age),
-      location,
+      division: division,
+      district: district,
+      area: subArea.trim(), // 'area' holds your custom text input (e.g., 'Dhanmondi')
       emergency_contact: emergencyContact.replace(/\s/g, ''),
     };
 
@@ -296,24 +337,24 @@ const Register = () => {
         {/* Brand */}
         <div className="flex flex-col items-center mb-6">
           <div className="flex items-center">
-                    <img
-                      src={Logo}
-                      alt="MaternaAI Logo"
-                      style={{
-                        width: "50px",
-                        height: "50px",
-                        objectFit: "contain",
-                        marginRight: "-12px",
-                      }}
-                    />
-          
-                    <span
-                      className="font-sans text-xl tracking-tight"
-                      style={{ color: "#6B2E50", fontWeight: 500 }}
-                    >
-                      Materna<span className="text-pink-100">AI</span>
-                    </span>
-                  </div>
+            <img
+              src={Logo}
+              alt="MaternaAI Logo"
+              style={{
+                width: "50px",
+                height: "50px",
+                objectFit: "contain",
+                marginRight: "-12px",
+              }}
+            />
+  
+            <span
+              className="font-sans text-xl tracking-tight"
+              style={{ color: "#6B2E50", fontWeight: 500 }}
+            >
+              Materna<span className="text-pink-100">AI</span>
+            </span>
+          </div>
           <h2 className="text-2xl font-black tracking-tight text-text-dark">Create Account</h2>
           <p className="text-xs font-bold text-text-muted mt-1 uppercase tracking-wider">Join the MaternaAI care circle</p>
         </div>
@@ -390,20 +431,59 @@ const Register = () => {
               </div>
             </Field>
 
-            {/* Location */}
-            <Field label="Location *">
+            {/* Division Selection Input */}
+            <Field label="Division *" error={errors.division}>
               <div className="relative">
                 <MapPin className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-text-muted pointer-events-none" />
-                <select value={location} onChange={e => setLocation(e.target.value)}
-                  disabled={isSubmitting}
-                  className={`${inputCls(!location && touched.location)} pl-10 appearance-none`}>
-                  <option value="">Select your location…</option>
-                  {BANGLADESH_LOCATIONS.map(loc => (
-                    <option key={loc} value={loc}>{loc}</option>
+                <select value={division} onChange={e => { setDivision(e.target.value); setDistrict(''); setSubArea(''); }}
+                  disabled={isSubmitting} onBlur={() => touch('location')}
+                  className={`${inputCls(!!errors.division)} pl-10 appearance-none`}>
+                  <option value="">Select Division…</option>
+                  {Object.keys(BANGLADESH_LOCATIONS).map(div => (
+                    <option key={div} value={div}>{div}</option>
                   ))}
                 </select>
               </div>
             </Field>
+
+            {/* Cascaded District Selection Input */}
+            <Field label="District / Zila *" error={errors.district}>
+              <div className="relative">
+                <MapPin className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-text-muted pointer-events-none" />
+                <select value={district} onChange={e => { setDistrict(e.target.value); setSubArea(''); }}
+                  disabled={isSubmitting || !division} onBlur={() => touch('location')}
+                  className={`${inputCls(!!errors.district)} pl-10 appearance-none disabled:opacity-50`}>
+                  <option value="">{division ? 'Select District…' : 'Choose Division first'}</option>
+                  {division && BANGLADESH_LOCATIONS[division].map(dist => (
+                    <option key={dist} value={dist}>{dist}</option>
+                  ))}
+                </select>
+              </div>
+            </Field>
+
+            {/* Specific Area / Thana / Neighborhood Input Field */}
+            {district && (
+              <div className="col-span-1 md:col-span-2">
+                <Field 
+                  label="Area / Thana / Neighborhood *" 
+                  hint={district === 'Dhaka' ? "e.g. Dhanmondi, Gulshan, Mirpur, Uttara" : "e.g. Neighborhood, Thana, or Union boundary name"}
+                  error={errors.subArea}
+                >
+                  <div className="relative">
+                    <MapPin className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-text-muted" />
+                    <input 
+                      type="text" 
+                      placeholder={district === 'Dhaka' ? "e.g. Dhanmondi" : "e.g. Input local tracking neighborhood"}
+                      value={subArea}
+                      onChange={e => setSubArea(e.target.value)} 
+                      onBlur={() => touch('location')}
+                      disabled={isSubmitting}
+                      className={`${inputCls(!!errors.subArea)} pl-10`} 
+                    />
+                  </div>
+                </Field>
+              </div>
+            )}
 
             {/* Emergency Contact */}
             <Field label="Emergency Contact *" error={errors.emergency}
