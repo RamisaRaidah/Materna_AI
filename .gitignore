@@ -1,5 +1,18 @@
+# Dependencies
+node_modules/
+dist/
+
+# Python cache
 __pycache__/
 *.pyc
 *.pyo
-node_modules/
-dist/
+
+# Environment files
+.env
+backend/.env
+backend/.env.*
+
+!.env.example
+!frontend/.env.development
+!frontend/.env.production
+!backend/.env.example
