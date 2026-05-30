@@ -131,3 +131,21 @@ d:/MaternaAI (Workspace Root)
    ```bash
    npm run build
    ```
+
+---
+
+## Vision & Social Impact
+
+MaternaAI was conceived to ensure that high-quality, personalized maternal support is accessible to everyone, everywhere. By bridging the gap between automated AI insights and certified human clinical networks, the platform helps:
+- **Democratize Healthcare Info**: Deliver immediate guidance in local languages (Bengali/English) to remote areas.
+- **Empower Expectant Mothers**: Assist with daily care plans, vital tracking, and peer connections to combat isolation and postpartum challenges.
+- **Support Clinicians**: Provide automated severity-based triage systems that alert medical teams to critical risks early, when intervention is most effective.
+
+### Medical Disclaimer
+*MaternaAI is designed as an interactive maternal support assistant and clinical coordination tool to support expectant mothers and healthcare providers. It is not a replacement for professional, hands-on clinical diagnosis, physical checkups, or emergency medical services. Patients facing immediate physical danger or severe symptoms should contact their assigned clinician or emergency services immediately.*
+
+---
+
+<p align="center">
+  Designed and developed with care to ensure safe births and healthy beginnings.
+</p>
