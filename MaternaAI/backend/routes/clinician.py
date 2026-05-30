@@ -30,13 +30,31 @@ def get_alerts():
     """Get all undismissed alerts (any authenticated user can see their own; clinicians see all)."""
     role = g.user.get("role", "patient")
     if role in ("clinician", "admin"):
+        clinician_district = (g.user.get("district") or "").strip()
         alerts = query(
-            """SELECT ca.*, u.name AS patient_name, u.phone AS patient_phone,
-                      u.weeks_pregnant, u.location
-               FROM clinician_alerts ca
-               JOIN users u ON u.id = ca.patient_id
-               WHERE ca.is_dismissed = FALSE
-               ORDER BY ca.created_at DESC LIMIT 50"""
+            """
+            SELECT ca.*, u.name AS patient_name, u.phone AS patient_phone,
+                   u.weeks_pregnant, u.location
+            FROM clinician_alerts ca
+            JOIN users u ON u.id = ca.patient_id
+            WHERE ca.is_dismissed = FALSE
+              AND (
+                    ca.alert_type <> 'sos'
+                    OR (
+                        ca.assigned_to = %s
+                        OR (
+                            ca.assigned_to IS NULL
+                            AND (
+                                (%s <> '' AND LOWER(u.district) = LOWER(%s))
+                                OR (NOW() - ca.created_at >= INTERVAL '5 minutes')
+                            )
+                        )
+                    )
+                  )
+            ORDER BY ca.created_at DESC
+            LIMIT 50
+            """,
+            (g.user["id"], clinician_district, clinician_district)
         )
     else:
         alerts = query(
@@ -92,6 +110,8 @@ def get_sos_alerts():
     if auth_error:
         return auth_error
 
+    clinician_district = (g.user.get("district") or "").strip()
+
     alerts = query(
         """
         SELECT ca.*, u.name AS patient_name, u.phone AS patient_phone,
@@ -100,11 +120,20 @@ def get_sos_alerts():
         JOIN users u ON u.id = ca.patient_id
         WHERE ca.is_dismissed = FALSE
           AND ca.alert_type = 'sos'
-          AND (ca.assigned_to IS NULL OR ca.assigned_to = %s)
+          AND (
+                ca.assigned_to = %s
+                OR (
+                    ca.assigned_to IS NULL
+                    AND (
+                        (%s <> '' AND LOWER(u.district) = LOWER(%s))
+                        OR (NOW() - ca.created_at >= INTERVAL '5 minutes')
+                    )
+                )
+              )
         ORDER BY ca.created_at DESC
         LIMIT 50
         """,
-        (g.user["id"],)
+        (g.user["id"], clinician_district, clinician_district)
     )
     return jsonify(alerts)
 
