@@ -22,6 +22,18 @@ import {
   TrendingUp,
   MapPin
 } from 'lucide-react';
+import {
+  ResponsiveContainer,
+  AreaChart,
+  Area,
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip
+} from 'recharts';
+
 
 const HealthTracker = () => {
   const { user } = useAuth();
@@ -35,6 +47,8 @@ const HealthTracker = () => {
 
   // Vitals History state
   const [historyLogs, setHistoryLogs] = useState([]);
+  const [timelineTab, setTimelineTab] = useState('chart'); // default is 'chart' to look modern
+  const [selectedVital, setSelectedVital] = useState('bp'); // 'bp', 'glucose', 'weight', 'water'
 
   // Kick Counter States
   const [kickCount, setKickCount] = useState(0);
@@ -250,6 +264,38 @@ const HealthTracker = () => {
     const mins = Math.floor(seconds / 60);
     const secs = seconds % 60;
     return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+  };
+
+  // Prepare and reverse history logs for chronological display (left-to-right)
+  const chartData = [...historyLogs].reverse().map(log => ({
+    date: new Date(log.created_at).toLocaleDateString([], { month: 'short', day: 'numeric' }),
+    time: new Date(log.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+    systolic: log.bp_systolic,
+    diastolic: log.bp_diastolic,
+    glucose: log.blood_glucose,
+    weight: log.weight_gain,
+    water: log.water_intake,
+    danger: log.danger_level
+  }));
+
+  const CustomTooltip = ({ active, payload, label }) => {
+    if (active && payload && payload.length) {
+      return (
+        <div className="bg-white/95 backdrop-blur-md border border-primary-mauve/25 p-3 rounded-xl shadow-premium text-[10px] font-sans">
+          <p className="font-black text-text-dark border-b border-primary-mauve/10 pb-1 mb-1.5">{label}</p>
+          {payload.map((item, idx) => (
+            <div key={idx} className="flex items-center justify-between gap-4 py-0.5">
+              <span className="font-bold text-text-muted flex items-center gap-1.5">
+                <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: item.color }} />
+                {item.name}:
+              </span>
+              <span className="font-black text-text-dark">{item.value} {item.unit || ''}</span>
+            </div>
+          ))}
+        </div>
+      );
+    }
+    return null;
   };
 
   // Dynamic warning evaluations
@@ -663,68 +709,189 @@ const HealthTracker = () => {
             )}
           </div>
 
-          {/* Vitals History Timeline logs */}
-          <div className="bg-white border border-primary-mauve/10 rounded-2xl p-5 shadow-premium space-y-4 flex-1 flex flex-col min-h-[280px]">
-            <div className="flex items-center justify-between border-b border-primary-mauve/5 pb-2.5 shrink-0">
+          {/* Vitals History Timeline & Trend Charts */}
+          <div className="bg-white border border-primary-mauve/10 rounded-2xl p-5 shadow-premium space-y-4 flex-1 flex flex-col min-h-[380px]">
+            <div className="flex items-center justify-between border-b border-primary-mauve/5 pb-2.5 shrink-0 flex-wrap gap-2">
               <h3 className="font-sans font-black text-sm uppercase tracking-wider text-text-dark flex items-center gap-2">
                 <History className="w-4.5 h-4.5 text-primary-mauve" />
-                <span>Maternal Vitals Timeline</span>
+                <span>Maternal Vitals Tracker</span>
               </h3>
-              <span className="text-[9px] font-black uppercase tracking-wide bg-primary-mauve text-white px-2 py-0.5 rounded-full">
-                Database logs
-              </span>
+              <div className="flex bg-primary-mauve/10 p-0.5 rounded-lg border border-primary-mauve/10">
+                <button
+                  type="button"
+                  onClick={() => setTimelineTab('chart')}
+                  className={`px-3 py-1 text-[10px] font-black uppercase tracking-wider rounded-md transition-all cursor-pointer ${
+                    timelineTab === 'chart' ? 'bg-primary-mauve text-white shadow-xs' : 'text-text-muted hover:text-text-dark'
+                  }`}
+                >
+                  Trends Chart
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setTimelineTab('list')}
+                  className={`px-3 py-1 text-[10px] font-black uppercase tracking-wider rounded-md transition-all cursor-pointer ${
+                    timelineTab === 'list' ? 'bg-primary-mauve text-white shadow-xs' : 'text-text-muted hover:text-text-dark'
+                  }`}
+                >
+                  Logs List
+                </button>
+              </div>
             </div>
 
-            <div className="flex-1 overflow-y-auto space-y-3 max-h-[300px]">
-              {historyLogs.length === 0 ? (
-                <div className="flex flex-col items-center justify-center text-center py-10 space-y-2">
-                  <Clipboard className="w-8 h-8 text-primary-mauve/30" />
-                  <span className="text-[11px] font-bold text-text-muted">No historical vitals found.</span>
-                </div>
-              ) : (
-                historyLogs.map((log, index) => {
-                  const date = new Date(log.created_at).toLocaleDateString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
-
-                  return (
-                    <div
-                      key={index}
-                      className="p-3.5 rounded-xl border border-primary-mauve/5 bg-bg-rose-white/50 space-y-2.5 animate-fadeIn"
-                    >
-                      <div className="flex justify-between items-center">
-                        <span className="text-[9px] font-black text-text-muted">{date}</span>
-                        <span className={`inline-block px-2 py-0.5 rounded-full text-[8px] font-extrabold uppercase tracking-wide border ${log.danger_level === 'danger'
-                          ? 'bg-danger/10 border-danger/20 text-danger'
-                          : log.danger_level === 'warning'
-                            ? 'bg-warning/10 border-warning/20 text-warning'
-                            : 'bg-success/10 border-success/20 text-success'
-                          }`}>
-                          {log.danger_level.toUpperCase()}
-                        </span>
-                      </div>
-
-                      <div className="grid grid-cols-2 gap-2 text-[10px] font-bold text-text-dark">
-                        <div className="flex items-center gap-1.5">
-                          <Heart className="w-3.5 h-3.5 text-danger shrink-0" />
-                          <span>BP: {log.bp_systolic}/{log.bp_diastolic} mmHg</span>
-                        </div>
-                        <div className="flex items-center gap-1.5">
-                          <Droplet className="w-3.5 h-3.5 text-info shrink-0" />
-                          <span>Sugar: {log.blood_glucose} mmol/L</span>
-                        </div>
-                        <div className="flex items-center gap-1.5">
-                          <TrendingUp className="w-3.5 h-3.5 text-purple shrink-0" />
-                          <span>Weight: +{log.weight_gain} kg</span>
-                        </div>
-                        <div className="flex items-center gap-1.5">
-                          <GlassWater className="w-3.5 h-3.5 text-primary-mauve shrink-0" />
-                          <span>Hydration: {log.water_intake} L</span>
-                        </div>
-                      </div>
+            {timelineTab === 'chart' ? (
+              <div className="flex-1 flex flex-col space-y-4">
+                {historyLogs.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center text-center py-10 space-y-2 flex-1">
+                    <Clipboard className="w-8 h-8 text-primary-mauve/30" />
+                    <span className="text-[11px] font-bold text-text-muted">No historical vitals found to plot.</span>
+                  </div>
+                ) : (
+                  <>
+                    {/* Vital parameter selector pills */}
+                    <div className="flex gap-1.5 overflow-x-auto pb-1 shrink-0 scrollbar-none">
+                      {[
+                        { id: 'bp', label: 'Blood Pressure', icon: Heart },
+                        { id: 'glucose', label: 'Glucose', icon: Droplet },
+                        { id: 'weight', label: 'Weight Gain', icon: TrendingUp },
+                        { id: 'water', label: 'Hydration', icon: GlassWater },
+                      ].map(v => {
+                        const Icon = v.icon;
+                        return (
+                          <button
+                            key={v.id}
+                            type="button"
+                            onClick={() => setSelectedVital(v.id)}
+                            className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-[10px] font-black transition-all cursor-pointer whitespace-nowrap ${
+                              selectedVital === v.id
+                                ? 'bg-primary-mauve text-white border-primary-mauve shadow-xs'
+                                : 'border-primary-mauve/10 text-text-muted hover:text-text-dark hover:bg-bg-rose-white'
+                            }`}
+                          >
+                            <Icon className="w-3.5 h-3.5 shrink-0" />
+                            <span>{v.label}</span>
+                          </button>
+                        );
+                      })}
                     </div>
-                  );
-                })
-              )}
-            </div>
+
+                    {/* Recharts Container */}
+                    <div className="flex-1 min-h-[220px] w-full flex items-center justify-center select-none">
+                      {selectedVital === 'bp' && (
+                        <ResponsiveContainer width="100%" height={220}>
+                          <LineChart data={chartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                            <CartesianGrid strokeDasharray="3 3" stroke="rgba(171, 115, 151, 0.05)" />
+                            <XAxis dataKey="date" tick={{ fill: '#725b68', fontSize: 9, fontWeight: 700 }} axisLine={false} tickLine={false} />
+                            <YAxis tick={{ fill: '#725b68', fontSize: 9, fontWeight: 700 }} axisLine={false} tickLine={false} domain={['auto', 'auto']} />
+                            <Tooltip content={<CustomTooltip />} />
+                            <Line type="monotone" dataKey="systolic" name="Systolic BP" stroke="#d93d59" strokeWidth={3} dot={{ r: 4, strokeWidth: 2 }} activeDot={{ r: 6 }} unit=" mmHg" />
+                            <Line type="monotone" dataKey="diastolic" name="Diastolic BP" stroke="#3d8ed9" strokeWidth={3} dot={{ r: 4, strokeWidth: 2 }} activeDot={{ r: 6 }} unit=" mmHg" />
+                          </LineChart>
+                        </ResponsiveContainer>
+                      )}
+
+                      {selectedVital === 'glucose' && (
+                        <ResponsiveContainer width="100%" height={220}>
+                          <AreaChart data={chartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                            <defs>
+                              <linearGradient id="glucoseGrad" x1="0" y1="0" x2="0" y2="1">
+                                <stop offset="5%" stopColor="#e69d30" stopOpacity={0.2}/>
+                                <stop offset="95%" stopColor="#e69d30" stopOpacity={0.0}/>
+                              </linearGradient>
+                            </defs>
+                            <CartesianGrid strokeDasharray="3 3" stroke="rgba(171, 115, 151, 0.05)" />
+                            <XAxis dataKey="date" tick={{ fill: '#725b68', fontSize: 9, fontWeight: 700 }} axisLine={false} tickLine={false} />
+                            <YAxis tick={{ fill: '#725b68', fontSize: 9, fontWeight: 700 }} axisLine={false} tickLine={false} domain={['auto', 'auto']} />
+                            <Tooltip content={<CustomTooltip />} />
+                            <Area type="monotone" dataKey="glucose" name="Blood Glucose" stroke="#e69d30" strokeWidth={3} fillOpacity={1} fill="url(#glucoseGrad)" dot={{ r: 4, strokeWidth: 2 }} activeDot={{ r: 6 }} unit=" mmol/L" />
+                          </AreaChart>
+                        </ResponsiveContainer>
+                      )}
+
+                      {selectedVital === 'weight' && (
+                        <ResponsiveContainer width="100%" height={220}>
+                          <LineChart data={chartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                            <CartesianGrid strokeDasharray="3 3" stroke="rgba(171, 115, 151, 0.05)" />
+                            <XAxis dataKey="date" tick={{ fill: '#725b68', fontSize: 9, fontWeight: 700 }} axisLine={false} tickLine={false} />
+                            <YAxis tick={{ fill: '#725b68', fontSize: 9, fontWeight: 700 }} axisLine={false} tickLine={false} domain={['auto', 'auto']} />
+                            <Tooltip content={<CustomTooltip />} />
+                            <Line type="monotone" dataKey="weight" name="Weight Gain" stroke="#8652cc" strokeWidth={3} dot={{ r: 4, strokeWidth: 2 }} activeDot={{ r: 6 }} unit=" kg" />
+                          </LineChart>
+                        </ResponsiveContainer>
+                      )}
+
+                      {selectedVital === 'water' && (
+                        <ResponsiveContainer width="100%" height={220}>
+                          <AreaChart data={chartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                            <defs>
+                              <linearGradient id="waterGrad" x1="0" y1="0" x2="0" y2="1">
+                                <stop offset="5%" stopColor="#ab7397" stopOpacity={0.2}/>
+                                <stop offset="95%" stopColor="#ab7397" stopOpacity={0.0}/>
+                              </linearGradient>
+                            </defs>
+                            <CartesianGrid strokeDasharray="3 3" stroke="rgba(171, 115, 151, 0.05)" />
+                            <XAxis dataKey="date" tick={{ fill: '#725b68', fontSize: 9, fontWeight: 700 }} axisLine={false} tickLine={false} />
+                            <YAxis tick={{ fill: '#725b68', fontSize: 9, fontWeight: 700 }} axisLine={false} tickLine={false} domain={[0, 'auto']} />
+                            <Tooltip content={<CustomTooltip />} />
+                            <Area type="monotone" dataKey="water" name="Hydration" stroke="#ab7397" strokeWidth={3} fillOpacity={1} fill="url(#waterGrad)" dot={{ r: 4, strokeWidth: 2 }} activeDot={{ r: 6 }} unit=" L" />
+                          </AreaChart>
+                        </ResponsiveContainer>
+                      )}
+                    </div>
+                  </>
+                )}
+              </div>
+            ) : (
+              <div className="flex-1 overflow-y-auto space-y-3 max-h-[300px] scrollbar-none">
+                {historyLogs.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center text-center py-10 space-y-2">
+                    <Clipboard className="w-8 h-8 text-primary-mauve/30" />
+                    <span className="text-[11px] font-bold text-text-muted">No historical vitals found.</span>
+                  </div>
+                ) : (
+                  historyLogs.map((log, index) => {
+                    const date = new Date(log.created_at).toLocaleDateString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+
+                    return (
+                      <div
+                        key={index}
+                        className="p-3.5 rounded-xl border border-primary-mauve/5 bg-bg-rose-white/50 space-y-2.5 animate-fadeIn"
+                      >
+                        <div className="flex justify-between items-center">
+                          <span className="text-[9px] font-black text-text-muted">{date}</span>
+                          <span className={`inline-block px-2 py-0.5 rounded-full text-[8px] font-extrabold uppercase tracking-wide border ${log.danger_level === 'danger'
+                            ? 'bg-danger/10 border-danger/20 text-danger'
+                            : log.danger_level === 'warning'
+                              ? 'bg-warning/10 border-warning/20 text-warning'
+                              : 'bg-success/10 border-success/20 text-success'
+                            }`}>
+                            {log.danger_level.toUpperCase()}
+                          </span>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-2 text-[10px] font-bold text-text-dark">
+                          <div className="flex items-center gap-1.5">
+                            <Heart className="w-3.5 h-3.5 text-danger shrink-0" />
+                            <span>BP: {log.bp_systolic}/{log.bp_diastolic} mmHg</span>
+                          </div>
+                          <div className="flex items-center gap-1.5">
+                            <Droplet className="w-3.5 h-3.5 text-info shrink-0" />
+                            <span>Sugar: {log.blood_glucose} mmol/L</span>
+                          </div>
+                          <div className="flex items-center gap-1.5">
+                            <TrendingUp className="w-3.5 h-3.5 text-purple shrink-0" />
+                            <span>Weight: +{log.weight_gain} kg</span>
+                          </div>
+                          <div className="flex items-center gap-1.5">
+                            <GlassWater className="w-3.5 h-3.5 text-primary-mauve shrink-0" />
+                            <span>Hydration: {log.water_intake} L</span>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+            )}
           </div>
 
           {/* ─── AI Report Analyzer ─────────────────────────────── */}
