@@ -8,11 +8,11 @@ __pycache__/
 *.pyo
 
 # Environment files
-.env
-backend/.env
-backend/.env.*
+MaternaAI/frontend/.env
+MaternaAI/frontend/.env.*
+MaternaAI/backend/.env
+MaternaAI/backend/.env.*
 
-!.env.example
-!frontend/.env.development
-!frontend/.env.production
-!backend/.env.example
+!MaternaAI/frontend/.env.development
+!MaternaAI/frontend/.env.production
+!MaternaAI/backend/.env.example
