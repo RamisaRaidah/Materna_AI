@@ -35,35 +35,35 @@ const Login = () => {
 
   return (
     <div className="min-h-screen w-full flex items-center justify-center bg-gradient-to-br from-bg-rose-white via-[#f3e9f0] to-[#e8d2e0] p-4 font-sans relative overflow-hidden">
-      
+
       {/* Visual background decorations */}
       <div className="absolute top-10 right-10 w-72 h-72 rounded-full bg-secondary-blush/20 filter blur-3xl animate-float" />
       <div className="absolute bottom-10 left-10 w-96 h-96 rounded-full bg-primary-mauve/10 filter blur-3xl" style={{ animationDelay: '2s' }} />
 
       {/* Login Card */}
       <div className="w-full max-w-md bg-white/75 backdrop-blur-md border border-primary-mauve/10 rounded-2xl p-8 shadow-premium z-10 relative">
-        
-        {/* Brand Banner */}
-        <div className="flex flex-col items-center mb-8">
-          <div className="flex items-center">
-          <img
-            src={Logo}
-            alt="MaternaAI Logo"
-            style={{
-              width: "50px",
-              height: "50px",
-              objectFit: "contain",
-              marginRight: "-12px",
-            }}
-          />
 
-          <span
-            className="font-sans text-xl tracking-tight"
-            style={{ color: "#6B2E50", fontWeight: 500 }}
-          >
-            Materna<span className="text-pink-100">AI</span>
-          </span>
-        </div>
+        {/* Brand Banner */}
+        <div className="flex flex-col items-center mb-8 cursor-pointer group" onClick={() => navigate('/')}>
+          <div className="flex items-center">
+            <img
+              src={Logo}
+              alt="MaternaAI Logo"
+              style={{
+                width: "50px",
+                height: "50px",
+                objectFit: "contain",
+                marginRight: "-12px",
+              }}
+            />
+
+            <span
+              className="font-sans text-xl tracking-tight transition-opacity group-hover:opacity-80"
+              style={{ color: "#6B2E50", fontWeight: 500 }}
+            >
+              Materna<span className="text-primary-mauve">AI</span>
+            </span>
+          </div>
           <p className="text-xs font-bold tracking-wider text-text-muted mt-1 uppercase">
             Safe Births, Healthy Beginnings
           </p>
@@ -79,7 +79,7 @@ const Login = () => {
 
         {/* Credentials Form */}
         <form onSubmit={handleSubmit} className="space-y-4">
-          
+
           {/* Phone Field */}
           <div>
             <label className="block text-xs font-bold text-text-muted uppercase tracking-wider mb-1.5 pl-0.5">

@@ -13,9 +13,9 @@ const Landing = () => {
         <div className="min-h-screen flex flex-col bg-[#FFFBFD]">
             {/* Header */}
             <header className="flex items-center justify-between px-5 w-full h-[60px] bg-[#B07D9C]">
-                <div className="flex items-center">
+                <div className="flex items-center cursor-pointer group" onClick={() => navigate('/')}>
                     <img src={Logo} alt="Logo" className="w-12 h-12 object-contain -ml-3" />
-                    <span className="font-sans text-xl tracking-tight text-white font-medium">
+                    <span className="font-sans text-xl tracking-tight text-white font-medium transition-opacity group-hover:opacity-80">
                         aterna<span className="text-pink-100">AI</span>
                     </span>
                 </div>

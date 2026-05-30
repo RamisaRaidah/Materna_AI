@@ -49,20 +49,20 @@ function getBabyEmoji(weeks) {
 // 64-District Administrative Matrix mapping 
 const BANGLADESH_LOCATIONS = {
   'Dhaka Division': [
-    'Dhaka', 'Gazipur', 'Narayanganj', 'Narsingdi', 'Manikganj', 
-    'Munshiganj', 'Faridpur', 'Gopalganj', 'Madaripur', 'Rajbari', 
+    'Dhaka', 'Gazipur', 'Narayanganj', 'Narsingdi', 'Manikganj',
+    'Munshiganj', 'Faridpur', 'Gopalganj', 'Madaripur', 'Rajbari',
     'Shariatpur', 'Tangail', 'Kishoreganj'
   ],
   'Chittagong Division': [
-    'Chittagong', "Cox's Bazar", 'Cumilla', 'Feni', 'Noakhali', 
+    'Chittagong', "Cox's Bazar", 'Cumilla', 'Feni', 'Noakhali',
     'Lakshmipur', 'Brahmanbaria', 'Chandpur', 'Rangamati', 'Khagrachhari', 'Bandarban'
   ],
   'Rajshahi Division': [
-    'Rajshahi', 'Bogura', 'Pabna', 'Natore', 'Naogaon', 
+    'Rajshahi', 'Bogura', 'Pabna', 'Natore', 'Naogaon',
     'Sirajganj', 'Chapai Nawabganj', 'Joypurhat'
   ],
   'Khulna Division': [
-    'Khulna', 'Jashore', 'Kushtia', 'Satkhira', 'Bagerhat', 
+    'Khulna', 'Jashore', 'Kushtia', 'Satkhira', 'Bagerhat',
     'Jhenaidah', 'Magura', 'Meherpur', 'Narail', 'Chuadanga'
   ],
   'Barisal Division': [
@@ -72,7 +72,7 @@ const BANGLADESH_LOCATIONS = {
     'Sylhet', 'Moulvibazar', 'Habiganj', 'Sunamganj'
   ],
   'Rangpur Division': [
-    'Rangpur', 'Dinajpur', 'Kurigram', 'Gaibandha', 'Nilphamari', 
+    'Rangpur', 'Dinajpur', 'Kurigram', 'Gaibandha', 'Nilphamari',
     'Panchagarh', 'Thakurgaon', 'Lalmonirhat'
   ],
   'Mymensingh Division': [
@@ -214,7 +214,7 @@ const Register = () => {
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [age, setAge] = useState('');
-  
+
   // Independent Structural Location States
   const [division, setDivision] = useState('');
   const [district, setDistrict] = useState('');
@@ -279,10 +279,10 @@ const Register = () => {
     if (role === 'patient' && !isPostpartum) {
       fieldErrors.push(validateField('weeks', weeksPregnant, { isPostpartum }));
     }
-    
+
     // Add structural location validity evaluation
     const isLocationValid = division && district && subArea.trim();
-    
+
     return fieldErrors.every(e => !e) && isLocationValid;
   };
 
@@ -335,7 +335,7 @@ const Register = () => {
       <div className="w-full max-w-xl bg-white/80 backdrop-blur-md border border-primary-mauve/10 rounded-2xl p-8 shadow-premium z-10 relative my-6">
 
         {/* Brand */}
-        <div className="flex flex-col items-center mb-6">
+        <div className="flex flex-col items-center mb-6 cursor-pointer group" onClick={() => navigate('/')}>
           <div className="flex items-center">
             <img
               src={Logo}
@@ -347,12 +347,12 @@ const Register = () => {
                 marginRight: "-12px",
               }}
             />
-  
+
             <span
-              className="font-sans text-xl tracking-tight"
+              className="font-sans text-xl tracking-tight transition-opacity group-hover:opacity-80"
               style={{ color: "#6B2E50", fontWeight: 500 }}
             >
-              Materna<span className="text-pink-100">AI</span>
+              Materna<span className="text-primary-mauve">AI</span>
             </span>
           </div>
           <h2 className="text-2xl font-black tracking-tight text-text-dark">Create Account</h2>
@@ -464,21 +464,21 @@ const Register = () => {
             {/* Specific Area / Thana / Neighborhood Input Field */}
             {district && (
               <div className="col-span-1 md:col-span-2">
-                <Field 
-                  label="Area / Thana / Neighborhood *" 
+                <Field
+                  label="Area / Thana / Neighborhood *"
                   hint={district === 'Dhaka' ? "e.g. Dhanmondi, Gulshan, Mirpur, Uttara" : "e.g. Neighborhood, Thana, or Union boundary name"}
                   error={errors.subArea}
                 >
                   <div className="relative">
                     <MapPin className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-text-muted" />
-                    <input 
-                      type="text" 
+                    <input
+                      type="text"
                       placeholder={district === 'Dhaka' ? "e.g. Dhanmondi" : "e.g. Input local tracking neighborhood"}
                       value={subArea}
-                      onChange={e => setSubArea(e.target.value)} 
+                      onChange={e => setSubArea(e.target.value)}
                       onBlur={() => touch('location')}
                       disabled={isSubmitting}
-                      className={`${inputCls(!!errors.subArea)} pl-10`} 
+                      className={`${inputCls(!!errors.subArea)} pl-10`}
                     />
                   </div>
                 </Field>
@@ -490,7 +490,7 @@ const Register = () => {
               hint="Must differ from your phone">
               <div className="relative">
                 <Heart className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-text-muted" />
-                <input type="tel" placeholder={role==='patient'?"Spouse / Parent number":"Enter official number"} value={emergencyContact}
+                <input type="tel" placeholder={role === 'patient' ? "Spouse / Parent number" : "Enter official number"} value={emergencyContact}
                   onChange={e => setEmergencyContact(e.target.value)} onBlur={() => touch('emergency')}
                   disabled={isSubmitting}
                   className={`${inputCls(!!errors.emergency)} pl-10`} />
