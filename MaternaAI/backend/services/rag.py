@@ -44,7 +44,7 @@ def retrieve_context(query: str, category: str = None, top_k: int = 4) -> list:
             WHERE category = %s
             ORDER BY embedding <=> %s::vector
             LIMIT %s
-        """, (query_embedding, category, query_embedding, top_k))
+        """, (query_embedding, category, query_embedding, 10))
     else:
         cur.execute("""
             SELECT content, source, category,
@@ -52,16 +52,29 @@ def retrieve_context(query: str, category: str = None, top_k: int = 4) -> list:
             FROM knowledge_chunks
             ORDER BY embedding <=> %s::vector
             LIMIT %s
-        """, (query_embedding, query_embedding, top_k))
+        """, (query_embedding, query_embedding, 10))
 
     rows = cur.fetchall()
     cur.close()
     conn.close()
 
-    return [
+    chunks = [
         {"content": row[0], "source": row[1], "category": row[2], "similarity": row[3]}
         for row in rows
     ]
+
+    # Rerank
+    try:
+        reranked = co.rerank(
+            query=query,
+            documents=[c["content"] for c in chunks],
+            top_n=top_k,
+            model="rerank-multilingual-v3.0"
+        )
+        return [chunks[r.index] for r in reranked.results]
+    except Exception as e:
+        print(f"Reranking failed, falling back to cosine order: {e}")
+        return chunks[:top_k]
 
 def format_context(chunks: list) -> str:
     if not chunks:
@@ -264,7 +277,7 @@ def rag_query(user_input: str, user_profile: dict, mode: str = "danger", detecte
                     gemini_contents.append({"role": role, "parts": [msg["content"]]})
                 
                 genai_model = genai.GenerativeModel(
-                    model_name="gemini-1.5-flash",
+                    model_name="gemini-2.5-flash",
                     system_instruction=system_content
                 )
                 response_text = genai_model.generate_content(
