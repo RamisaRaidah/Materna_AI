@@ -19,14 +19,23 @@ import ClinicianCommunity from './pages/ClinicianCommunity';
 import ClinicianSOS from './pages/ClinicianSOS';
 import ClinicianFollowUps from './pages/ClinicianFollowUps';
 import ClinicianProfile from './pages/ClinicianProfile';
-import Landing from './pages/Landing'
-import Logo from './components/assets/Logo.png'
+import Landing from './pages/Landing';
+import Logo from './components/assets/Logo.png';
 import ClinicianAssistant from './pages/ClinicianAssistant';
 import Profile from './pages/Profile';
 import SavedBirthPlans from './pages/SavedBirthPlans';
+import Features from './pages/Features';
+import PagesOverview from './pages/PagesOverview';
+import Blogs from './pages/Blogs';
+import Contact from './pages/Contact';
+import LearnMore from './pages/LearnMore';
+import DiscoverMore from './pages/DiscoverMore';
+import BengaliSupport from './pages/BengaliSupport';
+import SmsService from './pages/SmsService';
 
 const PrivateRoute = ({ children }) => {
-  const { isAuthenticated, loading } = useAuth();
+  const constAuth = useAuth();
+  const { isAuthenticated, loading } = constAuth;
 
   if (loading) {
     return (
@@ -49,6 +58,14 @@ function App() {
       <Route path="/landing" element={<Landing/>}/>
       <Route path="/login" element={<Login />} />
       <Route path="/register" element={<Register />} />
+      <Route path="/features" element={<Features />} />
+      <Route path="/pages" element={<PagesOverview />} />
+      <Route path="/blogs" element={<Blogs />} />
+      <Route path="/contact" element={<Contact />} />
+      <Route path="/learn-more" element={<LearnMore />} />
+      <Route path="/discover-more" element={<DiscoverMore />} />
+      <Route path="/bengali-support" element={<BengaliSupport />} />
+      <Route path="/sms-service" element={<SmsService />} />
 
       {/* Protected Layout Sub-pages */}
       <Route path="/" element={
