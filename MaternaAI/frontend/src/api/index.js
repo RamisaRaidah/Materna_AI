@@ -252,4 +252,15 @@ export const sosAPI = {
   }
 };
 
+export const riskAPI = {
+  getLatestProfile: async (lang = 'bn') => {
+    const response = await api.get('/api/risk/profile', { params: { lang } });
+    return response.data;
+  },
+  recomputeRisk: async (lang = 'bn') => {
+    const response = await api.post('/api/risk/recompute', { lang });
+    return response.data;
+  },
+};
+
 export default api;

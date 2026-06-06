@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { healthAPI, clinicianAPI, sosAPI } from '../api';
+import { healthAPI, clinicianAPI, sosAPI, riskAPI } from '../api';
 import {
   Heart,
   Droplet,
@@ -48,6 +48,11 @@ const Home = () => {
     }
   });
 
+  // Risk Profile States
+  const [riskProfile, setRiskProfile] = useState(null);
+  const [riskLoading, setRiskLoading] = useState(false);
+  const [riskLanguage, setRiskLanguage] = useState('bn');
+
   const [aiPlanError, setAiPlanError] = useState(null);
 
 // Mood Journal AI State
@@ -69,14 +74,15 @@ const [alerts, setAlerts] = useState([]);
 const [stats, setStats] = useState(null);
 const [isClinicianLoading, setIsClinicianLoading] = useState(false);
 
-// Sync Vitals and Stats on Load
+// Sync Vitals, Stats, and Risk Profile on Load
 useEffect(() => {
   if (user?.role === 'clinician') {
     loadClinicianData();
   } else {
     loadPatientVitals();
+    loadPatientRisk(riskLanguage);
   }
-}, [user]);
+}, [user, riskLanguage]);
 
 useEffect(() => {
   const handleStorageChange = () => {
@@ -105,6 +111,33 @@ const loadPatientVitals = async () => {
     }
   } catch (err) {
     console.error('Failed to fetch patient vitals on mount:', err);
+  }
+};
+
+// Load Patient Risk Profile
+const loadPatientRisk = async (lang) => {
+  setRiskLoading(true);
+  try {
+    const profile = await riskAPI.getLatestProfile(lang);
+    setRiskProfile(profile);
+  } catch (err) {
+    console.error('Failed to load risk profile:', err);
+  } finally {
+    setRiskLoading(false);
+  }
+};
+
+// Trigger Risk Recomputation
+const handleRecomputeRisk = async () => {
+  setRiskLoading(true);
+  try {
+    const profile = await riskAPI.recomputeRisk(riskLanguage);
+    setRiskProfile(profile);
+  } catch (err) {
+    console.error('Failed to recompute risk profile:', err);
+    alert('Risk recomputation failed. Please try again.');
+  } finally {
+    setRiskLoading(false);
   }
 };
 
@@ -404,6 +437,147 @@ return (
                 </div>
               </div>
             </div>
+
+            {/* Live Risk Profile Widget */}
+            {user?.role === 'patient' && (
+              <div className="bg-white border border-primary-mauve/10 rounded-2xl p-6 shadow-premium space-y-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2 text-primary-mauve">
+                    <ShieldAlert className="w-5 h-5 text-primary-mauve" />
+                    <h3 className="font-sans font-black text-sm uppercase tracking-wider">
+                      {riskLanguage === 'bn' ? 'লাইভ ঝুঁকি প্রোফাইল' : 'Live Risk Profile'}
+                    </h3>
+                  </div>
+                  
+                  <div className="flex items-center gap-3">
+                    {/* Language Toggle */}
+                    <div className="inline-flex rounded-lg border border-primary-mauve/20 p-0.5 bg-bg-rose-white">
+                      <button
+                        onClick={() => setRiskLanguage('bn')}
+                        className={`px-2.5 py-1 rounded-md text-[10px] font-black uppercase transition-all cursor-pointer ${
+                          riskLanguage === 'bn'
+                            ? 'bg-primary-mauve text-white shadow-xs'
+                            : 'text-text-muted hover:text-text-dark bg-transparent'
+                        }`}
+                      >
+                        বাংলা
+                      </button>
+                      <button
+                        onClick={() => setRiskLanguage('en')}
+                        className={`px-2.5 py-1 rounded-md text-[10px] font-black uppercase transition-all cursor-pointer ${
+                          riskLanguage === 'en'
+                            ? 'bg-primary-mauve text-white shadow-xs'
+                            : 'text-text-muted hover:text-text-dark bg-transparent'
+                        }`}
+                      >
+                        EN
+                      </button>
+                    </div>
+
+                    {/* Recompute Button */}
+                    <button
+                      onClick={handleRecomputeRisk}
+                      disabled={riskLoading}
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-primary-mauve/20 text-primary-mauve hover:bg-primary-mauve hover:text-white text-[10px] font-black uppercase tracking-wider transition-all cursor-pointer disabled:opacity-50"
+                    >
+                      {riskLoading ? (
+                        <Loader2 className="w-3 h-3 animate-spin" />
+                      ) : (
+                        <Activity className="w-3 h-3" />
+                      )}
+                      <span>{riskLanguage === 'bn' ? 'পুনরায় হিসাব করুন' : 'Recompute'}</span>
+                    </button>
+                  </div>
+                </div>
+
+                {riskLoading && !riskProfile ? (
+                  <div className="py-6 flex flex-col items-center justify-center space-y-2">
+                    <Loader2 className="w-6 h-6 animate-spin text-primary-mauve" />
+                    <span className="text-[11px] font-semibold text-text-muted">
+                      {riskLanguage === 'bn' ? 'ঝুঁকি প্রোফাইল আপডেট করা হচ্ছে...' : 'Updating risk profile...'}
+                    </span>
+                  </div>
+                ) : riskProfile ? (
+                  <div className="space-y-4 animate-fadeIn">
+                    {/* Risk Badge and Condition Flags */}
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-primary-mauve/5 pb-3">
+                      <div className="flex items-center gap-3">
+                        <div className="text-[10px] font-black uppercase text-text-muted tracking-wider">
+                          {riskLanguage === 'bn' ? 'ঝুঁকির স্তর:' : 'Risk Level:'}
+                        </div>
+                        <span
+                          className={`px-3 py-1 rounded-full text-[11px] font-black uppercase tracking-wider shadow-xs ${
+                            riskProfile.risk_level === 'Critical'
+                              ? 'bg-danger/10 text-danger border border-danger/20 animate-pulse-slow font-black'
+                              : riskProfile.risk_level === 'High'
+                              ? 'bg-orange-500/10 text-orange-600 border border-orange-500/20 font-black'
+                              : riskProfile.risk_level === 'Medium'
+                              ? 'bg-amber-500/10 text-amber-600 border border-amber-500/20 font-black'
+                              : 'bg-success/10 text-success border border-success/20 font-black'
+                          }`}
+                        >
+                          {riskProfile.risk_level === 'Critical' && (riskLanguage === 'bn' ? 'গুরুতর (Critical)' : 'Critical')}
+                          {riskProfile.risk_level === 'High' && (riskLanguage === 'bn' ? 'উচ্চ (High)' : 'High')}
+                          {riskProfile.risk_level === 'Medium' && (riskLanguage === 'bn' ? 'মাঝারি (Medium)' : 'Medium')}
+                          {riskProfile.risk_level === 'Low' && (riskLanguage === 'bn' ? 'কম (Low)' : 'Low')}
+                        </span>
+                      </div>
+                      
+                      {/* Condition flags */}
+                      <div className="flex flex-wrap gap-1.5">
+                        {riskProfile.condition_flags && riskProfile.condition_flags.map((flag, idx) => (
+                          <span
+                            key={idx}
+                            className="bg-primary-mauve/5 text-primary-mauve border border-primary-mauve/10 rounded-full px-2.5 py-0.5 text-[9px] font-black uppercase tracking-wider"
+                          >
+                            {flag}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Explanation */}
+                    <div className="space-y-1.5">
+                      <div className="text-[10px] font-black uppercase text-text-muted tracking-wider">
+                        {riskLanguage === 'bn' ? 'বিশ্লেষণ ও ব্যাখ্যা:' : 'Clinical Analysis & Explanation:'}
+                      </div>
+                      <p className="text-xs font-semibold text-text-dark leading-relaxed">
+                        {riskProfile.explanation}
+                      </p>
+                    </div>
+
+                    {/* Action Recommendation */}
+                    <div className={`p-4 rounded-xl border flex gap-3 ${
+                      riskProfile.risk_level === 'Critical'
+                        ? 'bg-danger/5 border-danger/15 text-danger'
+                        : riskProfile.risk_level === 'High'
+                        ? 'bg-orange-500/5 border-orange-500/15 text-orange-700'
+                        : riskProfile.risk_level === 'Medium'
+                        ? 'bg-amber-500/5 border-amber-500/15 text-amber-700'
+                        : 'bg-success/5 border-success/15 text-success'
+                    }`}>
+                      <div className="w-5 h-5 rounded-full flex items-center justify-center bg-white/60 shrink-0 text-sm shadow-xs select-none">
+                        {riskProfile.risk_level === 'Critical' ? '🚨' : riskProfile.risk_level === 'High' ? '⚠️' : riskProfile.risk_level === 'Medium' ? '⚡' : '✓'}
+                      </div>
+                      <div className="space-y-0.5">
+                        <div className="text-[9px] font-black uppercase tracking-wider text-opacity-80">
+                          {riskLanguage === 'bn' ? 'প্রস্তাবিত পদক্ষেপ:' : 'Recommended Action:'}
+                        </div>
+                        <p className="text-xs font-extrabold leading-snug">
+                          {riskProfile.recommendation}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="text-center py-4">
+                    <p className="text-xs font-semibold text-text-muted">
+                      {riskLanguage === 'bn' ? 'কোনো ঝুঁকি প্রোফাইল পাওয়া যায়নি।' : 'No risk profile available.'}
+                    </p>
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* Vitals Grid */}
             <div className="space-y-3">

@@ -76,6 +76,18 @@ def update_me():
     set_clause = ", ".join(f"{k} = %s" for k in updates)
     values = list(updates.values()) + [g.user["id"]]
     updated_user = query(f"UPDATE users SET {set_clause} WHERE id = %s RETURNING *", values, fetch="one")
+    
+    # Trigger risk recomputation if key health fields are updated
+    health_keys = {"age", "weeks_pregnant", "is_postpartum", "persona", "due_date"}
+    if any(k in updates for k in health_keys):
+        from services.risk_engine import compute_user_risk
+        try:
+            current_profile = query("SELECT language FROM risk_profiles WHERE user_id = %s", (g.user["id"],), fetch="one")
+            lang = current_profile.get("language", "bn") if current_profile else "bn"
+            compute_user_risk(g.user["id"], lang=lang)
+        except Exception as e:
+            print(f"Failed to auto-recompute risk after profile update: {e}")
+
     safe = {k: v for k, v in updated_user.items() if k != "password_hash"}
     return jsonify({"message": "Profile updated successfully!", "user": safe})
 
