@@ -766,6 +766,312 @@ Newborn danger signs:
 National hotline: 333 (follow prompts for health and emergency services).
 These numbers connect to local guidance and referral support."""
     },
+    {
+        "source": "WHO Postnatal Care Guidelines - Physiological Maternal Assessment",
+        "category": "general",
+        "content": """A.1 Maternal Assessment - Physiological Assessment of the Woman (Recommendation 1):
+First 24 Hours: All postpartum women require regular routine assessments of vaginal bleeding, uterine tonus, fundal height, temperature, and heart rate (pulse), beginning within the first hour after birth.
+Blood Pressure: Measured shortly after birth. If normal, a second measurement must be taken within 6 hours.
+Urine Void: Must be documented within 6 hours.
+Beyond 24 Hours (Subsequent Contacts): Inquiries must continue regarding general well-being. Assessments must cover: micturition (urination) and urinary incontinence, bowel function, healing of any perineal wound, headache, fatigue, back pain, perineal pain, perineal hygiene, breast pain, uterine tenderness, and lochia (postpartum vaginal discharge).
+Remarks: Postpartum abdominal uterine tonus assessment is recommended for all women for early identification of uterine atony."""
+    },
+    {
+        "source": "WHO Postnatal Care Guidelines - HIV Catch-Up Testing",
+        "category": "general",
+        "content": """A.1.2 HIV Catch-Up Testing (Recommendation 2a & 2b):
+In high HIV burden settings (>=5% HIV prevalence), catch-up postpartum HIV testing is needed for women of HIV-negative or unknown status who missed early antenatal contact testing or third-trimester retesting.
+In low HIV burden settings (<5% HIV prevalence), catch-up testing can be considered for women of HIV-negative or unknown status who missed antenatal testing or third-trimester retesting. This is limited to women in serodiscordant relationships (partner not virally suppressed on ART) or those with other known ongoing HIV risks.
+Remarks: Retesting at 14 weeks, 6 months, or 9 months postpartum could be encouraged in high-burden settings. ART initiation should be offered to all women with confirmed HIV diagnosis. HIV-exposed infants should receive early virological testing."""
+    },
+    {
+        "source": "WHO Postnatal Care Guidelines - Tuberculosis (TB) Screening",
+        "category": "general",
+        "content": """A.1.3 Screening for Tuberculosis (TB) Disease (Recommendation 3a, 3b, 3c):
+Recommendation 3a: Systematic screening for TB disease may be conducted among the general population, including postpartum women, in areas with estimated TB prevalence of 0.5% or higher.
+Recommendation 3b: In settings where general population TB prevalence is 100/100,000 or higher, systematic screening may be conducted among postpartum women.
+Recommendation 3c: Household contacts and close contacts of individuals with TB disease—including postpartum women and newborns—should be systematically screened.
+Remarks: Postpartum TB screening may be conducted in subpopulations with structural risk factors (urban poor, homeless, remote communities, refugees, etc.). Any newborn with close contact to a TB patient must be screened via symptom screen and/or chest radiograph."""
+    },
+    {
+        "source": "WHO Postnatal Care Guidelines - Common Physiological Signs and Symptoms",
+        "category": "general",
+        "content": """A.2 Interventions for Common Physiological Signs and Symptoms:
+Perineal and Uterine Cramping/Involution Pain: Perineal pain impairs mobility, newborn care, and breastfeeding. Non-pharmacological cooling options: solid/crushed ice, gel packs, or bathing. Pharmacological options: paracetamol, aspirin, oral NSAIDs. Uterine involution causes cramping for 2–3 days, treated with paracetamol, NSAIDs, and/or codeine.
+Urinary and Fecal Incontinence: Roughly one-third of women experience involuntary urinary leakage in the first 3 months postpartum. Pelvic Floor Muscle Training (PFMT)—daily sets of repeated voluntary contractions several days a week—is used to prevent/treat it.
+Breast Engorgement: Pathological overfilling of the breasts with milk (hard, painful, tight breasts), affecting 15% to 50% of women. Methods: moist heat before feeding, frequent feeding, correct positioning/attachment, expressing/pumping, massage, cold compresses. Can be paired with paracetamol or ibuprofen. Pharmacological: oxytocin or enzyme therapy."""
+    },
+    {
+        "source": "WHO Postnatal Care Guidelines - Values, Acceptability, Feasibility",
+        "category": "general",
+        "content": """WHO Postnatal Care Guidelines Summary Boxes:
+Values (Box 3.1): Women desire a positive experience where they can build confidence as a mother, adjust to relationships, and navigate challenges. They want info on soothing injuries and to discuss their birth experience. Breastfeeding is highly valued for bonding, but challenges cause distress.
+Acceptability (Box 3.2): Women appreciate techniques enhancing comfort, mobility, sexual relations, and psychosocial well-being. Antenatal info about complications is highly valued.
+Feasibility (Box 3.3): Lack of personnel, resources, and training may limit delivery of treatments, info, and counseling. In LMICs, women may avoid seeking help if they believe treatments will incur extra costs or facilities lack resources."""
+    },
+    {
+        "source": "WHO Postnatal Care Guidelines - Local Cooling for Perineal Pain",
+        "category": "general",
+        "content": """A.2.1 Local Cooling for Perineal Pain Relief (Recommendation 4):
+Local cooling, such as with ice packs or cold pads, can be offered to women in the immediate postpartum period to relieve acute pain from childbirth-related perineal trauma, based on the woman's preferences and available options.
+Remarks: Involves intermittent applications of crushed ice (between pad layers) or gel packs for 10 to 20 minutes within the first 48 hours postpartum. Pain relief must be individualized. Local cooling is low-cost and safe. Health workers must ask about perineal pain at every contact and educate on danger signs (worsening pain signaling hematomas, hemorrhoids, or infection)."""
+    },
+    {
+        "source": "WHO Postnatal Care Guidelines - Local Cooling Evidence & Considerations",
+        "category": "general",
+        "content": """WHO Postnatal Care Guidelines - Local Cooling Evidence & Considerations:
+Effects of Interventions: Evidence from Cochrane review focused on local cooling for non-severe perineal trauma (episiotomy, 1st-degree, or 2nd-degree tears). Excluded 3rd- or 4th-degree tears and intact perineums.
+Trial Data: 10 trials (1,258 women total) in hospital settings (Brazil, UK, Iran, Thailand, Turkey).
+Comparisons: Evaluates two main comparisons:
+1. Perineal local cooling compared with no pain relief or usual care.
+2. Perineal local cooling compared with other forms of non-pharmacological perineal pain relief."""
+    },
+    {
+        "source": "WHO Postnatal Care Guidelines - Perineal Local Cooling Comparison 1",
+        "category": "general",
+        "content": """A.2.1 Local Cooling - Comparison 1: Perineal Local Cooling vs. No Pain Relief or Usual Care:
+- Based on 5 trials (744 women) evaluating ice packs or cold gel packs vs no intervention, usual care, or generic maternity pads.
+- Pain Relief: Uncertain if it reduces overall pain at 4–6, <24, or 24–48 hours postpartum, or moderate-to-severe pain within 24 hours (very low-certainty). Low-certainty evidence suggests it may reduce moderate-to-severe pain at 24–48 hours (1 trial, 316 women; RR 0.73, 95% CI 0.57 to 0.94; caution due to 29.8% attrition).
+- Edema & Bruising: Low-certainty suggests little/no difference within 24 hours; effects at 24–48 hours are uncertain.
+- Functioning: Low-certainty indicates little/no difference in pain associated with sitting or walking at 24 and 24–48 hours. Pain during feeding baby is uncertain.
+- Satisfaction: Low-certainty indicates little/no difference to overall satisfaction with perineal care at day 10.
+- Adverse Effects: No adverse events (like cold burns) reported. Breastmilk provision rates at 24–48 hours are uncertain."""
+    },
+    {
+        "source": "WHO Postnatal Care Guidelines - Perineal Local Cooling Comparison 2 (Other Methods)",
+        "category": "general",
+        "content": """A.2.1 Local Cooling - Comparison 2: Perineal Local Cooling vs. Other Non-Pharmacological Methods:
+- Comparison 2a (Cold Gel Pads + Compression vs. Uncooled Gel Pads + Compression): 1 trial, 250 primiparous women. Pain relief at 4-6h is uncertain. Low-certainty suggests cold gel pads + compression may reduce pain (MD 0.43 lower, 95% CI 0.73 to 0.13 lower) and perineal edema (MD 0.15 lower, 95% CI 0.28 to 0.03 lower) at 24–48 hours. May increase satisfaction (MD 0.88 higher).
+- Comparison 2b (Ice Packs vs. Room-Temperature Water Packs): 1 trial, 63 women. Pain, edema, and additional analgesia needs are uncertain. Low-certainty suggests ice packs make little/no difference to satisfaction (RR 0.91), willingness to repeat (RR 0.88) or recommend (RR 0.89). No adverse effects. Little/no difference to breastfeeding rates at 48 hours.
+- Comparison 2c (Ice Packs vs. Cold Gel Pads): 3 trials. Pain, redness, edema, bruising, discharge, wound gaping, satisfaction, and adverse effects are highly uncertain (very low-certainty)."""
+    },
+    {
+        "source": "WHO Postnatal Care Guidelines - Local Cooling Judgements & Oral Analgesia Intro",
+        "category": "general",
+        "content": """WHO Postnatal Care Guidelines - Local Cooling Judgements & Oral Analgesia Intro:
+- Trauma Subgroups: Unknown if cooling effects differ between episiotomies and tears.
+- Resources & Equity: Highly affordable but requires clean water, electricity, refrigeration, and cold storage. Lack of these in low-resource settings may worsen health inequity.
+- Judgements: VS. No Pain Relief: Desirable effects: Trivial, Undesirable: Don't know, Certainty: Very Low, Values: No important variability, Cost: Negligible, Acceptability: Probably yes. VS. Other Non-Pharmacological: Desirable: Small.
+- A.2.2 Oral Analgesia - Recommendation 5 (Recommended): Oral paracetamol is recommended as the first-line choice when oral analgesia is required for postpartum perineal pain.
+- Remarks: Individualize using the lowest effective dose. Single-dose paracetamol in early postpartum carries negligible risk to the newborn (minimal breastmilk excretion). Aspirin is strictly contraindicated during breastfeeding due to potential salicylate harm. Counsel on danger signs (escalating pain signaling hematomas, infection, or hemorrhoids)."""
+    },
+    {
+        "source": "WHO Postnatal Care Guidelines - Oral Analgesia Evidence & Comparisons (Paracetamol & Aspirin)",
+        "category": "general",
+        "content": """WHO Postnatal Care Guidelines - Oral Analgesia Evidence Base & Comparisons:
+- Evidence: Three Cochrane reviews of single-dose treatments for episiotomies/repaired tears. Paracetamol: 10 trials (1,367 women), 500-650 mg vs 1,000 mg vs placebo. Aspirin: 17 trials (1,132 women), 500-1,200 mg vs placebo (breastfeeding women excluded). NSAIDs: 28 trials (4,181 women) of 13 NSAIDs (breastfeeding women excluded).
+- Comparison 1a: Single-Dose Paracetamol vs. Placebo: 500–650 mg: Pain relief is uncertain. 1000 mg: Low-certainty evidence suggests it may provide adequate pain relief (RR 2.42, 95% CI 1.53 to 3.81). Paracetamol reduces rescue analgesia needs (RR 0.34). Little/no effect on nausea (RR 0.18) or sleepiness (RR 0.89).
+- Comparison 1b: Single-Dose Aspirin vs. Placebo: Low-certainty suggests it may provide adequate pain relief (RR 2.03, 95% CI 1.69 to 2.42), specifically at 500–650 mg (RR 1.98). 300, 900, 1200 mg are uncertain. Reduces rescue analgesia at 4–8 hours (RR 0.25). Total risk of adverse effects is uncertain."""
+    },
+    {
+        "source": "WHO Postnatal Care Guidelines - Oral Analgesia NSAIDs vs Placebo",
+        "category": "general",
+        "content": """WHO Postnatal Care Guidelines - Comparison 1c: Single-Dose NSAID vs. Placebo:
+- Symptom Relief at 4 Hours: Uncertain overall. Subgroups: Diclofenac 100 mg (RR 2.36) and Meclofenamate sodium 100 mg & 200 mg (RR 1.42) may provide adequate relief (low certainty). Ibuprofen, Ketoprofen, Diflunisal, Flurbiprofen are uncertain.
+- Symptom Relief at 6 Hours: Low-certainty suggests single-dose NSAID may provide adequate pain relief (RR 1.92, 95% CI 1.69 to 2.17). Successful: Ibuprofen 300–400 mg (RR 2.08), Meclofenamate sodium 100 mg (RR 1.36) & 200 mg (RR 1.40), Dipyrone 500 mg (RR 2.21). Others are uncertain.
+- Health Service Use (Rescue Relief): Low-certainty shows NSAIDs reduce rescue relief needs at 4 hours (RR 0.39), driven by Ibuprofen 300–400 mg (RR 0.32). At 6 hours, reduction is uncertain overall, but specific subgroups showed reduction: Ibuprofen 300–400 mg (RR 0.33), Meclofenamate sodium 100 mg (RR 0.34) & 200 mg (RR 0.45), Flurbiprofen 25/50/100 mg (all RR <= 0.06).
+- Adverse Effects: Uncertain at 4 hours. Low-certainty suggests single-dose NSAID makes little/no difference to adverse effects at 6 hours."""
+    },
+    {
+        "source": "WHO Postnatal Care Guidelines - Uterine Cramping Pharmacological Treatments",
+        "category": "general",
+        "content": """Postpartum pain from uterine cramping and involution (uterus shrinking back to normal size) - Pharmacological Stack:
+1. Drug Classes vs. Placebo:
+- NSAIDs (e.g., Ibuprofen, Aspirin): Evidence strongly leans toward NSAIDs. Low-certainty evidence shows they may provide adequate pain relief compared to placebo (RR 1.66). Aspirin 650 mg showed a clear benefit (RR 1.33). Relief from naproxen, flurbiprofen, ketorolac, and fenoprofen remains uncertain.
+- Paracetamol: Uncertain whether a single oral dose of paracetamol provides better pain relief than a placebo.
+- Opioids (e.g., Codeine): Uncertain if opioids provide adequate pain relief or affect the need for additional pain meds compared to a placebo.
+2. Head-to-Head Comparisons:
+- Higher vs. Lower Doses: Uncertain if changing dosage makes a difference for Naproxen (300 mg vs 600 mg), Ketorolac (5 mg vs 10 mg), or Codeine (60 mg vs 120 mg).
+- NSAIDs vs. Opioids: Low-certainty suggests NSAIDs may provide better pain relief for uterine cramping than opioids (RR 1.33); specific matchups (Aspirin vs. Codeine, Naproxen vs. Codeine) remain uncertain.
+- NSAIDs vs. Herbal Analgesia: Moderate-certainty suggests similar level of adequate pain relief (RR 0.96); specific pairs (ibuprofen vs fennel essence, mefenamic acid vs melissa officinalis) are uncertain.
+- Paracetamol vs. NSAIDs: Uncertain if paracetamol (650 mg) provides adequate pain relief or alters side effects compared to aspirin (650 mg) or naproxen (500 mg)."""
+    },
+    {
+        "source": "WHO Postnatal Care Guidelines - Uterine Cramping Practical Considerations & Safety",
+        "category": "general",
+        "content": """Uterine cramping pharmacological treatments - Costs, Equity, Feasibility, & Safety:
+3. Practical Considerations:
+- Paracetamol: Negligible cost (approx. US$ 0.004/tablet). Highly feasible/widely available OTC. Listed on WHO Essential Medicines. Varies equity impact: increases equity due to low cost, but can decrease it if women pay out-of-pocket.
+- NSAIDs: Negligible cost (Aspirin: US$ 0.005, Ibuprofen: US$ 0.01). Highly feasible. Only Aspirin/Ibuprofen on WHO Essential Medicines. Equity varies (out-of-pocket dependency).
+- Opioids: Moderate cost (Codeine: US$ 0.09, Nalbuphine: US$ 1.44/ml). Feasibility varies (requires prescription, specialized training, secure storage). Probably reduced equity: expensive alternatives are used in high-resource settings, widening care gaps.
+4. Safety & Breastfeeding:
+- Data Scarcity: Almost all trials did not report breastfeeding status or newborn adverse effects (8 trials excluded breastfeeding women entirely).
+- Paracetamol Safety: Broadly considered safe/compatible with breastfeeding by AAP. Infant exposure is <2% of maternal dose. Only a single case of infant trunk rash described.
+- Perceptions: Women may decline meds due to fear of passing chemicals through breastmilk. Clear safety info, correct single-dose usage, and avoiding accidental overdose are vital."""
+    },
+    {
+        "source": "WHO Postnatal Care Guidelines - Breast Engorgement Non-Pharmacological Interventions",
+        "category": "general",
+        "content": """WHO Postnatal Care Guidelines - Non-Pharmacological Interventions for Postpartum Breast Engorgement:
+- Cold Cabbage Leaves vs. Usual Care: Moderate-certainty shows a moderate desirable effect (overall balance favors cabbage leaves). Negligible cost (~US$ 0.50–1.30 per head). Feasibility varies (requires clean water to wash, kitchen tools to prepare, and refrigeration). Acceptability probably yes. Time commitment is high (apply for 2–8 hours, replace every 2 hours).
+- Cold Gel Packs vs. Usual Care: Low-to-moderate certainty shows a small desirable effect. May make little/no difference in breast pain or satisfaction, but moderate-certainty suggests they probably reduce breast hardness. Moderate costs (~US$ 20.00 per two reusable packs). Feasibility limited in low-income settings (refrigeration/electricity needed). Decreases equity.
+- Warm Herbal Compresses vs. Usual Care: Low-to-moderate certainty shows small desirable effect. Hot herbal compress balls (Cassumunar ginger, turmeric, camphor) probably reduce pain (large trial of 500 women). Hollyhock leaf compress effects are completely uncertain. Two women had skin irritation. Feasibility/cost vary (requires heating/boiling facilities, UV/milling processing, professional prep).
+- Breast Massage vs. Usual Care: Effectiveness: Don't know. Trials (e.g. Oketani method) reported results per breast, leading to exclusion from pooled analyses. High cost/reduced equity if specialized massage therapist is needed. Highly feasible/equitable if midwives/women are trained via leaflets."""
+    },
+    {
+        "source": "WHO Postnatal Care Guidelines - Breast Engorgement Pharmacological & Summary",
+        "category": "general",
+        "content": """WHO Postnatal Care Guidelines - Breast Engorgement Pharmacological Interventions (Not Recommended):
+- Note: GDG explicitly does not recommend subcutaneous oxytocin or proteolytic enzyme therapy. Breastfeeding counseling and support should be first-line.
+- Subcutaneous Oxytocin vs. Placebo: Entirely uncertain whether daily injection of 2.5 IU of subcutaneous oxytocin softens breasts by day 3 (very low-certainty). Acceptability: Probably no (invasive/painful injection). Cost moderate (~US$ 0.19 to 1.19/ml + needles/sharps bins). Demands cold chain storage and skilled health workers.
+- Proteolytic Enzymes vs. Placebo (oral protease complexes, bromelain, trypsin, serrapeptase): Highly uncertain if they affect pain/swelling (very low-certainty). One small trial suggested serrapeptase might reduce general engorgement (RR 0.36; low-certainty). Acceptability probably no (no long-term safety data for breastfeeding mothers). Moderate cost (~US$ 20-30 for 90 capsules). Omitted from WHO Essential Medicines list.
+
+Non-Pharmacological vs. Pharmacological Comparison Summary:
+- Cold Cabbage Leaves: Moderate desirable effect | Moderate certainty | Probably favors intervention | Negligible costs
+- Cold Gel Packs: Small desirable effect | Low to Moderate certainty | Does not favor either | Moderate costs (~US$ 20)
+- Warm Herbal Compresses: Small desirable effect | Low certainty | Don't know | Varies
+- Breast Massage: Don't know | No included studies | Don't know | Varies (High if specialized)
+- Subcutaneous Oxytocin: Don't know | Very Low certainty | Don't know | Moderate costs (requires cold chain)
+- Proteolytic Enzymes: Don't know | Very Low certainty | Don't know | Moderate costs"""
+    },
+    {
+        "source": "WHO Postpartum Haemorrhage (PPH) Prevention - Uterotonics (Oxytocin, Carbetocin, Misoprostol)",
+        "category": "danger",
+        "content": """WHO Postpartum Haemorrhage (PPH) Prevention - Approved Uterotonics:
+1. Oxytocin (10 IU, IM/IV): Recommended for all births (vaginal/caesarean). If IV access is established, slow IV infusion/injection is preferred over IM. Avoid rapid IV bolus due to haemodynamic side-effects (hypotension/tachycardia). For C-sections, split 10 IU between a small IV bolus and slow infusion. Requires cold chain (2-8 °C).
+2. Heat-Stable Carbetocin (100 µg, IM/IV): Context-specific. Recommended for all births only where unit cost is comparable to other uterotonics. Substantially reduces PPH with minimal side-effects. Does not require cold chain or refrigeration.
+3. Misoprostol (400 µg or 600 µg, PO): Recommended for all births (hospital/community). Preferred route is oral (PO). Advance antenatal distribution during third-trimester visits is recommended for out-of-facility births without skilled personnel, with targeted monitoring. Increases shivering, fever, and diarrhoea, but benefits outweigh harms. Inexpensive; no cold chain needed."""
+    },
+    {
+        "source": "WHO Postpartum Haemorrhage (PPH) Prevention - Uterotonics (Ergometrine & Oxytocin+Ergometrine)",
+        "category": "danger",
+        "content": """WHO Postpartum Haemorrhage (PPH) Prevention - Approved Uterotonics (Cont.):
+4. Ergometrine / Methylergometrine (200 µg, IM/IV): Context-specific. Recommended only where hypertensive disorders (pre-eclampsia, eclampsia, gestational/chronic hypertension) and cardiovascular disorders can be safely and reliably excluded. High risk of drug-induced hypertension (50 per 1000 births). Requires refrigeration (2–8 °C).
+5. Fixed-Dose Combination Oxytocin + Ergometrine (5 IU / 500 µg, IM): Context-specific. Only recommended if hypertensive disorders are excluded. Highly sensitive to heat; requires refrigeration (2–8 °C).
+
+Uterotonic Comparative Summary:
+- Oxytocin (IM/Slow IV) | Cold chain required | Key risk: Avoid rapid IV bolus | Setting: Facilities with skilled personnel.
+- Carbetocin (IM/IV) | No cold chain (Heat-Stable) | Key risk: High unit cost | Setting: Facilities with skilled personnel.
+- Misoprostol (PO) | No cold chain | Key risk: Causes shivering, fever, diarrhoea | Setting: Community/Remote births.
+- Ergometrine (IM/IV) | Cold chain required | Key risk: Hypertensive/cardiovascular contraindications | Setting: Facilities with BP screening.
+- Oxytocin + Ergometrine (IM) | Cold chain required | Key risk: Hypertensive/cardiovascular contraindications | Setting: Facilities with BP screening."""
+    },
+    {
+        "source": "WHO PPH Prevention - Alternatives, Pre-Eclampsia & Hyperglycemia Classification",
+        "category": "danger",
+        "content": """WHO PPH Prevention - Alternatives, Pre-Eclampsia & Hyperglycemia:
+- Injectable Prostaglandins (Carboprost, Sulprostone): Explicitly not recommended for PPH prevention. No benefit for severe PPH or transfusions. High gastrointestinal side-effects (diarrhoea risk NNH = 6). Expensive with low availability.
+- Choice when multiple uterotonics are available: Oxytocin (10 IU IM/IV) is the first choice. Carbetocin reduces PPH >=500 mL but supply cost is 20x higher. Misoprostol alone is less effective than oxytocin for severe PPH. Ergometrine has severe hypertensive side-effects. Oxytocin + Misoprostol co-administration is highly effective but poorly feasible (dual route) and increases side-effects (shivering/fever).
+- Cold-Chain Failure Rule: If cold chain fails, oxytocin and ergometrine are unsuitable. Prioritize heat-stable alternatives: heat-stable carbetocin or oral misoprostol.
+- Pre-eclampsia Prevention (Calcium Supplementation):
+  1. Pre-pregnancy: Research context only (powdery/unpalatable tablets).
+  2. During pregnancy: Recommended in populations with low dietary calcium. Regimen: 1.5–2.0 g oral elemental calcium daily in three divided doses. Take calcium and iron supplements several hours apart (negative absorption interaction).
+- Maternal Hyperglycemia Classification: Diagnose and classify hyperglycemia first detected in pregnancy as: 1. Diabetes mellitus in pregnancy, or 2. Gestational diabetes mellitus."""
+    },
+    {
+        "source": "WHO Surgical Site Infection (SSI) Prevention - Preoperative Bathing & Decolonization",
+        "category": "general",
+        "content": """WHO SSI Prevention - Preoperative Bathing & Decolonization:
+- Preoperative Bathing: Good clinical practice for patients to bathe or shower prior to surgery. Soap selection: Either plain soap or antimicrobial soap (chlorhexidine gluconate - CHG) is acceptable. CHG-impregnated cloths are not recommended due to high cost and very low-quality evidence. CHG can cause rare skin irritation, dermatitis, photosensitivity, or anaphylaxis.
+- Mupirocin & CHG Decolonization:
+  1. Target: Strong recommendation for S. aureus nasal carriers in cardiothoracic/orthopaedic surgeries; Conditional for other surgeries. Target population constraints: Adult only (no paediatric data).
+  2. Protocol: Intranasal mupirocin 2% ointment (with/without CHG body wash). At least one dose must be immediately preoperative.
+  3. Constraints: Screen first; universal decolonization is prohibited to prevent antimicrobial resistance (AMR). Do not use where baseline mupirocin resistance is high.
+  4. Safety: Watch for localized allergic reactions. CHG must never contact brain, meninges, eyes, middle/inner ear, or mucosal surfaces. Strictly prohibited for neonates."""
+    },
+    {
+        "source": "WHO SSI Prevention - SAP Timing, Hair Removal, Skin Prep, & Sealants",
+        "category": "general",
+        "content": """WHO SSI Prevention - SAP Timing, Hair Removal, Skin Prep, and Sealants:
+- Surgical Antibiotic Prophylaxis (SAP) Timing: Administer SAP prior to incision, specifically within 120 minutes pre-incision. Valid for paediatric patients.
+- Half-Life Customization: Tailor exact timing to half-life. Short half-life drugs (e.g., cefazolin) should be given <60 minutes before incision. Long half-life/prolonged infusion drugs (e.g., vancomycin, fluoroquinolones) must start early in the 120-minute window. Re-dose if surgery exceeds two half-lives or blood loss is excessive.
+- Caesarean Section: SAP must be administered prior to surgical incision, NOT delayed until cord clamping.
+- Preoperative Hair Removal: Strong recommendation against shaving. Leave hair intact or use an electric clipper if removal is mandatory for access/visualization. Shaving with razors causes micro-abrasions that increase SSI risk.
+- Surgical Site Skin Preparation: Strong recommendation for alcohol-based CHG solutions on intact skin. Superior to aqueous solutions and alcohol-based povidone-iodine.
+- Fire Safety: Alcohol is flammable. Allow prep to dry fully by evaporation before activating diathermy.
+- Antimicrobial Sealants: Conditional recommendation against using cyanoacrylate-based sealants. No clinical benefit, and exposes patients to skin irritation/allergic reactions."""
+    },
+    {
+        "source": "WHO SSI Prevention - Hand Prep, Nutritional Formulas, & Immunosuppressants",
+        "category": "general",
+        "content": """WHO SSI Prevention - Hand Prep, Nutritional Formulas, and Immunosuppressants:
+- Surgical Hand Preparation: Perform scrub with antimicrobial soap + water OR rub with alcohol-based handrub (ABHR) before donning sterile gloves. Both methods show absolute clinical equivalence. Never combine sequentially (soap/water residue impairs ABHR activity). Initial plain soap wash required when entering OR suite. Local production of WHO-standard ABHR is encouraged in low-resource settings.
+- ABHR/Scrub Warning: Frequent scrubbing causes irritation. 4% CHG is most likely to induce contact dermatitis. Prevent contact with eyes (conjunctivitis/corneal damage) or inner/middle ear (ototoxicity).
+- Nutritional Formulas (Preoperative Support): Conditional recommendation. Consider oral/enteral multiple nutrient-enhanced formulas (arginine, glutamine, omega-3, nucleotides) ONLY for underweight adult major surgery patients (BMI <18.5, or weight 15-20% below norm). Paediatric inapplicability. Do not delay surgery or insert feeding tubes solely for this.
+- Immunosuppressive Medications: Conditional recommendation against discontinuation. Suggests maintaining standard regimens of Methotrexate (MTX) and anti-TNF alpha biologics perioperatively. Customise discontinuation on a case-by-case basis."""
+    },
+    {
+        "source": "WHO SSI Prevention - Summary Matrix of Preoperative Guidelines",
+        "category": "general",
+        "content": """WHO SSI Prevention - Summary Matrix of Preoperative Guidelines:
+- Mupirocin 2% Ointment: Strong (Cardio/Ortho) / Conditional (Other) | Moderate certainty | Treat adult nasal carriers; immediate pre-op dose | Do not use in paediatric patients; avoid universal use to prevent AMR.
+- SAP Timing: Strong | Low to Moderate certainty | Administer IV within 120 mins before incision | Tailor timing to drug half-life (e.g. cefazolin <60 mins); pre-incision for C-sections.
+- Hair Removal: Strong Against Shaving | Moderate certainty | Leave hair intact or use electric clippers only | Shaving/razors entirely discouraged due to micro-abrasion risks.
+- Skin Prep: Strong | Low to Moderate certainty | Alcohol-based antiseptic preferably with CHG on intact skin | Highly flammable; must dry completely. Toxic to eyes/ears/brain; avoid on neonates.
+- Antimicrobial Sealants: Conditional Against | Very Low certainty | Do not use cyanoacrylate sealants | No clinical benefit; skin irritation risk.
+- Surgical Hand Prep: Strong | Moderate certainty | Use ABHR or antimicrobial soap + water | Do not combine sequentially.
+- Nutritional Formulas: Conditional | Very Low certainty | Oral/enteral formulas for underweight adult major surgery | BMI <18.5 only.
+- Immunosuppressive Drugs: Conditional Against Discontinuation | Moderate certainty | Maintain MTX and anti-TNF medications perioperatively | Individualise regimens."""
+    },
+    {
+        "source": "WHO SSI Prevention - Perioperative Blood Glucose Control & Goal-Directed Fluid Therapy",
+        "category": "general",
+        "content": """WHO SSI Prevention - Blood Glucose Control & GDFT:
+- Perioperative Blood Glucose Control: Conditional recommendation (low-quality evidence). Use intensive blood glucose control protocols for both diabetic and non-diabetic adult surgical patients.
+  1. Target Levels: Intensive protocols target blood glucose <=150 mg/dL (8.3 mmol/L). Conventional protocols target <220 mg/dL (12.2 mmol/L).
+  2. Administration: IV insulin mandatory for intensive protocols. Methods include continuous/intermittent delivery and insulin clamp (fixed high-dose IV insulin + separate 20% dextrose to lock blood glucose at 70-110 mg/dL).
+  3. Timing & Demographics: Must maintain control postoperatively (ranging from 18 hours to 14 days or until enteral nutrition). Adult only (unproven in children).
+  4. Harms: High risk of life-threatening hypoglycaemia (<=40 mg/dL to <=80 mg/dL), leading to cardiac events. No difference in mortality or stroke.
+- Intraoperative Goal-Directed Fluid Therapy (GDFT): Conditional recommendation (low-quality evidence). Titrate fluid volumes and inotropic drugs intraoperatively using a standardized algorithmic protocol driven by dynamic pre-load parameters (pulse/systolic pressure variation via arterial catheter or minimally invasive alternatives). Deployed to manage cardiovascular and renal function. Unproven in children."""
+    },
+    {
+        "source": "WHO SSI Prevention - Surgical Drapes, Gowns, & Wound Protector Devices",
+        "category": "general",
+        "content": """WHO SSI Prevention - Surgical Drapes, Gowns, and Wound Protector (WP) Devices:
+- Surgical Drapes and Gowns: Conditional recommendation (moderate to very low-quality). Sterile disposable non-woven or sterile reusable woven drapes/gowns are acceptable. Critical mandate: Materials must be completely impermeable to liquids to prevent patient cross-contamination and protect healthcare staff. Single-use drapes risk skin rashes/eczema from adhesive bands and accidental device dislodgement. Changing mid-operation has no evidence.
+- Plastic Adhesive Incise Drapes (Recommended Against): Conditional recommendation against using plastic adhesive incise drapes (non-impregnated or antimicrobial). Studies show zero SSI reduction. Introduces risks of skin allergy (specifically to iodophor-impregnated films) and retained adhesive film fragments.
+- Wound Protector (WP) Devices: Conditional recommendation (very low-quality). Consider single- or double-ring WPs in clean-contaminated (Class II), contaminated (Class III), and dirty (Class IV) abdominal surgeries.
+  1. Caveats: Strictly single-use (do not reuse/reprocess). Forcing insertion in dense adhesions can cause small bowel injuries and prolong procedure.
+  2. Removal Contamination: Improper handling during removal can dump collected fluids and contaminate wound edges (especially with peritonitis). Unproven in children."""
+    },
+    {
+        "source": "WHO SSI Prevention - Incisional Wound Irrigation & Triclosan-Coated Sutures",
+        "category": "general",
+        "content": """WHO SSI Prevention - Incisional Wound Irrigation and Triclosan-Coated Sutures:
+- Aqueous PVP-I Wound Irrigation: Conditional recommendation (low-quality). Consider irrigating the incisional wound with aqueous PVP-I solution before closure, mainly in Clean (Class I) and Clean-Contaminated (Class II) wounds. No dose-response found across PVP-I concentrations (spanned 0.35% to 10%).
+  - Safety Warning: PVP-I is neurotoxic; never allow contact with exposed meninges, brain, or spinal cord. Can cause cytotoxic damage to fibroblasts/mesothelium, impairing healing. Substitute alternative if iodine allergy is present.
+- Antibiotic Wound Irrigation (Recommended Against): Conditional recommendation against. Efficacy disproof shows zero benefit compared to saline or no irrigation. Drives antimicrobial resistance (AMR) and lacks standardized preparation procedures.
+- Saline Solution Irrigation: Insufficient evidence for a definitive recommendation. Regular saline shows no benefit, but pulse pressure saline irrigation was beneficial in Classes I, II, and III compared to standard saline.
+- Triclosan-Coated Sutures: Conditional recommendation (moderate-quality). Suggests using triclosan-coated absorbable sutures independent of surgery type or wound class (e.g., polydioxanone, polyglactin 910). Can be applied to paediatric patients (verify manufacturer rules). Minimal risk of systemic absorption."""
+    },
+    {
+        "source": "WHO SSI Prevention - SAP Prolongation, Advanced Dressings, & Drains",
+        "category": "general",
+        "content": """WHO SSI Prevention - SAP Prolongation, Advanced Dressings, and Drains:
+- Prolongation of Surgical Antibiotic Prophylaxis (SAP) (Strong Recommended Against): Do not extend SAP past completion of the operation. Standard single dose encompasses preoperative dose plus intraoperative re-dosing. Moderate-quality evidence from 44 RCTs confirms zero benefit.
+  - Exceptions: Cardiac, orthognathic, and vascular surgeries had very low-quality trials suggesting benefit, but robust trials showed zero benefit to extending past 24 hours.
+  - Harms: Strongly drives AMR, disrupts native microbiome, causes short/long-term GI complications, and directly accelerates Clostridium difficile infections.
+- Advanced Wound Dressings (Recommended Against): Conditional recommendation against using advanced dressings (hydrocolloid, hydroactive, silver, PHMB) over standard sterile dry absorbent dressings on primarily closed wounds. No clinical advantage. Silver dressings risk nanoparticle exposure and skin irritation. High economic burden for LMICs.
+- SAP in the Presence of Drains (Recommended Against): Conditional recommendation against continuing SAP solely due to the presence of a wound drain. Provides zero benefit. Drives AMR, side effects, C. difficile risk, and fungal superinfections.
+- Wound Drain Removal: Conditional recommendation (very low-quality). Remove closed wound drainage systems only when clinically indicated. No optimal timeline exists. Single-use only. Early removal can cause seromas/haematomas requiring subsequent treatment."""
+    },
+    {
+        "source": "WHO SSI Prevention - Summary Matrix of Perioperative Guidelines",
+        "category": "general",
+        "content": """WHO SSI Prevention - Summary Matrix of Perioperative Guidelines:
+- Perioperative Blood Glucose: Conditional | Low certainty | Target <=150 mg/dL (8.3 mmol/L) using IV insulin; maintain post-op | High risk of life-threatening hypoglycaemia; unproven in children.
+- Goal-Directed Fluid Therapy: Conditional | Low certainty | Titrate fluids/inotropes intraoperatively via algorithm | Avoid overload/hypovolemia; unproven in children.
+- Drapes & Gowns: Conditional | Moderate to Very Low certainty | Use sterile disposable non-woven or reusable woven drapes/gowns | Must be impermeable to liquids.
+- Plastic Adhesive Incise Drapes: Conditional Against | Low to Very Low certainty | Suggests NOT using them | Risk of skin allergy and retained film fragments.
+- Wound Protector (WP) Devices: Conditional | Very Low certainty | Consider single/double-ring WPs in Class II-IV abdominal surgery | Single-use only; insertion difficult in dense adhesions.
+- Aqueous PVP-I Irrigation: Conditional | Low certainty | Consider irrigating wound with aqueous PVP-I before closure (Class I/II) | Neurotoxic (no meninges/brain/spine contact); cytotoxic to fibroblasts.
+- Antibiotic Irrigation: Conditional Against | Low certainty | Do not irrigate wound with antibiotic solutions | Zero benefit; drives AMR.
+- Triclosan-Coated Sutures: Conditional | Moderate certainty | Suggests using triclosan-coated sutures | Valid for pediatric patients (check rules).
+- Prolongation of SAP: Strong Against | Moderate certainty | Do not prolong SAP past completion of operation | Drives AMR, GI complications, C. difficile.
+- Advanced Dressings: Conditional Against | Low certainty | Do not use advanced dressings over primarily closed wounds | No advantage; silver nanoparticles risk.
+- SAP with Drains: Conditional Against | Low certainty | Do not continue SAP solely due to presence of drain | Drives AMR and fungal superinfections.
+- Wound Drain Removal: Conditional | Very Low certainty | Remove closed drains only when clinically indicated | Early removal risk of seromas/haematomas."""
+    },
+    {
+        "source": "WHO guidelines - Key Synthesis Points Across Preoperative & Perioperative Datasets",
+        "category": "general",
+        "content": """WHO Guidelines - Key Synthesis Points Across Preoperative & Perioperative Datasets:
+1. Strict Anti-AMR Stance: WHO uses Strong/Strong Against mandates whenever an intervention threatens to drive AMR without high-certainty benefit. E.g., no prolonging SAP, strict ban on universal mupirocin decolonization, and no antibiotic wound/drain irrigation.
+2. Chemical and Material Safety: CHG and PVP-I have strict anatomical boundaries. Neither can touch eyes, middle/inner ear, brain tissue, or meninges due to toxicities (CHG ototoxicity, PVP-I neurotoxicity). Alcohol-based preps require complete evaporation to eliminate fire hazards from electrosurgery.
+3. Pediatric Data Gaps: Most advanced interventions (GDFT, advanced dressings, blood glucose protocols, wound protectors, pre-incisional PVP-I irrigation) are unproven for pediatric patients. Exceptions valid for children: SAP timing, preoperative hair clipping, and triclosan-coated sutures (check contraindications).
+4. Material Reutilization: Wound protectors and closed wound drainage systems are strictly single-use; never reuse or reprocess.
+5. Simplicity Over Commercialization: Standard practices are favored over expensive innovations. E.g., ABHR equal to antimicrobial soap, plain soap equal to CHG soap for bathing, standard dressings equal to advanced dressings, and no benefit for cyanoacrylate skin sealants/plastic incise drapes."""
+    },
 ]
 
 def embed_text(text: str) -> list:
@@ -782,18 +1088,55 @@ def seed_knowledge_base():
     register_vector(conn)
     cur = conn.cursor()
 
+    # Clear existing knowledge chunks to prevent duplication
+    print("Clearing existing knowledge chunks...")
+    cur.execute("TRUNCATE TABLE knowledge_chunks CASCADE;")
+    conn.commit()
+
     print(f"Seeding {len(KNOWLEDGE_CHUNKS)} knowledge chunks...")
 
-    for i, chunk in enumerate(KNOWLEDGE_CHUNKS):
-        print(f"  Embedding chunk {i+1}/{len(KNOWLEDGE_CHUNKS)}: {chunk['source'][:50]}...")
-        embedding = embed_text(chunk["content"])
+    batch_size = 20
+    import time
+    
+    for i in range(0, len(KNOWLEDGE_CHUNKS), batch_size):
+        batch = KNOWLEDGE_CHUNKS[i:i + batch_size]
+        print(f"Embedding and seeding batch {i // batch_size + 1}/{(len(KNOWLEDGE_CHUNKS) - 1) // batch_size + 1} ({i+1} to {min(i + batch_size, len(KNOWLEDGE_CHUNKS))})...")
+        
+        texts = [chunk["content"] for chunk in batch]
+        
+        retries = 5
+        embeddings = None
+        while retries > 0:
+            try:
+                response = co.embed(
+                    texts=texts,
+                    model="embed-multilingual-v3.0",
+                    input_type="search_document",
+                    embedding_types=["float"]
+                )
+                embeddings = response.embeddings.float
+                break
+            except Exception as e:
+                print(f"  Error calling Cohere API: {e}")
+                retries -= 1
+                if retries > 0:
+                    print("  Waiting 15 seconds before retrying...")
+                    time.sleep(15)
+                else:
+                    raise e
+        
+        for j, chunk in enumerate(batch):
+            embedding = embeddings[j]
+            cur.execute("""
+                INSERT INTO knowledge_chunks (source, category, content, embedding)
+                VALUES (%s, %s, %s, %s)
+            """, (chunk["source"], chunk["category"], chunk["content"], embedding))
+        
+        conn.commit()
+        # Sleep for 2 seconds between batches to avoid rate limit spikes
+        if i + batch_size < len(KNOWLEDGE_CHUNKS):
+            time.sleep(2)
 
-        cur.execute("""
-            INSERT INTO knowledge_chunks (source, category, content, embedding)
-            VALUES (%s, %s, %s, %s)
-        """, (chunk["source"], chunk["category"], chunk["content"], embedding))
-
-    conn.commit()
     cur.close()
     conn.close()
     print("Done! Knowledge base seeded successfully.")

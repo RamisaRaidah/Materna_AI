@@ -21,6 +21,9 @@ app.register_blueprint(auth_bp, url_prefix="/auth")
 from routes.health import health_bp
 app.register_blueprint(health_bp, url_prefix="/api/health")
 
+from routes.risk import risk_bp
+app.register_blueprint(risk_bp, url_prefix="/api/risk")
+
 from routes.ppd import ppd_bp
 app.register_blueprint(ppd_bp, url_prefix="/api/ppd")
  
