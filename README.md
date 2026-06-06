@@ -11,7 +11,7 @@ The platform is designed with accessibility at its core, featuring multilingual 
 MaternaAI is structured as a modern full-stack web application consisting of a React single-page application (SPA) frontend, a Python Flask REST API backend, and a PostgreSQL database featuring PGVector for Retrieval-Augmented Generation (RAG).
 
 ```
-d:/MaternaAI (Workspace Root)
+MaternaAI (Workspace Root)
 ├── Docs/                           # Global project documentation resources
 ├── MaternaAI-prototype/            # Prototype HTML/JS/CSS logic
 └── MaternaAI/                      # Main codebase folder
