@@ -28,7 +28,8 @@ const Sidebar = ({
   setShowNotifications,
   loadingNotifications = false,
   acknowledgingIds = [],
-  onAcknowledge
+  onAcknowledge,
+  unreadDMs = 0
 }) => {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
@@ -256,14 +257,21 @@ const Sidebar = ({
                       to={item.path}
                       onClick={() => setIsOpen(false)}
                       className={({ isActive }) => `
-                        flex items-center gap-3.5 px-4 py-3 rounded-lg text-sm font-bold tracking-wide transition-all
+                        flex items-center justify-between px-4 py-3 rounded-lg text-sm font-bold tracking-wide transition-all
                         ${isActive
                           ? 'bg-primary-mauve/8 text-primary-mauve shadow-xs border-l-4 border-primary-mauve pl-3'
                           : 'text-text-muted hover:text-primary-mauve hover:bg-primary-mauve/4'}
                       `}
                     >
-                      <Icon className="w-5 h-5 shrink-0" />
-                      <span>{item.name}</span>
+                      <div className="flex items-center gap-3.5">
+                        <Icon className="w-5 h-5 shrink-0" />
+                        <span>{item.name}</span>
+                      </div>
+                      {((item.path === '/clinician-chat' || item.path === '/community' || item.path === '/clinician/community') && unreadDMs > 0) && (
+                        <span className="min-w-[18px] h-[18px] px-1 rounded-full bg-danger text-white text-[10px] font-black flex items-center justify-center animate-pulse">
+                          {unreadDMs}
+                        </span>
+                      )}
                     </NavLink>
                   );
                 })}
