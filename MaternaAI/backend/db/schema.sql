@@ -65,6 +65,18 @@ CREATE TABLE birth_plans (
     special_notes TEXT,
     emergency_contacts JSONB,          -- [{name, phone, relation}]
     generated_plan TEXT,               -- LLM generated full plan
+    track VARCHAR(10) DEFAULT 'A',
+    blood_group VARCHAR(5),
+    rh_negative BOOLEAN DEFAULT FALSE,
+    known_allergies JSONB DEFAULT '[]',
+    medical_conditions JSONB DEFAULT '[]',
+    csection_consent BOOLEAN DEFAULT TRUE,
+    neonatal_prefs JSONB DEFAULT '{}',
+    cultural_prefs JSONB DEFAULT '{}',
+    sba_present VARCHAR(20),
+    birth_prep_checklist JSONB DEFAULT '{}',
+    referral_pathway JSONB DEFAULT '{}',
+    danger_signs_acknowledged BOOLEAN DEFAULT FALSE,
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
