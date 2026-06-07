@@ -1,4 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
+import removeMarkdown from "remove-markdown";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import { useAuth } from '../context/AuthContext';
 import { chatAPI } from '../api';
 import {
@@ -103,7 +106,8 @@ const ClinicianAssistant = () => {
       if (!user?.id) return;
       try {
         setIsProcessing(true);
-        const history = await chatAPI.getHistory(user.id);
+        const historyLoader = chatAPI.getClinicianHistory ?? chatAPI.getHistory;
+        const history = await historyLoader(user.id);
         setMessages(history);
       } catch (err) {
         console.error('Failed to load chat history:', err);
@@ -267,8 +271,8 @@ const ClinicianAssistant = () => {
     try {
       const profile = getClinicianProfile();
       const userId = user?.id || 1;
-
-      const data = await chatAPI.speak(audioBlob, profile, mode, userId, clientTranscriptionText);
+      const speakFn = chatAPI.speakClinician ?? chatAPI.speak;
+      const data = await speakFn(audioBlob, profile, mode, userId, clientTranscriptionText);
 
       const userMsg = {
         role: 'user',
@@ -323,8 +327,9 @@ const ClinicianAssistant = () => {
     try {
       const profile = getClinicianProfile();
       const userId = user?.id || 1;
+      const analyzeFn = chatAPI.analyzeClinician ?? chatAPI.analyze;
 
-      const data = await chatAPI.analyze(query, profile, mode, userId);
+      const data = await analyzeFn(query, profile, mode, userId);
 
       const assistantMsg = {
         role: 'assistant',
@@ -572,12 +577,14 @@ const ClinicianAssistant = () => {
                           ? 'bg-primary-mauve text-white border-primary-mauve/15 rounded-tr-none'
                           : 'bg-bg-rose-white text-text-dark border-primary-mauve/5 rounded-tl-none'
                       } ${isBangla ? 'bengali-text text-base' : 'font-sans'}`}>
-                        {msg.content}
+                        <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                          {msg.content}
+                        </ReactMarkdown>
 
                         {!isUser && (
                           <div className="flex justify-end mt-2 pt-2 border-t border-primary-mauve/5">
                             <button
-                              onClick={() => playTTS(msg.content, index)}
+                              onClick={() => playTTS(removeMarkdown(msg.content), index)}
                               className={`flex items-center gap-1 px-2.5 py-1 rounded-md text-[10px] font-black uppercase tracking-wider transition-all cursor-pointer ${
                                 currentPlaybackMessageId === index
                                   ? 'bg-danger text-white border border-danger/10'

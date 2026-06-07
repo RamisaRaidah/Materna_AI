@@ -1,5 +1,5 @@
 from flask import Blueprint, request, jsonify, Response
-from services.rag import rag_query, get_db
+from services.rag import rag_query, clinician_rag_query, get_db
 from services.tts import generate_tts_stream, is_bengali
 import json
 
@@ -227,7 +227,24 @@ def analyze():
 
     # Run RAG Query — pass detected language and user_id to leverage history context
     try:
-        response = rag_query(user_input, user_profile, mode, detected_lang=lang, user_id=user_id)
+        if user_profile.get("role") == "clinician":
+            clinician_mode_map = {
+                "triage": "rapid_triage",
+                "vitals": "vitals_watch",
+                "followup": "follow_up",
+                "community": "community"
+            }
+            backend_mode = clinician_mode_map.get(mode, mode)
+            response = clinician_rag_query(
+                user_input=user_input,
+                clinician_profile=user_profile,
+                patients=[],
+                mode=backend_mode,
+                detected_lang=lang,
+                clinician_id=user_id
+            )
+        else:
+            response = rag_query(user_input, user_profile, mode, detected_lang=lang, user_id=user_id)
     except Exception as e:
         print("RAG failed:", e)
         response = "দুঃখিত, এখন উত্তর দিতে সমস্যা হচ্ছে। পরে আবার চেষ্টা করুন।"
@@ -245,6 +262,83 @@ def analyze():
         "response": response,
         "extractedNutrients": extracted_nutrients,
         "mode": mode
+    })
+
+
+@chat_bp.route("/clinician", methods=["POST"])
+def clinician_chat():
+    """
+    Clinician-only chat endpoint.
+    Routes to clinician_rag_query with the correct mode and patient list.
+
+    Expected JSON body:
+    {
+        "message":  "Summarise Fatima's last 14 days",
+        "mode":     "rapid_triage" | "vitals_watch" | "follow_up" | "community",
+        "clinician_id": 42,
+        "clinician_profile": {
+            "name": "Dr. Reza",
+            "role": "Obstetrician",
+            "facility": "Kaliganj Upazila Health Complex"
+        },
+        "patients": [
+            {
+                "name": "Fatima",
+                "weeks_pregnant": 28,
+                "bp_history": "130/80 → 150/95 over 14 days",
+                "glucose_logs": "3 elevated fasting readings",
+                "fetal_movement": "Reduced twice in last week",
+                "missed_appointments": 0
+            }
+        ]
+    }
+    """
+    data = request.json or {}
+
+    user_input = data.get("message", "").strip()
+    if not user_input:
+        return jsonify({"error": "No message provided"}), 400
+
+    mode = data.get("mode", "rapid_triage")
+    valid_modes = {"rapid_triage", "vitals_watch", "follow_up", "community"}
+    if mode not in valid_modes:
+        return jsonify({"error": f"Invalid mode. Choose from: {', '.join(valid_modes)}"}), 400
+
+    clinician_id       = data.get("clinician_id")
+    clinician_profile  = data.get("clinician_profile", {})
+    patients           = data.get("patients", [])
+
+    # Language detection — clinicians are usually in English but support Bengali too
+    lang = "bn" if is_bengali(user_input) else "en"
+
+    # Persist clinician message (uses same chat_messages table; role stays 'user')
+    if clinician_id:
+        save_chat_message(clinician_id, "user", user_input, intent=mode, language=lang)
+
+    try:
+        response = clinician_rag_query(
+            user_input=user_input,
+            clinician_profile=clinician_profile,
+            patients=patients,
+            mode=mode,
+            detected_lang=lang,
+            clinician_id=clinician_id,
+        )
+    except Exception as e:
+        print(f"Clinician RAG failed: {e}")
+        response = (
+            "Clinical decision support is temporarily unavailable. "
+            "Please follow standard protocols and escalate to a supervisor if needed."
+        )
+
+    # Persist assistant response
+    if clinician_id:
+        save_chat_message(clinician_id, "assistant", response, intent=mode, language=lang)
+
+    return jsonify({
+        "response": response,
+        "mode": mode,
+        "patients_processed": len(patients),
     })
 
 @chat_bp.route("/speak", methods=["POST"])
@@ -326,7 +420,24 @@ def speak():
 
     # Pass transcribed text to RAG with history context
     try:
-        response = rag_query(transcribed_text, user_profile, mode, detected_lang=lang, user_id=user_id)
+        if user_profile.get("role") == "clinician":
+            clinician_mode_map = {
+                "triage": "rapid_triage",
+                "vitals": "vitals_watch",
+                "followup": "follow_up",
+                "community": "community"
+            }
+            backend_mode = clinician_mode_map.get(mode, mode)
+            response = clinician_rag_query(
+                user_input=transcribed_text,
+                clinician_profile=user_profile,
+                patients=[],
+                mode=backend_mode,
+                detected_lang=lang,
+                clinician_id=user_id
+            )
+        else:
+            response = rag_query(transcribed_text, user_profile, mode, detected_lang=lang, user_id=user_id)
     except Exception as e:
         print("RAG failed:", e)
         response = "দুঃখিত, সমস্যা হয়েছে।"

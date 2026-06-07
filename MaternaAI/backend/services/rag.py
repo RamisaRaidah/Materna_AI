@@ -157,6 +157,318 @@ Medical Knowledge Context (Use this to guide your advice naturally):
 
     return f"{base_system}\n\nTask: {task}"
 
+def build_clinician_prompt(
+    clinician_profile: dict,
+    context: str,
+    mode: str,
+    patients: list,
+    detected_lang: str = "en"
+) -> str:
+    """
+    Builds a clinician-facing system prompt for one of four clinical modes:
+      - rapid_triage : Identify immediate risks and recommend escalation
+      - vitals_watch : Continuous monitoring and risk surveillance
+      - follow_up    : Ensure continuity of care
+      - community    : Coordinate field operations and referral networks
+
+    `patients` is a list so the clinician can query about multiple patients at once.
+    """
+
+    if detected_lang == "bn":
+        lang_rule = (
+            "LANGUAGE RULE: The clinician is writing in Bengali/Banglish. "
+            "Respond entirely in clear, professional Bengali (বাংলা). "
+            "Use standard clinical terminology. Be structured and precise."
+        )
+    else:
+        lang_rule = (
+            "LANGUAGE RULE: Respond entirely in clear, professional English. "
+            "Use standard clinical terminology. Be structured and precise."
+        )
+
+    # ── Patient context block ──────────────────────────────────────────────
+    if not patients:
+        patient_block = "No specific patient records provided for this query."
+    else:
+        patient_entries = []
+        for i, p in enumerate(patients, start=1):
+            fields = "\n".join(
+                f"    {k.replace('_', ' ').title()}: {v}"
+                for k, v in p.items()
+            )
+            patient_entries.append(f"  Patient {i} — {p.get('name', 'Unknown')}:\n{fields}")
+        patient_block = "PATIENT RECORDS:\n" + "\n\n".join(patient_entries)
+
+    # ── Mode-specific task and output guidance ─────────────────────────────
+    mode_configs = {
+        "rapid_triage": {
+            "title": "Rapid Triage",
+            "purpose": (
+                "Identify immediate maternal and fetal risks. "
+                "Classify urgency, retrieve relevant clinical protocols, "
+                "and generate clear escalation recommendations."
+            ),
+            "task": (
+                "For each patient listed:\n"
+                "1. Detect maternal and fetal danger signs from their data.\n"
+                "2. Classify urgency: Routine / Urgent / Emergency.\n"
+                "3. List possible diagnoses (differential).\n"
+                "4. State the recommended escalation action (e.g., emergency referral, admit, monitor, next ANC).\n"
+                "5. Cite the relevant clinical protocol or guideline from the retrieved context.\n"
+                "6. If multiple patients, order them from highest to lowest urgency.\n"
+                "Format output as a structured clinical note per patient."
+            ),
+            "rag_hint": "WHO maternal health guidelines, national obstetric protocols, emergency referral pathways, hospital SOPs.",
+        },
+        "vitals_watch": {
+            "title": "Vitals Watch",
+            "purpose": (
+                "Perform trend analysis on patient vitals and flag abnormal patterns. "
+                "Produce a prioritised review list."
+            ),
+            "task": (
+                "For each patient listed:\n"
+                "1. Summarise vital-sign trends (BP, glucose, weight, fetal movement) over the recorded period.\n"
+                "2. Identify abnormal patterns or threshold breaches.\n"
+                "3. Assign a monitoring priority: High / Medium / Low.\n"
+                "4. State a specific recommended action and review timeline.\n"
+                "5. After individual summaries, produce a combined PRIORITY LIST (High → Medium → Low) across all patients.\n"
+                "Format per patient, then the combined priority list at the end."
+            ),
+            "rag_hint": "Antenatal monitoring protocols, hypertension in pregnancy guidelines, gestational diabetes thresholds.",
+        },
+        "follow_up": {
+            "title": "Follow-Up Plans",
+            "purpose": (
+                "Ensure continuity of care for at-risk patients, "
+                "especially those with missed appointments or unresolved issues."
+            ),
+            "task": (
+                "For each patient listed:\n"
+                "1. Identify care gaps (missed visits, unsubmitted logs, pending labs).\n"
+                "2. Generate a prioritised follow-up schedule with specific dates/intervals.\n"
+                "3. Draft a short outreach SMS the CHW can send to this patient.\n"
+                "4. Provide a CHW call-script outline: key questions to ask and red flags to listen for.\n"
+                "5. List any unresolved clinical issues to address at next contact.\n"
+                "If multiple patients, order them by follow-up urgency."
+            ),
+            "rag_hint": "Care continuity protocols, CHW outreach guidelines, risk-stratified follow-up schedules.",
+        },
+        "community": {
+            "title": "Community Coverage",
+            "purpose": (
+                "Coordinate field operations: route referrals, identify coverage gaps, "
+                "suggest nearest capable facilities, and monitor transport barriers."
+            ),
+            "task": (
+                "For each patient or area listed:\n"
+                "1. If a referral is needed, suggest the nearest appropriate facility "
+                "   with distance, travel time, and contact information from the context.\n"
+                "2. Note any transport barriers and suggest available support.\n"
+                "3. Recommend CHW actions (home visit, community escort, etc.).\n"
+                "4. After individual recommendations, produce a COVERAGE DASHBOARD:\n"
+                "   - Total active pregnancies / high-risk count / overdue visits / pending referrals.\n"
+                "   - Geographic areas with identified service gaps.\n"
+                "Use the referral network and facility directory from the retrieved context."
+            ),
+            "rag_hint": "Facility directory, referral network database, CHW reports, geographic and transport data.",
+        },
+    }
+
+    cfg = mode_configs.get(
+        mode,
+        {
+            "title": "General Clinical Query",
+            "purpose": "Answer the clinician's question using evidence-based guidance.",
+            "task": "Provide a concise, structured clinical response citing relevant protocols.",
+            "rag_hint": "All available clinical knowledge sources.",
+        },
+    )
+
+    clinician_role = clinician_profile.get("role", "Healthcare Provider")
+    facility = clinician_profile.get("facility", "Health Facility")
+
+    system_prompt = f"""You are MaternaAI Clinical, an AI obstetric decision-support assistant designed to augment—not replace—the clinical judgment of physicians, midwives, nurses, and community health workers in Bangladesh.
+
+Your purpose is to help healthcare professionals make evidence-based maternal health decisions using retrieved protocols, patient records, and field data.
+
+TONE AND COMMUNICATION RULES — CRITICAL:
+1. You are a clinical tool, not a social companion. Maintain a neutral, professional, informational tone at all times.
+2. NEVER use personal address terms such as "Dear Doctor", "Dear Clinician", "My dear", "Dear staff", or any equivalent in any language.
+3. Do NOT open with pleasantries, greetings, or affirmations (no "Of course!", "Great question!", "Sure!", etc.).
+4. Do NOT use flattering or emotional language. Respond directly to the clinical question.
+5. Start your response immediately with the clinical content — a heading, a patient name, or an assessment. Nothing else first.
+6. You may use the clinician's name if directly relevant (e.g. in a handoff note), but never as a form of address in the response opening.
+
+{lang_rule}
+
+CLINICIAN CONTEXT:
+  Role    : {clinician_role}
+  Facility: {facility}
+
+ACTIVE MODE: {cfg['title'].upper()}
+Purpose: {cfg['purpose']}
+
+{patient_block}
+
+RETRIEVED CLINICAL KNOWLEDGE (ground all recommendations in this):
+{context}
+(Key sources for this mode: {cfg['rag_hint']})
+
+RESPONSE RULES:
+1. Use clear headings per patient. Never produce an unstructured wall of text.
+2. Cover ALL patients in the list — do not skip any.
+3. Ground every recommendation in the retrieved knowledge above.
+4. If a situation appears life-threatening, state this explicitly and immediately.
+5. Be concise but never omit clinically important details.
+6. Provide differentials and recommendations; final diagnosis is the clinician's responsibility.
+
+TASK:
+{cfg['task']}
+"""
+    return system_prompt
+
+
+def clinician_rag_query(
+    user_input: str,
+    clinician_profile: dict,
+    patients: list,
+    mode: str = "rapid_triage",
+    detected_lang: str = "en",
+    clinician_id: int = None,
+    top_k: int = 6
+) -> str:
+    """
+    Entry-point RAG query for clinician-facing modes.
+
+    Args:
+        user_input       : The clinician's free-text question or command.
+        clinician_profile: Dict with keys like 'name', 'role', 'facility'.
+        patients         : List of patient profile dicts (1 or many).
+        mode             : One of 'rapid_triage' | 'vitals_watch' | 'follow_up' | 'community'.
+        detected_lang    : 'en' or 'bn'.
+        clinician_id     : Optional DB user_id for conversation history.
+        top_k            : Number of knowledge chunks to retrieve.
+
+    Returns:
+        AI-generated clinical response string.
+    """
+    category_map = {
+        "rapid_triage": "danger",
+        "vitals_watch": "vitals",
+        "follow_up":    "followup",
+        "community":    "community",
+    }
+    category = category_map.get(mode)  # None = search across all categories
+
+    try:
+        # ── 1. Retrieve and rerank knowledge chunks ────────────────────────
+        enriched_query = user_input
+        if patients:
+            names = ", ".join(p.get("name", "patient") for p in patients)
+            enriched_query = f"{user_input} [Patients: {names}]"
+
+        chunks = retrieve_context(enriched_query, category=category, top_k=top_k)
+        context = format_context(chunks)
+
+        # ── 2. Build system prompt ─────────────────────────────────────────
+        system_content = build_clinician_prompt(
+            clinician_profile=clinician_profile,
+            context=context,
+            mode=mode,
+            patients=patients,
+            detected_lang=detected_lang
+        )
+
+        # ── 3. Assemble messages ───────────────────────────────────────────
+        messages = [{"role": "system", "content": system_content}]
+
+        if clinician_id:
+            history = get_recent_history(clinician_id, limit=6)
+            for msg in history:
+                role = "user" if msg["role"] == "user" else "assistant"
+                if role == "user" and msg["content"] == user_input:
+                    continue
+                messages.append({"role": role, "content": msg["content"]})
+
+        messages.append({"role": "user", "content": user_input})
+
+        # ── 4. Call LLM (Gemini primary → OpenRouter fallback) ────────────
+        if GEMINI_API_KEY:
+            try:
+                gemini_contents = [
+                    {
+                        "role": "user" if m["role"] == "user" else "model",
+                        "parts": [m["content"]]
+                    }
+                    for m in messages if m["role"] != "system"
+                ]
+                genai_model = genai.GenerativeModel(
+                    model_name="gemini-2.5-flash",
+                    system_instruction=system_content
+                )
+                response_text = genai_model.generate_content(
+                    gemini_contents,
+                    generation_config={"max_output_tokens": 1500}
+                ).text
+                if response_text:
+                    print(f"Clinician RAG ({mode}) — Gemini OK")
+                    return response_text
+            except Exception as gemini_err:
+                print(f"Clinician RAG — Gemini failed: {gemini_err}")
+
+        # OpenRouter fallback
+        model_queue = [
+            "google/gemini-2.5-flash",
+            "qwen/qwen-2.5-72b-instruct",
+            "meta-llama/llama-3.3-70b-instruct",
+            "meta-llama/llama-3.1-8b-instruct:free",
+        ]
+        response = None
+        last_err = None
+        for model in model_queue:
+            try:
+                response = or_client.chat.completions.create(
+                    model=model,
+                    messages=messages,
+                    max_tokens=1500
+                )
+                break
+            except Exception as model_err:
+                print(f"Clinician RAG — OpenRouter model {model} failed: {model_err}")
+                last_err = model_err
+
+        if not response:
+            raise last_err
+
+        return response.choices[0].message.content
+
+    except Exception as e:
+        print(f"Clinician RAG query failed ({mode}): {e}")
+        fallbacks = {
+            "rapid_triage": (
+                "Clinical decision support is temporarily unavailable. "
+                "Assess the patient directly using standard triage protocol "
+                "and escalate to the supervising clinician if danger signs are present."
+            ),
+            "vitals_watch": (
+                "Vitals trend analysis is temporarily unavailable. "
+                "Review patient records manually and prioritise any patients "
+                "with BP > 140/90 or reported reduced fetal movement."
+            ),
+            "follow_up": (
+                "Follow-up plan generation is temporarily unavailable. "
+                "Check the missed-appointment list and contact high-risk patients first."
+            ),
+            "community": (
+                "Community coordination support is temporarily unavailable. "
+                "Consult the facility referral directory directly "
+                "and coordinate with the CHW supervisor."
+            ),
+        }
+        return fallbacks.get(mode, "Clinical AI support is temporarily unavailable. Follow standard protocols.")
+
+
 def extract_nutrition_metrics(user_input: str, assistant_response: str) -> dict:
     """
     Utility function that analyzes the meal log text and estimates raw nutrient values.
