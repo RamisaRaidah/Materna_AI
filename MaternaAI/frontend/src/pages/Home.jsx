@@ -80,9 +80,9 @@ useEffect(() => {
     loadClinicianData();
   } else {
     loadPatientVitals();
-    loadPatientRisk(riskLanguage);
+    loadPatientRisk('bn'); // Fetch bilingual profile (defaults to bn values on legacy fields)
   }
-}, [user, riskLanguage]);
+}, [user]);
 
 useEffect(() => {
   const handleStorageChange = () => {
@@ -525,7 +525,7 @@ return (
                       
                       {/* Condition flags */}
                       <div className="flex flex-wrap gap-1.5">
-                        {riskProfile.condition_flags && riskProfile.condition_flags.map((flag, idx) => (
+                        {((riskLanguage === 'bn' ? riskProfile.condition_flags_bn : riskProfile.condition_flags_en) || riskProfile.condition_flags || []).map((flag, idx) => (
                           <span
                             key={idx}
                             className="bg-primary-mauve/5 text-primary-mauve border border-primary-mauve/10 rounded-full px-2.5 py-0.5 text-[9px] font-black uppercase tracking-wider"
@@ -542,7 +542,7 @@ return (
                         {riskLanguage === 'bn' ? 'বিশ্লেষণ ও ব্যাখ্যা:' : 'Clinical Analysis & Explanation:'}
                       </div>
                       <p className="text-xs font-semibold text-text-dark leading-relaxed">
-                        {riskProfile.explanation}
+                        {riskLanguage === 'bn' ? (riskProfile.explanation_bn || riskProfile.explanation) : (riskProfile.explanation_en || riskProfile.explanation)}
                       </p>
                     </div>
 
@@ -564,7 +564,7 @@ return (
                           {riskLanguage === 'bn' ? 'প্রস্তাবিত পদক্ষেপ:' : 'Recommended Action:'}
                         </div>
                         <p className="text-xs font-extrabold leading-snug">
-                          {riskProfile.recommendation}
+                          {riskLanguage === 'bn' ? (riskProfile.recommendation_bn || riskProfile.recommendation) : (riskProfile.recommendation_en || riskProfile.recommendation)}
                         </p>
                       </div>
                     </div>
