@@ -258,20 +258,6 @@ def enrich_with_llm(user_profile: dict, rule_results: dict, lang: str = "bn") ->
     Step 2 of Hybrid Approach: Gemini enrichment.
     Takes rule-based findings and generates bilingual explanation + recommendation.
     """
-    if not GEMINI_API_KEY:
-        # Fallback if Gemini key is missing
-        if lang == "bn":
-            return {
-                "condition_flags": ["সাধারণ ঝুঁকি" if rule_results["overall_risk"] == "Low" else "গর্ভকালীন জটিলতা ঝুঁকি"],
-                "explanation": f"আপনার সামগ্রিক ঝুঁকির মাত্রা {rule_results['overall_risk']}। আপনার লক্ষণ ও ভাইটাল পরীক্ষা করে সাবধানে থাকুন।",
-                "recommendation": "পর্যাপ্ত বিশ্রাম নিন এবং নিয়মিত রক্তচাপ ও রক্তের শর্করা পরীক্ষা করুন। কোনো জটিলতা দেখা দিলে মিডওয়াইফের সাথে যোগাযোগ করুন।"
-            }
-        else:
-            return {
-                "condition_flags": ["General Risk" if rule_results["overall_risk"] == "Low" else "Maternal Risk Flags"],
-                "explanation": f"Your calculated maternal risk level is {rule_results['overall_risk']}. Please monitor your health logs closely.",
-                "recommendation": "Ensure adequate rest, track your water intake, and consult your community midwife for any concerns."
-            }
 
     # Build Prompt
     prompt = f"""
