@@ -275,5 +275,11 @@ CREATE TABLE risk_profiles (
     rule_score INTEGER DEFAULT 0,
     symptoms_analyzed JSONB DEFAULT '{}',
     last_computed_at TIMESTAMPTZ DEFAULT NOW(),
-    updated_at TIMESTAMPTZ DEFAULT NOW()
+    updated_at TIMESTAMPTZ DEFAULT NOW(),
+    condition_flags_en TEXT[] DEFAULT '{}',
+    condition_flags_bn TEXT[] DEFAULT '{}',
+    explanation_en TEXT DEFAULT '',
+    explanation_bn TEXT DEFAULT '',
+    recommendation_en TEXT DEFAULT '',
+    recommendation_bn TEXT DEFAULT ''
 );

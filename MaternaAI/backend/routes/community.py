@@ -510,6 +510,29 @@ def send_dm(receiver_id):
         row = cur.fetchone()
         conn.commit()
         cur.close()
+
+        # Run background symptom extraction if one of the users is a patient
+        try:
+            sender = query("SELECT role FROM users WHERE id = %s", (sender_id,), fetch="one")
+            receiver = query("SELECT role FROM users WHERE id = %s", (receiver_id,), fetch="one")
+            patient_id = None
+            if sender and sender.get("role") == "patient":
+                patient_id = sender_id
+            elif receiver and receiver.get("role") == "patient":
+                patient_id = receiver_id
+            
+            if patient_id:
+                prof = query("SELECT language FROM risk_profiles WHERE user_id = %s", (patient_id,), fetch="one")
+                pat_lang = prof.get("language", "bn") if prof else "bn"
+                import threading
+                from services.risk_engine import extract_symptoms_from_text_and_update_risk
+                threading.Thread(
+                    target=extract_symptoms_from_text_and_update_risk,
+                    args=(patient_id, content, pat_lang)
+                ).start()
+        except Exception as spawn_err:
+            print("Background DM symptom extraction thread spawn failed:", spawn_err)
+
         return jsonify(_row_to_dm(row)), 201
     except Exception as e:
         if conn:
