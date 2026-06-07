@@ -62,6 +62,145 @@ def save_chat_message(user_id, role, content, intent=None, language='en'):
         if conn:
             conn.close()
 
+def scan_message_and_recompute_risk(user_id, message_text, lang="bn"):
+    """
+    Scans the message with a Gemini extraction prompt for health signals (symptoms).
+    If symptoms are detected, logs them in health_logs, and checks if they are new
+    or high-severity. If so, triggers risk recomputation.
+    """
+    if not message_text or not user_id:
+        return
+
+    import google.generativeai as genai
+    from config import GEMINI_API_KEY
+    from rules.severity import SYMPTOM_SEVERITY
+    from services.risk_engine import compute_user_risk
+    from db import query
+    import json
+
+    # List of symptoms we look for
+    valid_symptoms = [
+        "bleeding", "vision", "swelling", "severe_headache", "fever",
+        "abdominal_pain", "reduced_movement", "vomiting", "fatigue",
+        "low_mood", "excessive_thirst", "frequent_urination", "trouble_sleeping"
+    ]
+
+    extraction_prompt = f"""
+    You are a clinical symptom extraction bot.
+    Analyze the following user chat message (which may be in English, Bengali, or Banglish) and extract any maternal health symptoms.
+
+    User Message: "{message_text}"
+
+    Compare any mentioned symptoms to the list of standard symptoms below:
+    - bleeding (vaginal bleeding, spotting, active blood discharge)
+    - vision (blurry vision, vision changes, seeing spots)
+    - swelling (severe swelling in hands, face, or feet)
+    - severe_headache (persistent, severe, or bad headache)
+    - fever (high body temperature, fever, feeling hot with chills)
+    - abdominal_pain (severe stomach pain, abdominal cramps)
+    - reduced_movement (baby kicking less, reduced fetal movement)
+    - vomiting (excessive throwing up, nausea)
+    - fatigue (very tired, extremely weak, low energy)
+    - low_mood (feeling sad, depressed, crying, anxiety, extreme worry)
+    - excessive_thirst (feeling extremely thirsty all the time)
+    - frequent_urination (urinating abnormally often)
+    - trouble_sleeping (insomnia, unable to sleep)
+
+    Return ONLY a JSON list of matched standard symptom strings from the list above.
+    For example, if they mention severe headache and feet swelling, return: ["severe_headache", "swelling"].
+    If they mention sadness and fatigue, return: ["low_mood", "fatigue"].
+    If no standard symptoms match, return: [].
+
+    CRITICAL: Output MUST be a valid JSON array of strings and nothing else. No explanation, no markdown backticks.
+    """
+
+    extracted_symptoms = []
+    if GEMINI_API_KEY:
+        try:
+            model = genai.GenerativeModel("gemini-2.5-flash")
+            response = model.generate_content(
+                extraction_prompt,
+                generation_config={
+                    "response_mime_type": "application/json",
+                    "temperature": 0.1
+                }
+            )
+            if response and response.text:
+                cleaned_res = response.text.strip().replace("```json", "").replace("```", "").strip()
+                raw_list = json.loads(cleaned_res)
+                if isinstance(raw_list, list):
+                    extracted_symptoms = [s for s in raw_list if s in valid_symptoms]
+        except Exception as e:
+            print("Gemini symptom extraction failed:", e)
+
+    if not extracted_symptoms:
+        return
+
+    print(f"[CHAT RISK] Extracted symptoms from chat: {extracted_symptoms}")
+
+    # Fetch user's previous symptoms from health_logs in the last 14 days
+    previous_logs = query(
+        """
+        SELECT symptoms FROM health_logs
+        WHERE user_id = %s AND created_at >= NOW() - INTERVAL '14 days'
+        """,
+        (user_id,)
+    )
+    
+    previous_symptoms = set()
+    for log in previous_logs:
+        syms = log.get("symptoms")
+        if syms:
+            if isinstance(syms, list):
+                for s in syms:
+                    previous_symptoms.add(s)
+            elif isinstance(syms, str):
+                for s in syms.split(','):
+                    s_clean = s.strip()
+                    if s_clean:
+                        previous_symptoms.add(s_clean)
+
+    # Check if there are new symptoms or high-severity symptoms
+    new_symptoms = [s for s in extracted_symptoms if s not in previous_symptoms]
+    # High severity is >= 3
+    high_severity_symptoms = [s for s in extracted_symptoms if SYMPTOM_SEVERITY.get(s, 0) >= 3 or s in ["low_mood", "excessive_thirst", "frequent_urination"]]
+
+    should_recompute = len(new_symptoms) > 0 or len(high_severity_symptoms) > 0
+
+    # Log these extracted symptoms to health_logs
+    severity_score = sum(SYMPTOM_SEVERITY.get(s, 0) for s in extracted_symptoms)
+    danger_level = "safe"
+    if severity_score >= 8:
+        danger_level = "danger"
+    elif severity_score >= 4:
+        danger_level = "warning"
+
+    query(
+        """
+        INSERT INTO health_logs (user_id, symptoms, danger_level, raw_input, severity_score, transcribed_text)
+        VALUES (%s, %s, %s, %s, %s, %s)
+        """,
+        (
+            user_id,
+            extracted_symptoms,
+            danger_level,
+            f"Chat-extracted symptoms: {', '.join(extracted_symptoms)}",
+            severity_score,
+            message_text
+        ),
+        fetch="none"
+    )
+
+    if should_recompute:
+        print(f"[CHAT RISK] Recomputing risk for user {user_id} due to symptoms: new={new_symptoms}, high_sev={high_severity_symptoms}")
+        try:
+            # We want to recompute risk using the user's preferred language. Let's fetch it from their profile if possible.
+            current_profile = query("SELECT language FROM risk_profiles WHERE user_id = %s", (user_id,), fetch="one")
+            profile_lang = current_profile.get("language", lang) if current_profile else lang
+            compute_user_risk(user_id, lang=profile_lang)
+        except Exception as err:
+            print("Failed to recompute risk after chat extraction:", err)
+
 @chat_bp.route("/message", methods=["POST"])
 @chat_bp.route("/analyze", methods=["POST"])
 def analyze():
@@ -79,6 +218,12 @@ def analyze():
 
     # Save user message to database
     save_chat_message(user_id, 'user', user_input, intent=mode, language=lang)
+
+    # Scan for symptoms and recompute risk if needed
+    try:
+        scan_message_and_recompute_risk(user_id, user_input, lang=lang)
+    except Exception as e:
+        print("Symptom scanning failed:", e)
 
     # Run RAG Query — pass detected language and user_id to leverage history context
     try:
@@ -135,7 +280,7 @@ def speak():
         try:
             if GEMINI_API_KEY:
                 genai.configure(api_key=GEMINI_API_KEY)
-                model = genai.GenerativeModel("gemini-1.5-flash")
+                model = genai.GenerativeModel("gemini-2.5-flash")
                 prompt = (
                     "You are an expert audio transcriber. Transcribe this audio recording precisely. "
                     "If the audio is in Bengali (or its local spoken dialects), write the transcription entirely in standard Bengali script. "
@@ -171,6 +316,13 @@ def speak():
 
     # Save user speech transcription to database
     save_chat_message(user_id, 'user', transcribed_text, intent=mode, language=lang)
+
+    # Scan for symptoms and recompute risk if needed
+    if transcribed_text and transcribed_text != "[অডিও অস্পষ্ট - Audio unclear]":
+        try:
+            scan_message_and_recompute_risk(user_id, transcribed_text, lang=lang)
+        except Exception as e:
+            print("Symptom scanning failed:", e)
 
     # Pass transcribed text to RAG with history context
     try:

@@ -1,6 +1,21 @@
 import React, { useMemo, useState, useEffect, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { communityAPI } from '../api';
+import { db } from '../api/firebase';
+import {
+  collection,
+  doc,
+  addDoc,
+  setDoc,
+  updateDoc,
+  query as fsQuery,
+  where,
+  orderBy,
+  onSnapshot,
+  limit as fsLimit,
+  getDoc,
+  writeBatch
+} from 'firebase/firestore';
 import {
   Heart,
   MessageCircle,
@@ -25,7 +40,7 @@ import {
 
 const Community = () => {
   const { user } = useAuth();
-  
+
   // Dynamic lists
   const [groups, setGroups] = useState([]);
   const [activeGroupId, setActiveGroupId] = useState(null);
@@ -33,7 +48,7 @@ const Community = () => {
   const [posts, setPosts] = useState([]);
   const [groupMembers, setGroupMembers] = useState([]);
   const [isMember, setIsMember] = useState(false);
-  
+
   // Form states
   const [showCreateGroupModal, setShowCreateGroupModal] = useState(false);
   const [newGroupName, setNewGroupName] = useState('');
@@ -51,16 +66,18 @@ const Community = () => {
   const [comments, setComments] = useState({});
   const [activeCommentPostId, setActiveCommentPostId] = useState(null);
   const [newCommentText, setNewCommentText] = useState('');
-  
+
   // DM states
   const [showDMDrawer, setShowDMDrawer] = useState(false);
   const [inboxConversations, setInboxConversations] = useState([]);
+  const [mysqlInbox, setMysqlInbox] = useState([]);
   const [clinicianContacts, setClinicianContacts] = useState([]);
   const [activePartnerId, setActivePartnerId] = useState(null);
   const [activePartnerName, setActivePartnerName] = useState('');
   const [dmMessages, setDmMessages] = useState([]);
+  const [mysqlMessages, setMysqlMessages] = useState([]);
   const [newDMText, setNewDMText] = useState('');
-  
+
   // Local liked posts registry (to prevent double liking on the frontend)
   const [likedPosts, setLikedPosts] = useState([]);
 
@@ -75,6 +92,19 @@ const Community = () => {
 
   // Scroll ref for DM Thread
   const dmThreadEndRef = useRef(null);
+
+  // Firestore listeners unsubscribe refs
+  const inboxUnsubscribeRef = useRef(null);
+  const threadUnsubscribeRef = useRef(null);
+  const [activePartnerPhone, setActivePartnerPhone] = useState('');
+
+  // Clean up listeners on unmount
+  useEffect(() => {
+    return () => {
+      if (inboxUnsubscribeRef.current) inboxUnsubscribeRef.current();
+      if (threadUnsubscribeRef.current) threadUnsubscribeRef.current();
+    };
+  }, []);
 
   const sortedClinicianContacts = useMemo(() => {
     return [...clinicianContacts].sort((first, second) => {
@@ -109,6 +139,123 @@ const Community = () => {
   useEffect(() => {
     dmThreadEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [dmMessages]);
+
+  // Fetch legacy MySQL Inbox
+  useEffect(() => {
+    if (user?.id) {
+      communityAPI.getInbox(user.id)
+        .then(data => setMysqlInbox(Array.isArray(data) ? data : []))
+        .catch(err => console.warn("Could not load legacy inbox:", err));
+    }
+  }, [user]);
+
+  // 4. Global listener for DM Inbox (required for unread count badge)
+  useEffect(() => {
+    if (!user?.id || !db) return;
+
+    if (inboxUnsubscribeRef.current) {
+      inboxUnsubscribeRef.current();
+    }
+
+    const q = fsQuery(
+      collection(db, 'rooms'),
+      where('participants', 'array-contains', user.id)
+    );
+
+    inboxUnsubscribeRef.current = onSnapshot(q, (snapshot) => {
+      const conversations = [];
+      snapshot.forEach((doc) => {
+        const data = doc.data();
+        const partnerIdStr = Object.keys(data.partnerNames || {}).find(id => id !== String(user.id));
+        if (partnerIdStr) {
+          conversations.push({
+            partner_id: Number(partnerIdStr),
+            partner_name: data.partnerNames[partnerIdStr] || 'Clinician',
+            last_message: data.lastMessage || '',
+            last_sent_at: data.lastSentAt || null,
+            unread_count: data.unreadCount?.[String(user.id)] || 0
+          });
+        }
+      });
+
+      // Sort dynamically: Unread messages first, then by last_sent_at DESC
+      conversations.sort((a, b) => {
+        const hasUnreadA = a.unread_count > 0;
+        const hasUnreadB = b.unread_count > 0;
+
+        if (hasUnreadA === hasUnreadB) {
+          const timeA = a.last_sent_at ? new Date(a.last_sent_at).getTime() : 0;
+          const timeB = b.last_sent_at ? new Date(b.last_sent_at).getTime() : 0;
+          return timeB - timeA;
+        }
+
+        return hasUnreadA ? -1 : 1;
+      });
+
+      setInboxConversations(conversations);
+      setIsDMLoading(false);
+    }, (err) => {
+      console.error("Inbox Firestore listener error:", err);
+      setIsDMLoading(false);
+    });
+
+  }, [user, db]);
+
+  const combinedInbox = useMemo(() => {
+    const map = new Map();
+    // Use String key always to prevent int vs string mismatch causing duplicates
+    mysqlInbox.forEach(c => map.set(String(c.partner_id), c));
+    // Overwrite with Firebase ones if exists (they have real-time unread counts)
+    inboxConversations.forEach(c => map.set(String(c.partner_id), c));
+
+    const merged = Array.from(map.values());
+    merged.sort((a, b) => {
+      const hasUnreadA = a.unread_count > 0;
+      const hasUnreadB = b.unread_count > 0;
+
+      if (hasUnreadA === hasUnreadB) {
+        const timeA = a.last_sent_at ? new Date(a.last_sent_at).getTime() : 0;
+        const timeB = b.last_sent_at ? new Date(b.last_sent_at).getTime() : 0;
+        return timeB - timeA;
+      }
+      return hasUnreadA ? -1 : 1;
+    });
+    return merged;
+  }, [mysqlInbox, inboxConversations]);
+
+  const totalUnreadCount = useMemo(() => {
+    return combinedInbox.reduce((sum, chat) => sum + (chat.unread_count || 0), 0);
+  }, [combinedInbox]);
+
+  const combinedMessages = useMemo(() => {
+    const earliestFirebaseTime = dmMessages.reduce((min, m) => {
+      const t = new Date(m.created_at).getTime();
+      return t < min ? t : min;
+    }, Infinity);
+
+    const map = new Map();
+
+    // Only include MySQL messages that strictly predate the first Firebase message.
+    mysqlMessages.forEach(m => {
+      const t = new Date(m.created_at).getTime();
+      if (t < earliestFirebaseTime) {
+        map.set(`sql_${m.id}`, {
+          ...m,
+          sender_id: m.sender_id,
+          created_at: m.created_at,
+          status: m.is_read ? 'read' : 'sent',
+          hasPendingWrites: false
+        });
+      }
+    });
+
+    // Firebase messages are always shown
+    dmMessages.forEach(m => map.set(m.id, m));
+
+    return Array.from(map.values()).sort((a, b) =>
+      new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+    );
+  }, [mysqlMessages, dmMessages]);
 
   // API Call: Fetch Groups
   const loadGroups = async () => {
@@ -216,7 +363,7 @@ const Community = () => {
       setGroups(prev => [created, ...prev]);
       setActiveGroupId(created.id);
       setShowCreateGroupModal(false);
-      
+
       // Clear forms
       setNewGroupName('');
       setNewGroupDesc('');
@@ -257,7 +404,7 @@ const Community = () => {
   // API Call: Like Post
   const handleLikePost = async (postId) => {
     if (likedPosts.includes(postId)) return; // Prevent double liking
-    
+
     // Optimistic UI update
     setLikedPosts(prev => [...prev, postId]);
     setPosts(prev => prev.map(p => p.id === postId ? { ...p, likes: p.likes + 1 } : p));
@@ -332,65 +479,195 @@ const Community = () => {
     }
   };
 
-  // API Call: Load DM Inbox List
+  const getRoomId = (uid1, uid2) => {
+    const id1 = Math.min(Number(uid1), Number(uid2));
+    const id2 = Math.max(Number(uid1), Number(uid2));
+    return `room_${id1}_${id2}`;
+  };
+
+  // API Call: Load DM Inbox List from Firestore
   const handleOpenDMDrawer = async () => {
     setShowDMDrawer(true);
-    if (!user?.id) return;
+    if (!user?.id || !db) return;
     setIsDMLoading(true);
     try {
-      const [inboxData, clinicianData] = await Promise.all([
-        communityAPI.getInbox(user.id),
-        communityAPI.getContacts('clinician')
-      ]);
-      setInboxConversations(inboxData || []);
+      const clinicianData = await communityAPI.getContacts('clinician');
       setClinicianContacts(clinicianData || []);
     } catch (err) {
-      console.error("Failed to load DMs inbox:", err);
+      console.error("Failed to load clinician contacts:", err);
     } finally {
       setIsDMLoading(false);
     }
   };
 
-  // API Call: Load active DM Chat Thread
-  const handleSelectDMPartner = async (partnerId, partnerName) => {
-    if (!user?.id) return;
+  // API Call: Load active DM Chat Thread in Real-time
+  const handleSelectDMPartner = async (partnerId, partnerName, partnerPhone = '') => {
+    if (!user?.id || !db) return;
+
     setActivePartnerId(partnerId);
     setActivePartnerName(partnerName);
+    setActivePartnerPhone(partnerPhone || '');
     setIsDMLoading(true);
+    setDmMessages([]); // Clear previous messages instantly
+    setMysqlMessages([]);
+
     try {
-      const thread = await communityAPI.getDMThread(user.id, partnerId);
-      setDmMessages(thread || []);
-      
-      // Update inbox list dynamically to clear unread counts
-      setInboxConversations(prev => prev.map(c => c.partner_id === partnerId ? { ...c, unread_count: 0 } : c));
+      const legacyMsgs = await communityAPI.getDMThread(user.id, partnerId);
+      setMysqlMessages(legacyMsgs || []);
     } catch (err) {
-      console.error("Failed to fetch DM thread:", err);
-    } finally {
-      setIsDMLoading(false);
+      console.warn("Could not load legacy messages:", err);
     }
+
+    if (threadUnsubscribeRef.current) {
+      threadUnsubscribeRef.current();
+    }
+
+    const roomId = getRoomId(user.id, partnerId);
+
+    // Mark room as read for the current user (don't await to avoid blocking UI)
+    const roomRef = doc(db, 'rooms', roomId);
+    setDoc(roomRef, {
+      unreadCount: { [String(user.id)]: 0 }
+    }, { merge: true }).catch(() => { });
+
+    const q = fsQuery(
+      collection(db, 'rooms', roomId, 'messages'),
+      orderBy('createdAt', 'asc')
+    );
+
+    threadUnsubscribeRef.current = onSnapshot(q, { includeMetadataChanges: true }, (snapshot) => {
+      const msgs = [];
+
+      snapshot.forEach((msgDoc) => {
+        const data = msgDoc.data();
+        msgs.push({
+          id: msgDoc.id,
+          sender_id: data.senderId,
+          receiver_id: data.receiverId,
+          content: data.content,
+          created_at: data.createdAt,
+          status: data.status || 'sent',
+          hasPendingWrites: msgDoc.metadata.hasPendingWrites
+        });
+      });
+
+      if (!snapshot.metadata.hasPendingWrites) {
+        const batch = writeBatch(db);
+        let hasUpdates = false;
+        snapshot.forEach((msgDoc) => {
+          const data = msgDoc.data();
+          if (data.senderId !== user.id && data.status !== 'read') {
+            batch.update(doc(db, 'rooms', roomId, 'messages', msgDoc.id), { status: 'read' });
+            hasUpdates = true;
+          }
+        });
+        if (hasUpdates) {
+          batch.update(doc(db, 'rooms', roomId), {
+            [`unreadCount.${user.id}`]: 0
+          });
+          batch.commit().catch(() => {});
+        }
+      }
+
+      setDmMessages(msgs);
+      setIsDMLoading(false);
+    }, (err) => {
+      console.error("Thread Firestore listener error:", err);
+      setIsDMLoading(false);
+    });
   };
+
+  // Cleanup thread listener when leaving chat or closing drawer
+  useEffect(() => {
+    if (!activePartnerId || !showDMDrawer) {
+      if (threadUnsubscribeRef.current) {
+        threadUnsubscribeRef.current();
+        threadUnsubscribeRef.current = null;
+      }
+    }
+  }, [activePartnerId, showDMDrawer]);
 
   // API Call: Dispatch direct message
   const handleSendDMSubmit = async (e) => {
     e.preventDefault();
-    if (!newDMText.trim() || !activePartnerId || !user?.id) return;
+    if (!newDMText.trim() || !activePartnerId || !user?.id || !db) return;
+
+    const text = newDMText.trim();
+    setNewDMText('');
     setIsSubmittingDM(true);
 
-    const payload = {
-      sender_id: user.id,
-      content: newDMText
-    };
+    const roomId = getRoomId(user.id, activePartnerId);
 
     try {
-      const created = await communityAPI.sendDM(activePartnerId, payload);
-      setDmMessages(prev => [...prev, { ...created, sender_name: user.name }]);
-      setNewDMText('');
-      
-      // Refresh inbox list in background to sync last message
-      const inbox = await communityAPI.getInbox(user.id);
-      setInboxConversations(inbox || []);
+      const timestamp = new Date().toISOString();
+      const messagesRef = collection(db, 'rooms', roomId, 'messages');
+
+      // Write message to Firestore subcollection (IndexedDB queues locally if offline)
+      await addDoc(messagesRef, {
+        senderId: user.id,
+        receiverId: activePartnerId,
+        content: text,
+        createdAt: timestamp,
+        status: 'sent'
+      });
+
+      // Fetch current room summaries to increment recipient unread count
+      const roomRef = doc(db, 'rooms', roomId);
+
+      let partnerUnread = 0;
+      const roomSnapData = await getDoc(roomRef);
+      if (roomSnapData.exists()) {
+        const roomData = roomSnapData.data();
+        partnerUnread = roomData.unreadCount?.[String(activePartnerId)] || 0;
+      }
+
+      // Update room metadata
+      await setDoc(roomRef, {
+        participants: [user.id, activePartnerId],
+        lastMessage: text,
+        lastSentAt: timestamp,
+        partnerNames: {
+          [String(user.id)]: user.name,
+          [String(activePartnerId)]: activePartnerName
+        },
+        unreadCount: {
+          [String(activePartnerId)]: partnerUnread + 1,
+          [String(user.id)]: 0
+        }
+      }, { merge: true });
+
+      // Simultaneously save to MySQL backend database
+      try {
+        await communityAPI.sendDM(activePartnerId, { sender_id: user.id, content: text });
+      } catch (sqlErr) {
+        console.warn("Failed to sync message to MySQL:", sqlErr);
+      }
+
+      // If online, trigger simulated offline SMS fallback notify
+      if (navigator.onLine) {
+        let phoneNum = activePartnerPhone;
+        if (!phoneNum) {
+          const clin = clinicianContacts.find(c => c.id === activePartnerId);
+          if (clin) phoneNum = clin.phone;
+        }
+        if (phoneNum) {
+          try {
+            await fetch('/api/sms/send_offline_notify', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                sender_name: user.name,
+                recipient_phone: phoneNum,
+                message_content: text
+              })
+            });
+          } catch (smsErr) {
+            console.warn("Simulated SMS gateway failed:", smsErr);
+          }
+        }
+      }
     } catch (err) {
-      console.error("DM dispatch failed:", err);
+      console.error("DM Firestore dispatch failed:", err);
     } finally {
       setIsSubmittingDM(false);
     }
@@ -412,7 +689,7 @@ const Community = () => {
 
   return (
     <div className="p-4 md:p-8 max-w-5xl mx-auto space-y-6 font-sans">
-      
+
       {/* ──────────────────────────────────────────────────────── */}
       {/* 1. COMMUNITY HUB HEADER */}
       {/* ──────────────────────────────────────────────────────── */}
@@ -426,17 +703,22 @@ const Community = () => {
             Connect with mothers, share experiences anonymously, and consult local community health midwives.
           </p>
         </div>
-        
+
         {/* DM and Create buttons */}
         <div className="flex items-center gap-3 w-full md:w-auto shrink-0">
           <button
             onClick={handleOpenDMDrawer}
-            className="flex-1 md:flex-none flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl border border-primary-mauve/20 text-primary-mauve hover:bg-primary-mauve/8 text-xs font-black uppercase tracking-wider transition-all cursor-pointer"
+            className="flex-1 md:flex-none flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl border border-primary-mauve/20 text-primary-mauve hover:bg-primary-mauve/8 text-xs font-black uppercase tracking-wider transition-all cursor-pointer relative"
           >
             <Send className="w-4 h-4 rotate-45 mt-0.5" />
             <span>Direct Messages</span>
+            {totalUnreadCount > 0 && (
+              <span className="absolute -top-1.5 -right-1.5 bg-danger text-white text-[9px] font-black w-5 h-5 flex items-center justify-center rounded-full animate-bounce shadow-md">
+                {totalUnreadCount}
+              </span>
+            )}
           </button>
-          
+
           <button
             onClick={() => setShowCreateGroupModal(true)}
             className="flex-1 md:flex-none flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl bg-primary-mauve text-white hover:bg-bg-dark-mauve text-xs font-black uppercase tracking-wider shadow-glow transition-all cursor-pointer"
@@ -457,7 +739,7 @@ const Community = () => {
           </h3>
           <span className="text-[10px] font-bold text-text-muted">Swipe circles to navigate</span>
         </div>
-        
+
         {isGroupsLoading ? (
           <div className="flex items-center justify-center py-6">
             <Loader2 className="w-6 h-6 animate-spin text-primary-mauve" />
@@ -473,11 +755,10 @@ const Community = () => {
                   className="flex flex-col items-center gap-2 shrink-0 group focus:outline-hidden cursor-pointer"
                 >
                   {/* Story bubble border ring */}
-                  <div className={`w-18 h-18 rounded-full p-0.5 flex items-center justify-center transition-all duration-300 ${
-                    isActive 
+                  <div className={`w-18 h-18 rounded-full p-0.5 flex items-center justify-center transition-all duration-300 ${isActive
                       ? 'bg-gradient-to-tr from-primary-mauve via-secondary-blush to-purple shadow-[0_0_12px_rgba(171,115,151,0.4)] scale-103'
                       : 'border border-primary-mauve/15 group-hover:border-primary-mauve/40'
-                  }`}>
+                    }`}>
                     {/* Inner bubble circle */}
                     <div className="w-full h-full rounded-full bg-bg-rose-white flex items-center justify-center text-2xl shadow-inner select-none">
                       {group.emoji || '💬'}
@@ -499,7 +780,7 @@ const Community = () => {
       {activeGroup && (
         <div className="bg-gradient-to-br from-bg-dark-mauve to-primary-mauve text-white rounded-2xl p-6 shadow-premium relative overflow-hidden flex flex-col md:flex-row md:items-center justify-between gap-6">
           <div className="absolute top-0 right-0 w-32 h-32 bg-white/5 rounded-full filter blur-xl transform translate-x-10 -translate-y-10" />
-          
+
           <div className="space-y-2">
             <div className="flex items-center gap-2">
               <span className="text-[10px] font-black tracking-widest uppercase bg-white/15 px-3 py-1 rounded-full">
@@ -515,7 +796,7 @@ const Community = () => {
                 </span>
               )}
             </div>
-            
+
             <h2 className="text-xl font-black tracking-wide flex items-center gap-2">
               <span className="text-2xl">{activeGroup.emoji}</span>
               {activeGroup.name}
@@ -523,7 +804,7 @@ const Community = () => {
             <p className="text-xs font-semibold text-white/80 max-w-2xl leading-relaxed">
               {activeGroup.description || 'Welcome to our peer circle. Engage, support, and discuss details with others.'}
             </p>
-            
+
             <div className="flex items-center gap-4 text-[10px] font-bold text-white/70 pt-1">
               <span>{activeGroup.member_count || 1} Members</span>
               <span>•</span>
@@ -564,10 +845,10 @@ const Community = () => {
       {/* 4. POST FEED (MAIN CONTENT) */}
       {/* ──────────────────────────────────────────────────────── */}
       <div className="grid grid-cols-1 md:grid-cols-12 gap-6 items-stretch">
-        
+
         {/* LEFT COLUMN (Col Span 8): style Posts Feed */}
         <div className="md:col-span-8 space-y-6">
-          
+
           {isPostsLoading ? (
             <div className="bg-white border border-primary-mauve/10 rounded-2xl p-12 shadow-premium flex flex-col items-center justify-center text-center">
               <Loader2 className="w-8 h-8 animate-spin text-primary-mauve" />
@@ -598,7 +879,7 @@ const Community = () => {
               const authorIsAnonymous = post.is_anonymous;
 
               return (
-                <div 
+                <div
                   key={post.id}
                   className="bg-white border border-primary-mauve/10 rounded-2xl shadow-premium overflow-hidden animate-fadeIn"
                 >
@@ -609,7 +890,7 @@ const Community = () => {
                       <div className="w-9 h-9 rounded-full bg-primary-mauve/10 flex items-center justify-center text-base border border-primary-mauve/20 select-none shadow-xs font-bold">
                         {authorIsAnonymous ? '🤰' : '👩‍⚕️'}
                       </div>
-                      
+
                       {/* Author Details */}
                       <div>
                         <span className="text-xs font-black text-text-dark block leading-none">
@@ -638,7 +919,7 @@ const Community = () => {
                     {/* Background decorations to make it look premium */}
                     <div className="absolute top-4 left-4 w-12 h-12 rounded-full border border-white/10" />
                     <div className="absolute bottom-4 right-4 w-20 h-20 rounded-full border border-white/5 bg-white/5 filter blur-xs" />
-                    
+
                     {/* Glassmorphic Post Container */}
                     <div className="w-full max-w-md bg-white/10 backdrop-blur-md border border-white/20 p-5 rounded-2xl text-center space-y-4 shadow-2xl relative z-10 select-text">
                       <span className="text-white/30 text-5xl font-serif leading-none block h-4">“</span>
@@ -655,11 +936,10 @@ const Community = () => {
                       {/* Heart Button */}
                       <button
                         onClick={() => handleLikePost(post.id)}
-                        className={`flex items-center gap-1.5 p-1.5 rounded-lg transition-all cursor-pointer ${
-                          isLiked 
-                            ? 'text-danger hover:bg-danger/5' 
+                        className={`flex items-center gap-1.5 p-1.5 rounded-lg transition-all cursor-pointer ${isLiked
+                            ? 'text-danger hover:bg-danger/5'
                             : 'text-text-muted hover:text-danger hover:bg-danger/5'
-                        }`}
+                          }`}
                       >
                         <Heart className={`w-5 h-5 ${isLiked ? 'fill-danger text-danger scale-110' : ''}`} />
                         <span className="text-[11px] font-black">{post.likes}</span>
@@ -690,7 +970,7 @@ const Community = () => {
                   {/* Comment Section Panel (Collapsible drawer) */}
                   {activeCommentPostId === post.id && (
                     <div className="bg-bg-rose-white/40 border-t border-primary-mauve/5 p-4 space-y-4 animate-fadeIn">
-                      
+
                       {/* Comments list */}
                       <div className="space-y-3 max-h-48 overflow-y-auto pr-1">
                         {!comments[post.id] || comments[post.id].length === 0 ? (
@@ -722,11 +1002,11 @@ const Community = () => {
                       </div>
 
                       {/* Comment Input */}
-                      <form 
+                      <form
                         onSubmit={(e) => handleAddCommentSubmit(e, post.id)}
                         className="flex gap-2 items-center"
                       >
-                        <input 
+                        <input
                           type="text"
                           value={newCommentText}
                           onChange={(e) => setNewCommentText(e.target.value)}
@@ -754,7 +1034,7 @@ const Community = () => {
 
         {/* RIGHT COLUMN (Col Span 4): Circle details & active members */}
         <div className="md:col-span-4 space-y-6">
-          
+
           {/* Active members block */}
           <div className="bg-white border border-primary-mauve/10 rounded-2xl p-5 shadow-premium space-y-4">
             <h3 className="text-xs font-black text-text-dark uppercase tracking-wider pl-0.5 border-b border-primary-mauve/5 pb-2.5 flex items-center gap-2">
@@ -773,7 +1053,7 @@ const Community = () => {
             ) : (
               <div className="space-y-2.5 max-h-60 overflow-y-auto">
                 {groupMembers.map((member) => (
-                  <div 
+                  <div
                     key={member.id}
                     className="flex items-center justify-between p-2 rounded-xl border border-primary-mauve/5 hover:bg-bg-rose-white/50 transition-all"
                   >
@@ -816,7 +1096,7 @@ const Community = () => {
               <Sparkles className="w-4 h-4 text-primary-mauve" />
               <span>Circle Safety Rules</span>
             </h3>
-            
+
             <ul className="space-y-3 text-[10px] font-semibold text-text-muted leading-relaxed">
               <li className="flex items-start gap-2">
                 <CheckCircle2 className="w-4 h-4 text-success shrink-0 mt-0.5" />
@@ -843,14 +1123,14 @@ const Community = () => {
       {showDMDrawer && (
         <div className="fixed inset-0 z-50 flex justify-end">
           {/* Backdrop overlay */}
-          <div 
+          <div
             className="absolute inset-0 bg-text-dark/40 backdrop-blur-xs transition-opacity"
             onClick={() => setShowDMDrawer(false)}
           />
 
           {/* Drawer Canvas Box */}
           <div className="relative w-full max-w-md h-full bg-white shadow-2xl border-l border-primary-mauve/10 flex flex-col z-10 animate-slideLeft">
-            
+
             {/* Header */}
             <div className="p-4 border-b border-primary-mauve/10 bg-bg-rose-white flex items-center justify-between shrink-0">
               <div className="flex items-center gap-2">
@@ -859,77 +1139,78 @@ const Community = () => {
                   {activePartnerId ? `Chat with ${activePartnerName}` : "Direct Messages"}
                 </h3>
               </div>
-              
+
               <div className="flex items-center gap-1.5">
                 {activePartnerId && (
                   <button
                     onClick={() => { setActivePartnerId(null); setActivePartnerName(''); }}
-                    className="px-2.5 py-1 rounded-md text-[9px] font-black uppercase bg-primary-mauve/10 text-primary-mauve border border-primary-mauve/15"
+                    className="px-2 py-1 bg-primary-mauve/10 hover:bg-primary-mauve/20 text-primary-mauve rounded-lg text-[10px] font-black uppercase tracking-wider transition-all"
                   >
-                    Inbox
+                    Back
                   </button>
                 )}
-                <button 
+                <button
                   onClick={() => setShowDMDrawer(false)}
-                  className="p-1.5 hover:bg-primary-mauve/10 text-text-muted hover:text-text-dark rounded-lg"
+                  className="p-1 text-text-muted hover:text-text-dark hover:bg-bg-rose-white rounded-lg"
                 >
                   <X className="w-5 h-5" />
                 </button>
               </div>
             </div>
 
-            {/* Content canvas */}
-            <div className="flex-1 overflow-hidden flex flex-col relative">
-              
-              {isDMLoading && (
-                <div className="absolute inset-0 bg-white/70 backdrop-blur-xs flex items-center justify-center z-15">
-                  <Loader2 className="w-6 h-6 animate-spin text-primary-mauve" />
-                </div>
-              )}
-
-              {/* View 1: Conversations List Inbox */}
+            <div className="flex-1 flex flex-col overflow-hidden">
               {!activePartnerId ? (
-                <div className="flex-1 overflow-y-auto p-4 space-y-2.5">
-                  {inboxConversations.length === 0 ? (
-                    <div className="flex flex-col items-center justify-center text-center h-full max-w-xs mx-auto space-y-3">
-                      <MessageSquare className="w-10 h-10 text-primary-mauve/30" />
-                      <h4 className="font-extrabold text-xs text-text-dark">No Message Threads</h4>
-                      <p className="text-[10px] font-medium text-text-muted leading-relaxed">
-                        To message someone, select a midwife or pregnancy member from the **Circle Active Members** panel.
-                      </p>
-                    </div>
-                  ) : (
-                    inboxConversations.map((chat) => (
-                      <button
-                        key={chat.partner_id}
-                        onClick={() => handleSelectDMPartner(chat.partner_id, chat.partner_name)}
-                        className="w-full text-left p-3.5 rounded-xl border border-primary-mauve/5 bg-bg-rose-white/30 hover:bg-bg-rose-white hover:border-primary-mauve/20 transition-all flex justify-between items-start cursor-pointer"
-                      >
-                        <div className="flex gap-3 overflow-hidden pr-2">
-                          <div className="w-8.5 h-8.5 rounded-full bg-primary-mauve/10 flex items-center justify-center text-sm font-bold shrink-0">
-                            🤰
-                          </div>
-                          <div className="truncate">
-                            <span className="text-[11px] font-black text-text-dark block leading-none">
-                              {chat.partner_name}
-                            </span>
-                            <span className="text-[9px] font-medium text-text-muted mt-2 block truncate">
-                              {chat.last_message}
-                            </span>
-                          </div>
-                        </div>
+                <div className="flex-1 overflow-y-auto p-4 space-y-6">
 
-                        {/* Unread dot indicator */}
-                        {chat.unread_count > 0 && (
-                          <span className="w-4.5 h-4.5 rounded-full bg-danger text-white flex items-center justify-center text-[9px] font-black shrink-0">
-                            {chat.unread_count}
-                          </span>
-                        )}
-                      </button>
-                    ))
-                  )}
+                  {/* Recent Message Threads Section (Moved to top) */}
+                  <div>
+                    <p className="text-[10px] font-black uppercase tracking-wider text-text-muted px-1 mb-2">
+                      Recent Messages
+                    </p>
+                    {combinedInbox.length === 0 ? (
+                      <div className="flex flex-col items-center justify-center text-center py-4 max-w-xs mx-auto space-y-2 border border-dashed border-primary-mauve/20 rounded-xl bg-bg-rose-white/50">
+                        <MessageSquare className="w-5 h-5 text-primary-mauve/40" />
+                        <h4 className="font-extrabold text-[11px] text-text-dark">No Messages Yet</h4>
+                        <p className="text-[9px] font-medium text-text-muted leading-relaxed px-4">
+                          Select an available clinician below or a circle member to start a new chat.
+                        </p>
+                      </div>
+                    ) : (
+                      <div className="space-y-2">
+                        {combinedInbox.map((chat) => (
+                          <button
+                            key={chat.partner_id}
+                            onClick={() => handleSelectDMPartner(chat.partner_id, chat.partner_name, chat.partner_phone)}
+                            className="w-full text-left p-3.5 rounded-xl border border-primary-mauve/5 bg-bg-rose-white/30 hover:bg-bg-rose-white hover:border-primary-mauve/20 transition-all flex justify-between items-start cursor-pointer"
+                          >
+                            <div className="flex gap-3 overflow-hidden pr-2">
+                              <div className="w-8.5 h-8.5 rounded-full bg-primary-mauve/10 flex items-center justify-center text-sm font-bold shrink-0">
+                                🤰
+                              </div>
+                              <div className="truncate">
+                                <span className="text-[11px] font-black text-text-dark block leading-none">
+                                  {chat.partner_name}
+                                </span>
+                                <span className="text-[9px] font-medium text-text-muted mt-2 block truncate">
+                                  {chat.last_message}
+                                </span>
+                              </div>
+                            </div>
 
-                  <div className="pt-4">
+                            {/* Unread dot indicator */}
+                            {chat.unread_count > 0 && (
+                              <span className="w-4.5 h-4.5 rounded-full bg-danger text-white flex items-center justify-center text-[9px] font-black shrink-0">
+                                {chat.unread_count}
+                              </span>
+                            )}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Available Clinicians Section */}
+                  <div>
                     <p className="text-[10px] font-black uppercase tracking-wider text-text-muted px-1">
                       Available Clinicians
                     </p>
@@ -942,7 +1223,7 @@ const Community = () => {
                         sortedClinicianContacts.map((contact) => (
                           <button
                             key={contact.id}
-                            onClick={() => handleSelectDMPartner(contact.id, contact.name)}
+                            onClick={() => handleSelectDMPartner(contact.id, contact.name, contact.phone)}
                             className="w-full text-left p-3.5 rounded-xl border border-primary-mauve/5 bg-bg-rose-white/30 hover:bg-bg-rose-white hover:border-primary-mauve/20 transition-all flex justify-between items-start cursor-pointer"
                           >
                             <div className="flex gap-3 overflow-hidden pr-2">
@@ -967,30 +1248,43 @@ const Community = () => {
               ) : (
                 /* View 2: Active DM thread chat log */
                 <div className="flex-1 flex flex-col overflow-hidden bg-bg-rose-white/20">
-                  
+
                   {/* Message bubble stream */}
                   <div className="flex-1 overflow-y-auto p-4 space-y-3">
-                    {dmMessages.length === 0 ? (
+                    {combinedMessages.length === 0 ? (
                       <p className="text-[10px] font-bold text-text-muted py-8 text-center">
                         Say hello to start direct conversation logs!
                       </p>
                     ) : (
-                      dmMessages.map((dm) => {
+                      combinedMessages.map((dm) => {
                         const isMe = dm.sender_id === user?.id;
                         return (
                           <div
                             key={dm.id}
                             className={`flex ${isMe ? 'justify-end' : 'justify-start'}`}
                           >
-                            <div className={`p-3 rounded-2xl max-w-[80%] text-xs font-semibold leading-relaxed ${
-                              isMe 
-                                ? 'bg-primary-mauve text-white rounded-tr-none' 
+                            <div className={`p-3 rounded-2xl max-w-[80%] text-xs font-semibold leading-relaxed ${isMe
+                                ? 'bg-primary-mauve text-white rounded-tr-none'
                                 : 'bg-white text-text-dark border border-primary-mauve/5 rounded-tl-none shadow-xs'
-                            }`}>
+                              }`}>
                               <p>{dm.content}</p>
-                              <span className={`text-[8px] font-bold block mt-1.5 text-right ${isMe ? 'text-white/60' : 'text-text-muted/60'}`}>
-                                {new Date(dm.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                              </span>
+
+                              <div className="flex items-center justify-between gap-3 mt-1.5 border-t border-white/10 pt-1">
+                                <span className={`text-[8px] font-bold block ${isMe ? 'text-white/60' : 'text-text-muted/60'}`}>
+                                  {new Date(dm.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                </span>
+                                {isMe && (
+                                  <span className="text-[10px] font-black leading-none">
+                                    {dm.hasPendingWrites ? (
+                                      <span className="text-white/40" title="Sending...">🕒</span>
+                                    ) : dm.status === 'read' ? (
+                                      <span style={{ color: '#60a5fa' }} title="Read">✓✓</span>
+                                    ) : (
+                                      <span className="text-white/60" title="Sent">✓✓</span>
+                                    )}
+                                  </span>
+                                )}
+                              </div>
                             </div>
                           </div>
                         );
@@ -1000,26 +1294,54 @@ const Community = () => {
                   </div>
 
                   {/* Message Input box */}
-                  <form 
-                    onSubmit={handleSendDMSubmit}
-                    className="p-3 border-t border-primary-mauve/10 bg-white flex items-center gap-2 shrink-0"
-                  >
-                    <input 
-                      type="text"
-                      value={newDMText}
-                      onChange={(e) => setNewDMText(e.target.value)}
-                      placeholder="Type direct message..."
-                      disabled={isSubmittingDM}
-                      className="flex-1 px-3.5 py-2.5 text-xs font-semibold bg-bg-rose-white border border-primary-mauve/15 focus:border-primary-mauve outline-hidden rounded-xl"
-                    />
-                    <button
-                      type="submit"
-                      disabled={!newDMText.trim() || isSubmittingDM}
-                      className="p-2.5 bg-primary-mauve hover:bg-bg-dark-mauve text-white rounded-xl cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed select-none"
+                  <div className="p-3 border-t border-primary-mauve/10 bg-white shrink-0 space-y-2">
+                    {!navigator.onLine && (
+                      <p className="text-[10px] font-bold text-[#d93d59] text-center bg-danger/10 py-1.5 rounded-lg animate-pulse">
+                        ⚠️ You are offline. Click "SMS" to send via carrier.
+                      </p>
+                    )}
+                    <form
+                      onSubmit={handleSendDMSubmit}
+                      className="flex items-center gap-2"
                     >
-                      <Send className="w-4 h-4 rotate-45" />
-                    </button>
-                  </form>
+                      <input
+                        type="text"
+                        value={newDMText}
+                        onChange={(e) => setNewDMText(e.target.value)}
+                        placeholder="Type direct message..."
+                        disabled={isSubmittingDM}
+                        className="flex-1 px-3.5 py-2.5 text-xs font-semibold bg-bg-rose-white border border-primary-mauve/15 focus:border-primary-mauve outline-hidden rounded-xl"
+                      />
+                      {!navigator.onLine && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            let phoneNum = activePartnerPhone;
+                            if (!phoneNum) {
+                              const clin = clinicianContacts.find(c => c.id === activePartnerId);
+                              if (clin) phoneNum = clin.phone;
+                            }
+                            if (phoneNum) {
+                              window.open(`sms:${phoneNum}?body=${encodeURIComponent(newDMText)}`, '_blank');
+                            } else {
+                              alert("Recipients phone number not found.");
+                            }
+                          }}
+                          disabled={!newDMText.trim()}
+                          className="px-3.5 py-2.5 bg-[#4f46e5] text-white rounded-xl text-[10px] font-black uppercase hover:bg-[#4338ca] transition-all cursor-pointer shrink-0"
+                        >
+                          SMS
+                        </button>
+                      )}
+                      <button
+                        type="submit"
+                        disabled={!newDMText.trim() || isSubmittingDM}
+                        className="p-2.5 bg-primary-mauve hover:bg-bg-dark-mauve text-white rounded-xl cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed select-none"
+                      >
+                        <Send className="w-4 h-4 rotate-45" />
+                      </button>
+                    </form>
+                  </div>
 
                 </div>
               )}
@@ -1036,7 +1358,7 @@ const Community = () => {
       {showCreateGroupModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-text-dark/40 backdrop-blur-xs px-4">
           <div className="w-full max-w-md bg-white border border-primary-mauve/10 rounded-2xl p-6 shadow-premium relative">
-            
+
             <button
               onClick={() => setShowCreateGroupModal(false)}
               className="absolute top-4 right-4 p-1 text-text-muted hover:text-text-dark hover:bg-bg-rose-white rounded-lg"
@@ -1056,8 +1378,8 @@ const Community = () => {
                 <label className="block text-[9px] font-black text-text-muted uppercase tracking-wider mb-1 pl-0.5">
                   Circle Name
                 </label>
-                <input 
-                  type="text" 
+                <input
+                  type="text"
                   value={newGroupName}
                   onChange={(e) => setNewGroupName(e.target.value)}
                   placeholder="e.g. Sreemangal tea-garden outreach"
@@ -1087,16 +1409,16 @@ const Community = () => {
                   Emoji Icon & Color Theme
                 </label>
                 <div className="flex gap-3">
-                  <input 
-                    type="text" 
+                  <input
+                    type="text"
                     value={newGroupEmoji}
                     onChange={(e) => setNewGroupEmoji(e.target.value)}
                     maxLength="2"
                     placeholder="💬"
                     className="w-16 px-4 py-2 text-center bg-bg-rose-white border border-primary-mauve/15 text-xs font-semibold rounded-lg"
                   />
-                  <input 
-                    type="color" 
+                  <input
+                    type="color"
                     value={newGroupColor}
                     onChange={(e) => setNewGroupColor(e.target.value)}
                     className="w-full h-8 cursor-pointer rounded-lg border border-primary-mauve/15 p-0.5"
@@ -1108,7 +1430,7 @@ const Community = () => {
                 <label className="block text-[9px] font-black text-text-muted uppercase tracking-wider mb-1 pl-0.5">
                   Dossier Description
                 </label>
-                <textarea 
+                <textarea
                   value={newGroupDesc}
                   onChange={(e) => setNewGroupDesc(e.target.value)}
                   placeholder="State the focus of this support channel..."
@@ -1117,14 +1439,14 @@ const Community = () => {
               </div>
 
               <div className="flex gap-3 mt-6">
-                <button 
+                <button
                   type="button"
                   onClick={() => setShowCreateGroupModal(false)}
                   className="flex-1 py-2.5 border border-primary-mauve/25 text-primary-mauve rounded-xl text-xs font-bold hover:bg-bg-rose-white cursor-pointer select-none"
                 >
                   Cancel
                 </button>
-                <button 
+                <button
                   type="submit"
                   disabled={isSubmittingGroup}
                   className="flex-1 py-2.5 bg-primary-mauve text-white rounded-xl text-xs font-black uppercase tracking-wider hover:bg-bg-dark-mauve cursor-pointer shadow-glow transition-all select-none"
@@ -1143,7 +1465,7 @@ const Community = () => {
       {showCreatePostModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-text-dark/40 backdrop-blur-xs px-4">
           <div className="w-full max-w-md bg-white border border-primary-mauve/10 rounded-2xl p-6 shadow-premium relative animate-scaleUp">
-            
+
             <button
               onClick={() => setShowCreatePostModal(false)}
               className="absolute top-4 right-4 p-1 text-text-muted hover:text-text-dark hover:bg-bg-rose-white rounded-lg animate-pulse"
@@ -1163,7 +1485,7 @@ const Community = () => {
                 <label className="block text-[9px] font-black text-text-muted uppercase tracking-wider mb-1.5 pl-0.5">
                   Content text
                 </label>
-                <textarea 
+                <textarea
                   value={newPostContent}
                   onChange={(e) => setNewPostContent(e.target.value)}
                   placeholder="What is on your mind today? Write physical questions, blood pressure logs, or mental thoughts..."
@@ -1174,7 +1496,7 @@ const Community = () => {
 
               {/* Anonymous checklist */}
               <label className="flex items-center gap-3 p-3.5 bg-bg-rose-white/50 border border-primary-mauve/5 rounded-xl cursor-pointer select-none">
-                <input 
+                <input
                   type="checkbox"
                   checked={newPostAnonymous}
                   onChange={() => setNewPostAnonymous(!newPostAnonymous)}
@@ -1187,14 +1509,14 @@ const Community = () => {
               </label>
 
               <div className="flex gap-3 mt-6">
-                <button 
+                <button
                   type="button"
                   onClick={() => setShowCreatePostModal(false)}
                   className="flex-1 py-2.5 border border-primary-mauve/25 text-primary-mauve rounded-xl text-xs font-bold hover:bg-bg-rose-white cursor-pointer select-none"
                 >
                   Cancel
                 </button>
-                <button 
+                <button
                   type="submit"
                   disabled={isSubmittingPost || !newPostContent.trim()}
                   className="flex-1 py-2.5 bg-primary-mauve text-white rounded-xl text-xs font-black uppercase tracking-wider hover:bg-bg-dark-mauve cursor-pointer shadow-glow transition-all select-none"

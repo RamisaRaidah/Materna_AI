@@ -4,7 +4,9 @@ import Sidebar from './Sidebar';
 import { Menu } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { notificationsAPI } from '../api';
-import Logo from './assets/Logo.png'
+import Logo from './assets/Logo.png';
+import { collection, query as fsQuery, orderBy, limit as fsLimit, onSnapshot, doc, updateDoc, where } from 'firebase/firestore';
+import { db } from '../api/firebase';
 
 const Layout = () => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
@@ -14,35 +16,76 @@ const Layout = () => {
   const [showNotifications, setShowNotifications] = useState(false);
   const [acknowledgingIds, setAcknowledgingIds] = useState([]);
 
+  const [unreadDMs, setUnreadDMs] = useState(0);
+
+  // Firestore Notifications Subscription
   useEffect(() => {
-    let isActive = true;
-    let timerId;
+    if (!user || !db) return;
+    
+    setLoadingNotifications(true);
+    const q = fsQuery(
+      collection(db, 'notifications', String(user.id), 'items'),
+      orderBy('createdAt', 'desc'),
+      fsLimit(5)
+    );
 
-    const loadNotifications = async () => {
-      if (!user || user.role !== 'patient') return;
-      try {
-        setLoadingNotifications(true);
-        const data = await notificationsAPI.getNotifications(5);
-        if (!isActive) return;
-        setNotifications(Array.isArray(data) ? data : []);
-      } catch (err) {
-        if (!isActive) return;
-        setNotifications([]);
-      } finally {
-        if (isActive) {
-          setLoadingNotifications(false);
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const notes = [];
+      snapshot.forEach((doc) => {
+        const item = doc.data();
+        let payload = null;
+        if (item.data) {
+          try {
+            payload = typeof item.data === 'string' ? JSON.parse(item.data) : item.data;
+          } catch (e) {
+            payload = item.data;
+          }
         }
-      }
-    };
-
-    loadNotifications();
-    timerId = setInterval(loadNotifications, 5000);
+        notes.push({
+          id: doc.id,
+          title: item.title,
+          body: item.body,
+          type: item.type || 'info',
+          is_read: item.isRead || false,
+          created_at: item.createdAt,
+          data: payload
+        });
+      });
+      setNotifications(notes);
+      setLoadingNotifications(false);
+    }, (err) => {
+      console.error("Firestore notifications subscription error:", err);
+      setLoadingNotifications(false);
+    });
 
     return () => {
-      isActive = false;
-      if (timerId) {
-        clearInterval(timerId);
-      }
+      unsubscribe();
+    };
+  }, [user]);
+
+  // Firestore Unread DMs Subscription
+  useEffect(() => {
+    if (!user || !db) return;
+
+    const q = fsQuery(
+      collection(db, 'rooms'),
+      where('participants', 'array-contains', user.id)
+    );
+
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      let totalUnread = 0;
+      snapshot.forEach((doc) => {
+        const roomData = doc.data();
+        const roomUnread = roomData.unreadCount?.[String(user.id)] || 0;
+        totalUnread += roomUnread;
+      });
+      setUnreadDMs(totalUnread);
+    }, (err) => {
+      console.error("Firestore rooms unread subscription error:", err);
+    });
+
+    return () => {
+      unsubscribe();
     };
   }, [user]);
 
@@ -59,8 +102,16 @@ const Layout = () => {
     setAcknowledgingIds((prev) => [...prev, notificationId]);
     setNotifications(nextNotifications);
     try {
+      // 1. Mark read on SQL Backend
       await notificationsAPI.markRead(notificationId);
+      
+      // 2. Mark read on Firestore
+      if (db && user) {
+        const docRef = doc(db, 'notifications', String(user.id), 'items', String(notificationId));
+        await updateDoc(docRef, { isRead: true });
+      }
     } catch (err) {
+      console.error("Acknowledge error:", err);
       setNotifications(currentNotifications);
     } finally {
       setAcknowledgingIds((prev) => prev.filter((id) => id !== notificationId));
@@ -82,6 +133,7 @@ const Layout = () => {
         loadingNotifications={loadingNotifications}
         acknowledgingIds={acknowledgingIds}
         onAcknowledge={handleAcknowledge}
+        unreadDMs={unreadDMs}
       />
 
       {/* Main Content Area */}

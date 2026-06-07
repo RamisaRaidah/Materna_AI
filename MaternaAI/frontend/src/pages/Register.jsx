@@ -1,12 +1,13 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { authAPI } from '../api';
 import {
   User, Phone, Lock, Calendar, MapPin, AlertCircle,
   Sparkles, Heart, Eye, EyeOff, ChevronUp, ChevronDown,
-  CheckCircle2, Info
+  CheckCircle2, Info, X, MessageSquare
 } from 'lucide-react';
-import Logo from '../components/assets/Logo.png'
+import Logo from '../components/assets/Logo.png';
 
 // Validation Helpers
 const BD_PHONE_REGEX = /^(\+8801|01)[3-9]\d{8}$/;
@@ -79,7 +80,6 @@ const BANGLADESH_LOCATIONS = {
     'Mymensingh', 'Netrokona', 'Sherpur', 'Jamalpur'
   ]
 };
-
 // Field-level validation
 function validateField(field, value, extra = {}) {
   switch (field) {
@@ -215,6 +215,67 @@ const Register = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [age, setAge] = useState('');
 
+  // OTP State variables
+  const [otpSent, setOtpSent] = useState(false);
+  const [otpVerified, setOtpVerified] = useState(false);
+  const [otpCode, setOtpCode] = useState('');
+  const [otpLoading, setOtpLoading] = useState(false);
+  const [otpError, setOtpError] = useState('');
+  const [otpTimer, setOtpTimer] = useState(0);
+  const [incomingSMSCode, setIncomingSMSCode] = useState(null);
+
+  // OTP Cooldown Timer effect
+  useEffect(() => {
+    if (otpTimer > 0) {
+      const tId = setTimeout(() => setOtpTimer(otpTimer - 1), 1000);
+      return () => clearTimeout(tId);
+    }
+  }, [otpTimer]);
+
+  const handleSendOTP = async () => {
+    const phoneErr = validateField('phone', phone);
+    if (phoneErr) {
+      setOtpError(phoneErr);
+      return;
+    }
+    setOtpError('');
+    setOtpLoading(true);
+    setIncomingSMSCode(null);
+    try {
+      const response = await authAPI.sendOTP(phone.replace(/\s/g, ''));
+      setOtpSent(true);
+      setOtpTimer(60);
+      
+      if (response && response.simulated_code) {
+        setTimeout(() => {
+          setIncomingSMSCode(response.simulated_code);
+        }, 1500);
+      }
+    } catch (err) {
+      setOtpError(typeof err === 'string' ? err : 'Failed to send verification code.');
+    } finally {
+      setOtpLoading(false);
+    }
+  };
+
+  const handleVerifyOTP = async () => {
+    if (!otpCode.trim()) {
+      setOtpError('Please enter the OTP verification code.');
+      return;
+    }
+    setOtpError('');
+    setOtpLoading(true);
+    try {
+      await authAPI.verifyOTP(phone.replace(/\s/g, ''), otpCode.trim());
+      setOtpVerified(true);
+      setOtpError('');
+    } catch (err) {
+      setOtpError(typeof err === 'string' ? err : 'Invalid or expired OTP code.');
+    } finally {
+      setOtpLoading(false);
+    }
+  };
+
   // Independent Structural Location States
   const [division, setDivision] = useState('');
   const [district, setDistrict] = useState('');
@@ -280,15 +341,18 @@ const Register = () => {
       fieldErrors.push(validateField('weeks', weeksPregnant, { isPostpartum }));
     }
 
-    // Add structural location validity evaluation
     const isLocationValid = division && district && subArea.trim();
-
-    return fieldErrors.every(e => !e) && isLocationValid;
+    return fieldErrors.every(e => !e) && isLocationValid && otpVerified;
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setTouched({ name: true, phone: true, password: true, age: true, weeks: true, emergency: true, location: true });
+
+    if (!otpVerified) {
+      setSubmitError('Please verify your phone number via OTP first.');
+      return;
+    }
 
     if (!allValid()) {
       setSubmitError('Please complete all fields correctly, including your full location details.');
@@ -297,7 +361,6 @@ const Register = () => {
     setSubmitError('');
     setIsSubmitting(true);
 
-    // Matches your normalized multi-tier Flask architecture precisely
     const payload = {
       name: name.trim(),
       phone: phone.replace(/\s/g, ''),
@@ -306,8 +369,9 @@ const Register = () => {
       age: parseInt(age),
       division: division,
       district: district,
-      area: subArea.trim(), // 'area' holds your custom text input (e.g., 'Dhanmondi')
+      area: subArea.trim(),
       emergency_contact: emergencyContact.replace(/\s/g, ''),
+      otp_code: otpCode.trim()
     };
 
     if (role === 'patient') {
@@ -326,11 +390,49 @@ const Register = () => {
       setIsSubmitting(false);
     }
   };
-
   return (
     <div className="min-h-screen w-full flex items-center justify-center bg-gradient-to-br from-bg-rose-white via-[#f3e9f0] to-[#e8d2e0] p-4 font-sans relative overflow-hidden">
       <div className="absolute top-10 right-10 w-72 h-72 rounded-full bg-secondary-blush/20 filter blur-3xl animate-float" />
       <div className="absolute bottom-10 left-10 w-96 h-96 rounded-full bg-primary-mauve/10 filter blur-3xl" style={{ animationDelay: '2s' }} />
+
+      {/* Simulated SMS Push Notification */}
+      {incomingSMSCode && (
+        <div className="fixed top-6 left-1/2 -translate-x-1/2 z-50 w-[90%] max-w-sm bg-white rounded-2xl shadow-[0_10px_40px_-10px_rgba(0,0,0,0.3)] border border-primary-mauve/20 p-4 animate-[slideIn_0.3s_ease-out]">
+          <div className="flex items-start gap-3">
+            <div className="w-10 h-10 rounded-xl bg-[#4f46e5]/10 flex items-center justify-center shrink-0">
+              <MessageSquare className="w-5 h-5 text-[#4f46e5]" />
+            </div>
+            <div className="flex-1">
+              <div className="flex items-center justify-between">
+                <h4 className="text-xs font-black text-text-dark">Messages</h4>
+                <span className="text-[10px] font-bold text-text-muted">Just now</span>
+              </div>
+              <p className="text-xs font-semibold text-text-dark mt-1">
+                MaternaAI: Your OTP for registration is <span className="font-black text-primary-mauve">{incomingSMSCode}</span>.
+              </p>
+              <div className="mt-3 flex items-center gap-2">
+                <button 
+                  type="button"
+                  onClick={() => {
+                    setOtpCode(incomingSMSCode);
+                    setIncomingSMSCode(null);
+                  }}
+                  className="flex-1 py-2 bg-bg-rose-white hover:bg-primary-mauve/10 text-primary-mauve text-[10px] font-black uppercase rounded-lg border border-primary-mauve/20 transition-all cursor-pointer"
+                >
+                  Auto-fill Code
+                </button>
+              </div>
+            </div>
+            <button 
+              type="button" 
+              onClick={() => setIncomingSMSCode(null)}
+              className="text-text-muted hover:text-text-dark p-1 cursor-pointer"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+      )}
 
       <div className="w-full max-w-xl bg-white/80 backdrop-blur-md border border-primary-mauve/10 rounded-2xl p-8 shadow-premium z-10 relative my-6">
 
@@ -392,16 +494,63 @@ const Register = () => {
             </Field>
 
             {/* Phone */}
-            <Field label="Phone Number *" error={errors.phone}
+            <Field label="Phone Number *" error={errors.phone || otpError}
               hint="Bangladeshi format: 01XXXXXXXXX">
-              <div className="relative">
-                <Phone className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-text-muted" />
-                <input type="tel" placeholder="01700000000" value={phone}
-                  onChange={e => setPhone(e.target.value)} onBlur={() => touch('phone')}
-                  disabled={isSubmitting}
-                  className={`${inputCls(!!errors.phone)} pl-10`} />
+              <div className="flex gap-2">
+                <div className="relative flex-1">
+                  <Phone className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-text-muted" />
+                  <input type="tel" placeholder="01700000000" value={phone}
+                    onChange={e => setPhone(e.target.value)} onBlur={() => touch('phone')}
+                    disabled={isSubmitting || otpVerified}
+                    className={`${inputCls(!!errors.phone)} pl-10`} />
+                </div>
+                {!otpVerified && (
+                  <button
+                    type="button"
+                    onClick={handleSendOTP}
+                    disabled={otpLoading || otpTimer > 0 || !phone}
+                    className="px-3.5 py-2 bg-primary-mauve text-white text-[10px] font-black uppercase rounded-lg hover:bg-bg-dark-mauve transition-all disabled:opacity-50 cursor-pointer shrink-0"
+                  >
+                    {otpTimer > 0 ? `Resend (${otpTimer}s)` : otpSent ? 'Resend OTP' : 'Send OTP'}
+                  </button>
+                )}
               </div>
             </Field>
+
+            {/* OTP Code Input */}
+            {otpSent && !otpVerified && (
+              <div className="col-span-1 md:col-span-2 p-4 rounded-xl bg-[#FFF2F8] border border-primary-mauve/10 space-y-3">
+                <Field label="Enter OTP Code *" error={otpError}>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      maxLength="6"
+                      placeholder="6-digit code"
+                      value={otpCode}
+                      onChange={e => setOtpCode(e.target.value.replace(/\D/g, ''))}
+                      disabled={otpLoading}
+                      className="w-full bg-white border border-primary-mauve/15 focus:border-primary-mauve outline-none text-center tracking-widest font-black text-sm px-4 py-2.5 rounded-lg transition-all"
+                    />
+                    <button
+                      type="button"
+                      onClick={handleVerifyOTP}
+                      disabled={otpLoading || otpCode.length < 6}
+                      className="px-5 py-2.5 bg-success text-white text-xs font-black uppercase rounded-lg hover:bg-success/80 transition-all disabled:opacity-50 cursor-pointer shrink-0"
+                    >
+                      {otpLoading ? 'Verifying...' : 'Verify Code'}
+                    </button>
+                  </div>
+                </Field>
+              </div>
+            )}
+
+            {/* OTP Verified Alert */}
+            {otpVerified && (
+              <div className="col-span-1 md:col-span-2 p-3.5 rounded-xl bg-success/10 border border-success/20 text-success text-xs font-bold flex items-center gap-2">
+                <CheckCircle2 className="w-4 h-4 shrink-0" />
+                <span>Phone number verified successfully!</span>
+              </div>
+            )}
 
             {/* Password */}
             <Field label="Password *" error={errors.password}>

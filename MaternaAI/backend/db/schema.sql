@@ -19,6 +19,8 @@ CREATE TABLE users (
     area VARCHAR(100),
     address_details TEXT,
     emergency_contact VARCHAR(20),
+    fcm_token VARCHAR(255),
+    weeks_updated_at TIMESTAMPTZ DEFAULT NOW(),
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
@@ -211,6 +213,23 @@ CREATE TABLE appointments (
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- Phone Verifications
+CREATE TABLE phone_verifications (
+    phone VARCHAR(20) PRIMARY KEY,
+    code VARCHAR(10) NOT NULL,
+    expires_at TIMESTAMPTZ NOT NULL,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- SMS Logs
+CREATE TABLE sms_logs (
+    id SERIAL PRIMARY KEY,
+    recipient_phone VARCHAR(20) NOT NULL,
+    body TEXT NOT NULL,
+    status VARCHAR(20) DEFAULT 'sent',
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
 -- ==========================================
 -- RAG KNOWLEDGE BASE
 -- ==========================================
@@ -230,3 +249,31 @@ CREATE TABLE knowledge_chunks (
 CREATE INDEX ON knowledge_chunks 
 USING ivfflat (embedding vector_cosine_ops)
 WITH (lists = 100);
+
+-- Risk Assessments (historical records)
+CREATE TABLE risk_assessments (
+    id SERIAL PRIMARY KEY,
+    user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+    risk_level VARCHAR(20) NOT NULL,
+    condition_flags TEXT[] DEFAULT '{}',
+    explanation TEXT NOT NULL,
+    recommendation TEXT NOT NULL,
+    language VARCHAR(10) DEFAULT 'en',
+    rule_score INTEGER DEFAULT 0,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Risk Profiles (latest cached profile per user)
+CREATE TABLE risk_profiles (
+    id SERIAL PRIMARY KEY,
+    user_id INTEGER UNIQUE REFERENCES users(id) ON DELETE CASCADE,
+    risk_level VARCHAR(20) NOT NULL,
+    condition_flags TEXT[] DEFAULT '{}',
+    explanation TEXT NOT NULL,
+    recommendation TEXT NOT NULL,
+    language VARCHAR(10) DEFAULT 'en',
+    rule_score INTEGER DEFAULT 0,
+    symptoms_analyzed JSONB DEFAULT '{}',
+    last_computed_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);

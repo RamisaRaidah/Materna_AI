@@ -44,12 +44,24 @@ export const authAPI = {
     const response = await api.post('/auth/register', userData);
     return response.data; // Expected response: { token, user }
   },
+  sendOTP: async (phone) => {
+    const response = await api.post('/auth/otp/send', { phone });
+    return response.data;
+  },
+  verifyOTP: async (phone, code) => {
+    const response = await api.post('/auth/otp/verify', { phone, code });
+    return response.data;
+  },
   getMe: async () => {
     const response = await api.get('/auth/me');
     return response.data;
   },
   updateMe: async (userData) => {
     const response = await api.patch('/auth/me', userData);
+    return response.data;
+  },
+  registerFCM: async (fcmToken) => {
+    const response = await api.post('/auth/me/fcm', { fcmToken });
     return response.data;
   }
 };
@@ -250,6 +262,17 @@ export const sosAPI = {
     const response = await api.get(`/api/sos/contacts/personal/${userId}`);
     return response.data;
   }
+};
+
+export const riskAPI = {
+  getLatestProfile: async (lang = 'bn') => {
+    const response = await api.get('/api/risk/profile', { params: { lang } });
+    return response.data;
+  },
+  recomputeRisk: async (lang = 'bn') => {
+    const response = await api.post('/api/risk/recompute', { lang });
+    return response.data;
+  },
 };
 
 export default api;

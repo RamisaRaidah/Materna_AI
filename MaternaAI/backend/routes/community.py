@@ -571,32 +571,35 @@ def get_inbox(user_id):
         conn = get_db()
         cur = conn.cursor()
         cur.execute("""
-            SELECT DISTINCT ON (partner_id)
-                partner_id,
-                partner_name,
-                last_message,
-                last_sent_at,
-                unread_count
-            FROM (
-                SELECT
-                    CASE WHEN dm.sender_id = %(uid)s THEN dm.receiver_id ELSE dm.sender_id END AS partner_id,
-                    CASE WHEN dm.sender_id = %(uid)s THEN rv.name ELSE sv.name END AS partner_name,
-                    dm.content AS last_message,
-                    dm.created_at AS last_sent_at,
-                    (
-                        SELECT COUNT(*) FROM direct_messages
-                        WHERE sender_id != %(uid)s
-                          AND receiver_id = %(uid)s
-                          AND is_read = FALSE
-                          AND sender_id = CASE WHEN dm.sender_id = %(uid)s THEN dm.receiver_id ELSE dm.sender_id END
-                    ) AS unread_count
-                FROM direct_messages dm
-                LEFT JOIN users sv ON sv.id = dm.sender_id
-                LEFT JOIN users rv ON rv.id = dm.receiver_id
-                WHERE dm.sender_id = %(uid)s OR dm.receiver_id = %(uid)s
-                ORDER BY dm.created_at DESC
-            ) sub
-            ORDER BY partner_id, last_sent_at DESC
+            SELECT * FROM (
+                SELECT DISTINCT ON (partner_id)
+                    partner_id,
+                    partner_name,
+                    last_message,
+                    last_sent_at,
+                    unread_count
+                FROM (
+                    SELECT
+                        CASE WHEN dm.sender_id = %(uid)s THEN dm.receiver_id ELSE dm.sender_id END AS partner_id,
+                        CASE WHEN dm.sender_id = %(uid)s THEN rv.name ELSE sv.name END AS partner_name,
+                        dm.content AS last_message,
+                        dm.created_at AS last_sent_at,
+                        (
+                            SELECT COUNT(*) FROM direct_messages
+                            WHERE sender_id != %(uid)s
+                              AND receiver_id = %(uid)s
+                              AND is_read = FALSE
+                              AND sender_id = CASE WHEN dm.sender_id = %(uid)s THEN dm.receiver_id ELSE dm.sender_id END
+                        ) AS unread_count
+                    FROM direct_messages dm
+                    LEFT JOIN users sv ON sv.id = dm.sender_id
+                    LEFT JOIN users rv ON rv.id = dm.receiver_id
+                    WHERE dm.sender_id = %(uid)s OR dm.receiver_id = %(uid)s
+                    ORDER BY dm.created_at DESC
+                ) sub
+                ORDER BY partner_id, last_sent_at DESC
+            ) final_sub
+            ORDER BY last_sent_at DESC
         """, {"uid": user_id})
         rows = cur.fetchall()
         cur.close()

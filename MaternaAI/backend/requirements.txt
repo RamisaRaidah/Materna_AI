@@ -11,3 +11,4 @@ bcrypt
 edge-tts
 openai
 PyJWT
+firebase-admin
