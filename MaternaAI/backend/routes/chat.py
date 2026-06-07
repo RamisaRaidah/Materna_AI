@@ -1,5 +1,5 @@
 from flask import Blueprint, request, jsonify, Response
-from services.rag import rag_query, get_db
+from services.rag import rag_query, clinician_rag_query, get_db
 from services.tts import generate_tts_stream, is_bengali
 import json
 
@@ -62,144 +62,7 @@ def save_chat_message(user_id, role, content, intent=None, language='en'):
         if conn:
             conn.close()
 
-def scan_message_and_recompute_risk(user_id, message_text, lang="bn"):
-    """
-    Scans the message with a Gemini extraction prompt for health signals (symptoms).
-    If symptoms are detected, logs them in health_logs, and checks if they are new
-    or high-severity. If so, triggers risk recomputation.
-    """
-    if not message_text or not user_id:
-        return
-
-    import google.generativeai as genai
-    from config import GEMINI_API_KEY
-    from rules.severity import SYMPTOM_SEVERITY
-    from services.risk_engine import compute_user_risk
-    from db import query
-    import json
-
-    # List of symptoms we look for
-    valid_symptoms = [
-        "bleeding", "vision", "swelling", "severe_headache", "fever",
-        "abdominal_pain", "reduced_movement", "vomiting", "fatigue",
-        "low_mood", "excessive_thirst", "frequent_urination", "trouble_sleeping"
-    ]
-
-    extraction_prompt = f"""
-    You are a clinical symptom extraction bot.
-    Analyze the following user chat message (which may be in English, Bengali, or Banglish) and extract any maternal health symptoms.
-
-    User Message: "{message_text}"
-
-    Compare any mentioned symptoms to the list of standard symptoms below:
-    - bleeding (vaginal bleeding, spotting, active blood discharge)
-    - vision (blurry vision, vision changes, seeing spots)
-    - swelling (severe swelling in hands, face, or feet)
-    - severe_headache (persistent, severe, or bad headache)
-    - fever (high body temperature, fever, feeling hot with chills)
-    - abdominal_pain (severe stomach pain, abdominal cramps)
-    - reduced_movement (baby kicking less, reduced fetal movement)
-    - vomiting (excessive throwing up, nausea)
-    - fatigue (very tired, extremely weak, low energy)
-    - low_mood (feeling sad, depressed, crying, anxiety, extreme worry)
-    - excessive_thirst (feeling extremely thirsty all the time)
-    - frequent_urination (urinating abnormally often)
-    - trouble_sleeping (insomnia, unable to sleep)
-
-    Return ONLY a JSON list of matched standard symptom strings from the list above.
-    For example, if they mention severe headache and feet swelling, return: ["severe_headache", "swelling"].
-    If they mention sadness and fatigue, return: ["low_mood", "fatigue"].
-    If no standard symptoms match, return: [].
-
-    CRITICAL: Output MUST be a valid JSON array of strings and nothing else. No explanation, no markdown backticks.
-    """
-
-    extracted_symptoms = []
-    if GEMINI_API_KEY:
-        try:
-            model = genai.GenerativeModel("gemini-2.5-flash")
-            response = model.generate_content(
-                extraction_prompt,
-                generation_config={
-                    "response_mime_type": "application/json",
-                    "temperature": 0.1
-                }
-            )
-            if response and response.text:
-                cleaned_res = response.text.strip().replace("```json", "").replace("```", "").strip()
-                raw_list = json.loads(cleaned_res)
-                if isinstance(raw_list, list):
-                    extracted_symptoms = [s for s in raw_list if s in valid_symptoms]
-        except Exception as e:
-            print("Gemini symptom extraction failed:", e)
-
-    if not extracted_symptoms:
-        return
-
-    print(f"[CHAT RISK] Extracted symptoms from chat: {extracted_symptoms}")
-
-    # Fetch user's previous symptoms from health_logs in the last 14 days
-    previous_logs = query(
-        """
-        SELECT symptoms FROM health_logs
-        WHERE user_id = %s AND created_at >= NOW() - INTERVAL '14 days'
-        """,
-        (user_id,)
-    )
-    
-    previous_symptoms = set()
-    for log in previous_logs:
-        syms = log.get("symptoms")
-        if syms:
-            if isinstance(syms, list):
-                for s in syms:
-                    previous_symptoms.add(s)
-            elif isinstance(syms, str):
-                for s in syms.split(','):
-                    s_clean = s.strip()
-                    if s_clean:
-                        previous_symptoms.add(s_clean)
-
-    # Check if there are new symptoms or high-severity symptoms
-    new_symptoms = [s for s in extracted_symptoms if s not in previous_symptoms]
-    # High severity is >= 3
-    high_severity_symptoms = [s for s in extracted_symptoms if SYMPTOM_SEVERITY.get(s, 0) >= 3 or s in ["low_mood", "excessive_thirst", "frequent_urination"]]
-
-    should_recompute = len(new_symptoms) > 0 or len(high_severity_symptoms) > 0
-
-    # Log these extracted symptoms to health_logs
-    severity_score = sum(SYMPTOM_SEVERITY.get(s, 0) for s in extracted_symptoms)
-    danger_level = "safe"
-    if severity_score >= 8:
-        danger_level = "danger"
-    elif severity_score >= 4:
-        danger_level = "warning"
-
-    query(
-        """
-        INSERT INTO health_logs (user_id, symptoms, danger_level, raw_input, severity_score, transcribed_text)
-        VALUES (%s, %s, %s, %s, %s, %s)
-        """,
-        (
-            user_id,
-            extracted_symptoms,
-            danger_level,
-            f"Chat-extracted symptoms: {', '.join(extracted_symptoms)}",
-            severity_score,
-            message_text
-        ),
-        fetch="none"
-    )
-
-    if should_recompute:
-        print(f"[CHAT RISK] Recomputing risk for user {user_id} due to symptoms: new={new_symptoms}, high_sev={high_severity_symptoms}")
-        try:
-            # We want to recompute risk using the user's preferred language. Let's fetch it from their profile if possible.
-            current_profile = query("SELECT language FROM risk_profiles WHERE user_id = %s", (user_id,), fetch="one")
-            profile_lang = current_profile.get("language", lang) if current_profile else lang
-            compute_user_risk(user_id, lang=profile_lang)
-        except Exception as err:
-            print("Failed to recompute risk after chat extraction:", err)
+# scan_message_and_recompute_risk has been refactored and moved to services.risk_engine as extract_symptoms_from_text_and_update_risk
 
 @chat_bp.route("/message", methods=["POST"])
 @chat_bp.route("/analyze", methods=["POST"])
@@ -219,15 +82,37 @@ def analyze():
     # Save user message to database
     save_chat_message(user_id, 'user', user_input, intent=mode, language=lang)
 
-    # Scan for symptoms and recompute risk if needed
+    # Scan for symptoms and recompute risk if needed in background
     try:
-        scan_message_and_recompute_risk(user_id, user_input, lang=lang)
+        import threading
+        from services.risk_engine import extract_symptoms_from_text_and_update_risk
+        threading.Thread(
+            target=extract_symptoms_from_text_and_update_risk,
+            args=(user_id, user_input, lang)
+        ).start()
     except Exception as e:
         print("Symptom scanning failed:", e)
 
     # Run RAG Query — pass detected language and user_id to leverage history context
     try:
-        response = rag_query(user_input, user_profile, mode, detected_lang=lang, user_id=user_id)
+        if user_profile.get("role") == "clinician":
+            clinician_mode_map = {
+                "triage": "rapid_triage",
+                "vitals": "vitals_watch",
+                "followup": "follow_up",
+                "community": "community"
+            }
+            backend_mode = clinician_mode_map.get(mode, mode)
+            response = clinician_rag_query(
+                user_input=user_input,
+                clinician_profile=user_profile,
+                patients=[],
+                mode=backend_mode,
+                detected_lang=lang,
+                clinician_id=user_id
+            )
+        else:
+            response = rag_query(user_input, user_profile, mode, detected_lang=lang, user_id=user_id)
     except Exception as e:
         print("RAG failed:", e)
         response = "দুঃখিত, এখন উত্তর দিতে সমস্যা হচ্ছে। পরে আবার চেষ্টা করুন।"
@@ -245,6 +130,83 @@ def analyze():
         "response": response,
         "extractedNutrients": extracted_nutrients,
         "mode": mode
+    })
+
+
+@chat_bp.route("/clinician", methods=["POST"])
+def clinician_chat():
+    """
+    Clinician-only chat endpoint.
+    Routes to clinician_rag_query with the correct mode and patient list.
+
+    Expected JSON body:
+    {
+        "message":  "Summarise Fatima's last 14 days",
+        "mode":     "rapid_triage" | "vitals_watch" | "follow_up" | "community",
+        "clinician_id": 42,
+        "clinician_profile": {
+            "name": "Dr. Reza",
+            "role": "Obstetrician",
+            "facility": "Kaliganj Upazila Health Complex"
+        },
+        "patients": [
+            {
+                "name": "Fatima",
+                "weeks_pregnant": 28,
+                "bp_history": "130/80 → 150/95 over 14 days",
+                "glucose_logs": "3 elevated fasting readings",
+                "fetal_movement": "Reduced twice in last week",
+                "missed_appointments": 0
+            }
+        ]
+    }
+    """
+    data = request.json or {}
+
+    user_input = data.get("message", "").strip()
+    if not user_input:
+        return jsonify({"error": "No message provided"}), 400
+
+    mode = data.get("mode", "rapid_triage")
+    valid_modes = {"rapid_triage", "vitals_watch", "follow_up", "community"}
+    if mode not in valid_modes:
+        return jsonify({"error": f"Invalid mode. Choose from: {', '.join(valid_modes)}"}), 400
+
+    clinician_id       = data.get("clinician_id")
+    clinician_profile  = data.get("clinician_profile", {})
+    patients           = data.get("patients", [])
+
+    # Language detection — clinicians are usually in English but support Bengali too
+    lang = "bn" if is_bengali(user_input) else "en"
+
+    # Persist clinician message (uses same chat_messages table; role stays 'user')
+    if clinician_id:
+        save_chat_message(clinician_id, "user", user_input, intent=mode, language=lang)
+
+    try:
+        response = clinician_rag_query(
+            user_input=user_input,
+            clinician_profile=clinician_profile,
+            patients=patients,
+            mode=mode,
+            detected_lang=lang,
+            clinician_id=clinician_id,
+        )
+    except Exception as e:
+        print(f"Clinician RAG failed: {e}")
+        response = (
+            "Clinical decision support is temporarily unavailable. "
+            "Please follow standard protocols and escalate to a supervisor if needed."
+        )
+
+    # Persist assistant response
+    if clinician_id:
+        save_chat_message(clinician_id, "assistant", response, intent=mode, language=lang)
+
+    return jsonify({
+        "response": response,
+        "mode": mode,
+        "patients_processed": len(patients),
     })
 
 @chat_bp.route("/speak", methods=["POST"])
@@ -317,16 +279,38 @@ def speak():
     # Save user speech transcription to database
     save_chat_message(user_id, 'user', transcribed_text, intent=mode, language=lang)
 
-    # Scan for symptoms and recompute risk if needed
+    # Scan for symptoms and recompute risk if needed in background
     if transcribed_text and transcribed_text != "[অডিও অস্পষ্ট - Audio unclear]":
         try:
-            scan_message_and_recompute_risk(user_id, transcribed_text, lang=lang)
+            import threading
+            from services.risk_engine import extract_symptoms_from_text_and_update_risk
+            threading.Thread(
+                target=extract_symptoms_from_text_and_update_risk,
+                args=(user_id, transcribed_text, lang)
+            ).start()
         except Exception as e:
             print("Symptom scanning failed:", e)
 
     # Pass transcribed text to RAG with history context
     try:
-        response = rag_query(transcribed_text, user_profile, mode, detected_lang=lang, user_id=user_id)
+        if user_profile.get("role") == "clinician":
+            clinician_mode_map = {
+                "triage": "rapid_triage",
+                "vitals": "vitals_watch",
+                "followup": "follow_up",
+                "community": "community"
+            }
+            backend_mode = clinician_mode_map.get(mode, mode)
+            response = clinician_rag_query(
+                user_input=transcribed_text,
+                clinician_profile=user_profile,
+                patients=[],
+                mode=backend_mode,
+                detected_lang=lang,
+                clinician_id=user_id
+            )
+        else:
+            response = rag_query(transcribed_text, user_profile, mode, detected_lang=lang, user_id=user_id)
     except Exception as e:
         print("RAG failed:", e)
         response = "দুঃখিত, সমস্যা হয়েছে।"

@@ -48,6 +48,8 @@ app.register_blueprint(notifications_bp, url_prefix="/api/notifications")
 from routes.sms_routes import sms_bp
 app.register_blueprint(sms_bp, url_prefix="/api/sms")
 
+print("All blueprints have been registered.")
+
 @app.route("/")
 def home():
     return {"status": "MaternaAI backend is running"}
