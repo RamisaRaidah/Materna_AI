@@ -141,6 +141,115 @@ def build_history_summary(ctx):
     return " ".join(flags)
 
 
+def compute_readiness_score(data, ctx):
+    """
+    Compute a birth readiness score (0-100) and list of gap strings.
+    Supports both camelCase and snake_case keys for robustness.
+    """
+    score = 0
+    gaps = []
+
+    def get_val(keys, default=None):
+        for k in keys:
+            if k in data:
+                return data[k]
+        return default
+
+    track = get_val(["track"], "A")
+    blood_group = get_val(["blood_group", "bloodGroup"])
+    known_allergies = get_val(["known_allergies", "knownAllergies"])
+    medical_conditions = get_val(["medical_conditions", "medicalConditions"])
+    birth_prep_checklist = get_val(["birth_prep_checklist", "birthPrepChecklist"], {})
+    hospital_name = get_val(["hospital_name", "hospitalName", "hospital"])
+    emergency_contacts = get_val(["emergency_contacts", "emergencyContacts"], [])
+    sba_present = get_val(["sba_present", "sbaPresent"])
+    support_person = get_val(["support_person", "supportPerson"])
+    csection_consent = get_val(["csection_consent", "csectionConsent"], True)
+    danger_signs_acknowledged = get_val(["danger_signs_acknowledged", "dangerSignsAcknowledged", "dangerSignsAck"], False)
+
+    # 1. Medical preparedness (25 pts)
+    if blood_group and str(blood_group).strip().lower() not in ("", "unknown", "none"):
+        score += 10
+    else:
+        gaps.append("Blood group not recorded")
+
+    if known_allergies is not None:
+        score += 8
+    else:
+        gaps.append("Allergies list not recorded")
+
+    if medical_conditions is not None:
+        score += 7
+    else:
+        gaps.append("Medical conditions list not recorded")
+
+    # 2. Birth preparedness (25 pts)
+    if track == "B":
+        checked = 0
+        if isinstance(birth_prep_checklist, dict):
+            checked = sum(1 for v in birth_prep_checklist.values() if v)
+        score += min(25, checked * 6)
+        if checked < 4:
+            gaps.append(f"{4 - checked} birth preparedness item(s) incomplete")
+    else:
+        if hospital_name and str(hospital_name).strip():
+            score += 25
+        else:
+            gaps.append("No delivery facility selected")
+
+    # 3. Clinical history (25 pts)
+    # no-spike bonuses (10+8+7) vs deductions for spikes
+    if ctx.get("bp_spike_count", 0) == 0:
+        score += 10
+    else:
+        gaps.append("Elevated blood pressure readings logged")
+
+    if ctx.get("glucose_spike_count", 0) == 0:
+        score += 8
+    else:
+        gaps.append("Elevated blood glucose readings logged")
+
+    if ctx.get("reduced_kick_count", 0) == 0:
+        score += 7
+    else:
+        gaps.append("Reduced fetal kick sessions detected")
+
+    if ctx.get("ppd_risk") in ("moderate", "high"):
+        gaps.append(f"PPD risk flagged: {ctx.get('ppd_risk')}")
+
+    # 4. Support & planning (25 pts)
+    if emergency_contacts:
+        score += 9
+    else:
+        gaps.append("No emergency contact recorded")
+
+    if track == "B":
+        if sba_present == "yes":
+            score += 8
+        elif sba_present == "arranging":
+            score += 4
+            gaps.append("Skilled birth attendant still being arranged")
+        else:
+            gaps.append("No skilled birth attendant confirmed")
+
+        if danger_signs_acknowledged:
+            score += 8
+        else:
+            gaps.append("Danger signs not acknowledged")
+    else:
+        if support_person and str(support_person).strip():
+            score += 8
+        else:
+            gaps.append("No birth companion selected")
+
+        if csection_consent:
+            score += 8
+        else:
+            gaps.append("C-section consent not given")
+
+    return min(max(score, 0), 100), gaps
+
+
 @birth_plan_bp.route("/generate", methods=["POST"])
 def generate_birth_plan():
     data = request.json or {}
@@ -158,11 +267,17 @@ def generate_birth_plan():
 
     # Extract new fields
     track = data.get("track", "A")
+    print(f"TRACK RECEIVED FROM FRONTEND: {track}, hospital: {hospital}")
     blood_group = data.get("blood_group")
     rh_negative = data.get("rh_negative", False)
     known_allergies = data.get("known_allergies", [])
     medical_conditions = data.get("medical_conditions", [])
-    csection_consent = data.get("csection_consent", True)
+    csection_consent = data.get("csection_consent", "yes")
+    csection_str = {
+        "yes": "Consented to emergency C-section if medically required",
+        "no": "Has NOT consented to C-section — clinician must discuss before delivery",
+        "not_sure": "Undecided on C-section consent — requires discussion with care team"
+    }.get(str(csection_consent), "Not specified")
     neonatal_prefs = data.get("neonatal_prefs", {})
     cultural_prefs = data.get("cultural_prefs", {})
     sba_present = data.get("sba_present")
@@ -172,6 +287,8 @@ def generate_birth_plan():
     language = data.get("language", "en")
 
     try:
+        print("=== BIRTH PLAN GENERATE CALLED ===")
+        print("user_id:", user_id, "track:", data.get("track"))
         # Call patient context & history summary
         ctx = get_patient_context(user_id)
         history_summary = build_history_summary(ctx)
@@ -220,7 +337,7 @@ def generate_birth_plan():
                 f"{rh_instruction}"
                 f"Known Allergies: {allergies_str}. "
                 f"Medical Conditions: {conditions_str}. "
-                f"C-section Consent Status: {'Consented' if csection_consent else 'Not Consented'}. "
+                f"C-section Consent Status: {csection_str}. "
                 f"Neonatal Preferences: {json.dumps(neonatal_prefs)}. "
                 f"Cultural Preferences: {json.dumps(cultural_prefs)}. "
                 f"Support person: {support_person}. "
@@ -229,7 +346,13 @@ def generate_birth_plan():
             )
 
         # Append history summary
-        user_message += f" PATIENT CLINICAL HISTORY: {history_summary} Tailor all recommendations to these documented findings."
+        user_message += (
+            f" PATIENT HEALTH BACKGROUND: {history_summary} "
+            f"Based on this background, weave in personalised, friendly suggestions "
+            f"throughout the plan — not as warnings or a separate section, but naturally "
+            f"as if a caring midwife who knows her history is giving advice. "
+            f"Keep suggestions gentle and empowering, never alarming."
+        )
 
         # Language-aware prompt instruction
         lang_instruction = (
@@ -243,25 +366,72 @@ def generate_birth_plan():
         # Generate plan using RAG
         plan = rag_query(user_message, user_profile, mode="general", detected_lang=language)
 
+        # Compute readiness score
+        score_data = {
+            "blood_group": blood_group,
+            "known_allergies": known_allergies,
+            "medical_conditions": medical_conditions,
+            "track": track,
+            "birth_prep_checklist": birth_prep_checklist,
+            "hospital_name": hospital,
+            "emergency_contacts": emergency_contacts,
+            "sba_present": sba_present,
+            "support_person": support_person,
+        }
+        print("DEBUG data keys:", list(data.keys()))
+        print("DEBUG track:", data.get("track"))
+        print("DEBUG birth_prep_checklist:", data.get("birth_prep_checklist"))
+        print("DEBUG sba_present:", data.get("sba_present"))
+        print("DEBUG ctx:", ctx)
+        readiness_score, readiness_gaps = compute_readiness_score(score_data, ctx)
+
+        # Versioning: deactivate previous active plans
+        try:
+            query("""
+                UPDATE birth_plans SET is_active = FALSE
+                WHERE user_id = %s AND is_active = TRUE
+            """, (user_id,), fetch="none")
+        except Exception as update_err:
+            print(f"Warning: could not deactivate old plans: {update_err}")
+            # Non-fatal — continue with insert
+
+        version_row = query("""
+            SELECT COUNT(*) as cnt FROM birth_plans WHERE user_id = %s
+        """, (user_id,), fetch="one")
+        new_version = (version_row["cnt"] if version_row else 0) + 1
+
+        weeks_at_generation = data.get("profile", {}).get("weeks_pregnant") or None
+
+        print("DEBUG score:", readiness_score, "gaps:", readiness_gaps)
+
+        # Extract transport strategy
+        transport_strategy = data.get("transport", "")
+
         row = query("""
             INSERT INTO birth_plans 
-            (user_id, hospital_name, support_person, pain_preference, special_notes, emergency_contacts, generated_plan,
+            (user_id, hospital_name, transport, support_person, pain_preference, special_notes, emergency_contacts, generated_plan,
              track, blood_group, rh_negative, known_allergies, medical_conditions, csection_consent, neonatal_prefs, 
-             cultural_prefs, sba_present, birth_prep_checklist, referral_pathway, danger_signs_acknowledged)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-            RETURNING id, generated_plan, created_at
+             cultural_prefs, sba_present, birth_prep_checklist, referral_pathway, danger_signs_acknowledged,
+             readiness_score, readiness_gaps, is_active, version, weeks_at_generation)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            RETURNING id, generated_plan, created_at, readiness_score, readiness_gaps, version, is_active
         """, (
-            user_id, hospital, support_person, pain_pref,
+            user_id, hospital, transport_strategy, support_person, pain_pref,
             special_notes, json.dumps(emergency_contacts), plan,
             track, blood_group, rh_negative, json.dumps(known_allergies), json.dumps(medical_conditions),
             csection_consent, json.dumps(neonatal_prefs), json.dumps(cultural_prefs),
-            sba_present, json.dumps(birth_prep_checklist), json.dumps(referral_pathway), danger_signs_acknowledged
+            sba_present, json.dumps(birth_prep_checklist), json.dumps(referral_pathway), danger_signs_acknowledged,
+            readiness_score, json.dumps(readiness_gaps), True, new_version, weeks_at_generation
         ), fetch="one")
 
         return jsonify({
             "id": row["id"],
             "generated_plan": row["generated_plan"],
-            "created_at": row["created_at"].isoformat() if row["created_at"] else None
+            "created_at": row["created_at"].isoformat() if row["created_at"] else None,
+            "readiness_score": row["readiness_score"],
+            "readiness_gaps": row["readiness_gaps"],
+            "version": row["version"],
+            "is_active": row["is_active"]
         }), 201
 
     except Exception as e:
@@ -272,9 +442,17 @@ def generate_birth_plan():
 def get_birth_plans(user_id):
     try:
         rows = query("""
-            SELECT id, hospital_name, support_person, pain_preference, special_notes, emergency_contacts, generated_plan,
-                   track, blood_group, rh_negative, known_allergies, medical_conditions, csection_consent, neonatal_prefs,
-                   cultural_prefs, sba_present, birth_prep_checklist, referral_pathway, danger_signs_acknowledged, created_at
+            SELECT id, track, hospital_name, transport, readiness_score, readiness_gaps,
+                generated_plan, support_person, pain_preference, special_notes,
+                emergency_contacts, blood_group,
+                medical_conditions,
+                known_allergies,
+                csection_consent,
+                neonatal_prefs,
+                sba_present, birth_prep_checklist,
+                referral_pathway, danger_signs_acknowledged,
+                is_active, version,
+                weeks_at_generation, created_at
             FROM birth_plans
             WHERE user_id = %s
             ORDER BY created_at DESC
@@ -283,23 +461,23 @@ def get_birth_plans(user_id):
         return jsonify([{
             "id": r["id"],
             "hospital_name": r["hospital_name"],
-            "support_person": r["support_person"],
-            "pain_preference": r["pain_preference"],
-            "special_notes": r["special_notes"],
-            "emergency_contacts": r["emergency_contacts"],
+            "transport": r.get("transport"),
+            "support_person": r.get("support_person"),
+            "pain_preference": r.get("pain_preference"),
+            "special_notes": r.get("special_notes"),
+            "emergency_contacts": r.get("emergency_contacts"),
             "generated_plan": r["generated_plan"],
             "track": r["track"],
-            "blood_group": r["blood_group"],
-            "rh_negative": r["rh_negative"],
-            "known_allergies": r["known_allergies"],
-            "medical_conditions": r["medical_conditions"],
-            "csection_consent": r["csection_consent"],
-            "neonatal_prefs": r["neonatal_prefs"],
-            "cultural_prefs": r["cultural_prefs"],
-            "sba_present": r["sba_present"],
-            "birth_prep_checklist": r["birth_prep_checklist"],
-            "referral_pathway": r["referral_pathway"],
-            "danger_signs_acknowledged": r["danger_signs_acknowledged"],
+            "blood_group": r.get("blood_group"),
+            "sba_present": r.get("sba_present"),
+            "birth_prep_checklist": r.get("birth_prep_checklist"),
+            "referral_pathway": r.get("referral_pathway"),
+            "danger_signs_acknowledged": r.get("danger_signs_acknowledged"),
+            "readiness_score": r["readiness_score"],
+            "readiness_gaps": r["readiness_gaps"],
+            "is_active": r["is_active"],
+            "version": r["version"],
+            "weeks_at_generation": r.get("weeks_at_generation"),
             "created_at": r["created_at"].isoformat() if r["created_at"] else None
         } for r in rows])
     except Exception as e:
@@ -319,4 +497,4 @@ def delete_birth_plan(plan_id):
 
         return jsonify({"message": "Birth plan successfully deleted from database records"}), 200
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return jsonify({"error": str(e)}), 500

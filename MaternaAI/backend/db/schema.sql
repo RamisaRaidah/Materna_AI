@@ -77,6 +77,11 @@ CREATE TABLE birth_plans (
     birth_prep_checklist JSONB DEFAULT '{}',
     referral_pathway JSONB DEFAULT '{}',
     danger_signs_acknowledged BOOLEAN DEFAULT FALSE,
+    readiness_score INTEGER DEFAULT 0,
+    readiness_gaps JSONB DEFAULT '[]',
+    is_active BOOLEAN DEFAULT TRUE,
+    version INTEGER DEFAULT 1,
+    weeks_at_generation INTEGER,
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 

@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { FileText, Sparkles, Loader2, CheckCircle2, Printer, Download, RotateCcw, AlertCircle, MapPin, Users, Zap, Truck, Phone, Volume2, VolumeX } from 'lucide-react';
+import { FileText, Sparkles, Loader2, CheckCircle2, Printer, Download, RotateCcw, AlertCircle, MapPin, Users, Zap, Truck, Phone, Volume2, VolumeX, History, TrendingUp, ShieldCheck, ShieldAlert, ChevronDown } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
 // Data
@@ -445,9 +445,17 @@ const SelectCard = ({ options, value, onChange, getLabel, getEmoji, getDesc, get
   </div>
 );
 
+const HOME_TIERS = ['Home', 'Primary', 'NGO Primary'];
+
+const getTrack = (facilityValue) => {
+  const selected = FACILITIES.find(f => f.value === facilityValue);
+  return HOME_TIERS.includes(selected?.tier) ? 'B' : 'A';
+};
+
 // Main BirthPlan Page
 const BirthPlan = () => {
   const { user } = useAuth();
+  const [showAllVersions, setShowAllVersions] = useState(false);
 
   // Bilingual support state
   const [lang, setLang] = useState(user?.preferred_language || 'en');
@@ -473,17 +481,177 @@ const BirthPlan = () => {
   const [birthPrep, setBirthPrep] = useState({});
   const [dangerSignsAck, setDangerSignsAck] = useState(false);
   const [referralPathway, setReferralPathway] = useState({});
-  const [csectionConsent, setCsectionConsent] = useState(true);
+  const [csectionConsent, setCsectionConsent] = useState('yes');
+
+  // Plan history state — always sourced from API, never localStorage
+  const [existingPlans, setExistingPlans] = useState([]);
+  const [loadingHistory, setLoadingHistory] = useState(false);
+  const [expandedPlanId, setExpandedPlanId] = useState(null);
+  const [saving, setSaving] = useState(false);
+  const [saveSuccess, setSaveSuccess] = useState(false);
+
+  // Tab/step state for the form
+  const [activeStep, setActiveStep] = useState(0);
+  const [loading, setLoading] = useState(false);
+  const [generated, setGenerated] = useState(false);
+  const [showWizard, setShowWizard] = useState(true);
+  const [isEditing, setIsEditing] = useState(false);
+
+  // Ref snapshot of last-saved medical fields — used as fallback when API response omits them
+  const savedMedicalRef = React.useRef(null);
+
+  // Helper to safely parse JSON array fields
+  const parseJsonField = (field) => {
+    if (Array.isArray(field)) return field;
+    if (typeof field === 'string' && field) {
+      try { return JSON.parse(field); } catch { return []; }
+    }
+    return [];
+  };
+
+  // Fetch existing plans on mount and pre-fill form from active plan
+  useEffect(() => {
+    if (!user?.id) return;
+    // Seed the ref from localStorage so it's available as fallback immediately
+    try {
+      const stored = localStorage.getItem(`materna_medical_${user.id}`);
+      if (stored) savedMedicalRef.current = JSON.parse(stored);
+    } catch {}
+    setLoadingHistory(true);
+    fetch(`/api/birth_plan/${user.id}`)
+      .then(r => r.ok ? r.json() : [])
+      .then(data => {
+        const plans = Array.isArray(data) ? data : [];
+        setExistingPlans(plans);
+        const active = plans.find(p => p.is_active);
+        if (active) {
+          setFacility(active.hospital_name || '');
+          setTrack(active.track || 'A');
+          setCompanion(active.support_person || '');
+          setPain(active.pain_preference || '');
+          setBloodGroup(active.blood_group || '');
+          // Use ref snapshot as fallback for fields the API may not echo back
+          const snap = savedMedicalRef.current;
+
+          const apiConditions = parseJsonField(active.medical_conditions);
+          setConditions(apiConditions.length > 0 ? apiConditions : (snap?.medical_conditions ?? []));
+
+          const apiAllergies = parseJsonField(active.known_allergies).map(a => typeof a === 'object' ? a.name : a);
+          setAllergies(apiAllergies.length > 0 ? apiAllergies : (snap?.known_allergies ?? []));
+
+          const rawConsent = active.csection_consent;
+          const apiConsent = rawConsent === 'yes' || rawConsent === true  ? 'yes'
+            : rawConsent === 'no'  || rawConsent === false ? 'no'
+            : rawConsent === 'not_sure' ? 'not_sure'
+            : null;
+          setCsectionConsent(apiConsent ?? snap?.csection_consent ?? 'yes');
+
+          // Restore delivery preferences checkboxes
+          const rawNeonatal = active.neonatal_prefs;
+          const apiDeliveryPrefs = (() => {
+            if (rawNeonatal && typeof rawNeonatal === 'object' && !Array.isArray(rawNeonatal) && Object.keys(rawNeonatal).length > 0) return rawNeonatal;
+            if (typeof rawNeonatal === 'string' && rawNeonatal) { try { return JSON.parse(rawNeonatal); } catch { return null; } }
+            return null;
+          })();
+          if (apiDeliveryPrefs) {
+            setDeliveryPrefs(apiDeliveryPrefs);
+          } else if (snap?.neonatal_prefs) {
+            setDeliveryPrefs(snap.neonatal_prefs);
+          }
+
+          setSbaPresent(active.sba_present || '');
+          setBirthPrep(
+            typeof active.birth_prep_checklist === 'string'
+              ? JSON.parse(active.birth_prep_checklist)
+              : (active.birth_prep_checklist || {})
+          );
+          setDangerSignsAck(active.danger_signs_acknowledged || false);
+          setReferralPathway(
+            typeof active.referral_pathway === 'string'
+              ? JSON.parse(active.referral_pathway)
+              : (active.referral_pathway || {})
+          );
+          const transport_val = active.transport || (() => {
+            const notes = active.special_notes || '';
+            const match = notes.match(/Transport strategy: (.+?)\./);
+            return match ? match[1].trim() : '';
+          })();
+          setTransport(transport_val);
+          const contacts = parseJsonField(active.emergency_contacts);
+          setEmergencyContact1(contacts[0]?.phone || user?.emergency_contact || '');
+          setEmergencyContact2(contacts[1]?.phone || '');
+          const notesVal = (() => {
+            const notes = active.special_notes || '';
+            if (!notes.startsWith('Transport strategy:')) return notes;
+            const match = notes.match(/Notes: (.+)$/s);
+            return match ? match[1].trim() : '';
+          })();
+          setSpecialNotes(notesVal);
+        }
+      })
+      .catch(() => setExistingPlans([]))
+      .finally(() => setLoadingHistory(false));
+  }, [user?.id]);
+
+  // Live readiness score estimator (frontend-only approximation)
+  const estimateReadinessScore = () => {
+    let score = 0;
+
+    // 1. Medical preparedness (25)
+    if (
+      bloodGroup &&
+      !["", "unknown", "none"].includes(
+        bloodGroup.toString().trim().toLowerCase()
+      )
+    ) {
+      score += 10;
+    }
+
+    if (allergies !== null) score += 8;
+    if (conditions !== null) score += 7;
+
+    // 2. Birth preparedness (25)
+    if (track === "B") {
+      const checked = Object.values(birthPrep || {}).filter(Boolean).length;
+      score += Math.min(25, checked * 6);
+    } else {
+      if (facility && facility.trim()) {
+        score += 25;
+      }
+    }
+
+    // 3. Clinical history (25)
+    // Frontend has no ctx, so mimic backend's "healthy user" assumption.
+    score += 10; // bp_spike_count == 0
+    score += 8;  // glucose_spike_count == 0
+    score += 7;  // reduced_kick_count == 0
+
+    // 4. Support & planning (25)
+    if (emergencyContact1.trim() || emergencyContact2.trim()) {
+      score += 9;
+    }
+
+    if (track === "B") {
+      if (sbaPresent === "yes") score += 8;
+      else if (sbaPresent === "arranging") score += 4;
+
+      if (dangerSignsAck) score += 8;
+    } else {
+      if (companion && companion.trim()) score += 8;
+
+      if (csectionConsent === "yes") score += 8;
+    }
+
+    return Math.min(Math.max(score, 0), 100);
+  };
 
   // Playback audio state
   const [currentPlaybackMessage, setCurrentPlaybackMessage] = useState(false);
   const activeAudioRef = useRef(null);
 
   const [generatedPlanText, setGeneratedPlanText] = useState('');
-  const [generated, setGenerated] = useState(false);
-  const [loading, setLoading] = useState(false);
+  const [generatedMeta, setGeneratedMeta] = useState(null);
   const [errors, setErrors] = useState({});
-  const [activeStep, setActiveStep] = useState(0);
 
   // Clean up audio on unmount
   useEffect(() => {
@@ -534,21 +702,350 @@ const BirthPlan = () => {
     }
   };
 
-  // Steps depend dynamically on the track selection
-  const STEPS = track === 'A' ? STRINGS[lang].steps_A : STRINGS[lang].steps_B;
+  const handlePrintPlan = () => {
+    const planText = generatedPlanText || existingPlans.find(p => p.is_active)?.generated_plan;
+    if (!planText) return;
 
-  const handleFacilityChange = (val) => {
-    setFacility(val);
-    const selected = FACILITIES.find(f => f.value === val);
-    if (selected) {
-      if (selected.tier === 'Home' || selected.tier === 'Primary' || selected.tier === 'NGO Primary') {
-        setTrack('B');
-      } else {
-        setTrack('A');
-      }
+    const printWindow = window.open('', '_blank');
+    const weeks = user?.weeks_pregnant || 24;
+    
+    // Get localized/translated preferences
+    const localizedFacility = facility ? getLocalizedFacilityLabel(facility, lang) : '—';
+    const localizedCompanion = companion ? getLocalizedCompanionLabel(companion, lang) : '—';
+    const localizedPain = pain ? getLocalizedPainLabel(pain, lang) : '—';
+    const localizedTransport = transport ? getLocalizedTransportLabel(transport, lang) : '—';
+    
+    // Build allergies and conditions strings
+    const allergiesStr = allergies && allergies.length > 0 ? allergies.join(', ') : 'None';
+    const conditionsStr = conditions && conditions.length > 0 
+      ? conditions.map(c => {
+          const found = STRINGS[lang].conditions.find(cond => cond.id === c);
+          return found ? found.label : c;
+        }).join(', ')
+      : 'None';
+
+    // Track B checklist items
+    const checklistItems = [];
+    if (track === 'B') {
+      STRINGS[lang].prep_items.forEach(item => {
+        if (birthPrep[item.id]) {
+          checklistItems.push(item.label);
+        }
+      });
+    }
+
+    const csectionLabel = csectionConsent === 'yes' ? (lang === 'en' ? 'Yes, Consented' : 'হ্যাঁ, সম্মতি আছে')
+      : csectionConsent === 'no' ? (lang === 'en' ? 'No Consent' : 'না, সম্মতি নেই')
+      : (lang === 'en' ? 'Undecided' : 'এখনো নিশ্চিত নই');
+
+    const sbaLabel = sbaPresent === 'yes' ? STRINGS[lang].sba_yes
+      : sbaPresent === 'arranging' ? STRINGS[lang].sba_arranging
+      : sbaPresent === 'no' ? STRINGS[lang].sba_no
+      : '—';
+
+    // Emergency Contacts
+    const contacts = [];
+    if (emergencyContact1) contacts.push(emergencyContact1);
+    if (emergencyContact2) contacts.push(emergencyContact2);
+    const contactsStr = contacts.join(', ') || '—';
+
+    printWindow.document.write(`
+      <html>
+        <head>
+          <title>${lang === 'en' ? 'Birth Plan' : 'জন্ম পরিকল্পনা'} - ${user?.name || ''}</title>
+          <style>
+            body { 
+              font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; 
+              line-height: 1.6; 
+              color: #374151; 
+              padding: 40px; 
+              max-width: 800px; 
+              margin: 0 auto; 
+            }
+            .header {
+              text-align: center;
+              border-bottom: 3px double #5a4b6e;
+              padding-bottom: 20px;
+              margin-bottom: 30px;
+            }
+            .header h1 {
+              color: #5a4b6e;
+              margin: 0 0 5px 0;
+              font-size: 26px;
+              text-transform: uppercase;
+              letter-spacing: 1px;
+            }
+            .header p {
+              margin: 0;
+              font-size: 14px;
+              color: #6b7280;
+              font-weight: 600;
+            }
+            .section {
+              margin-bottom: 25px;
+            }
+            .section-title {
+              color: #7d6b91;
+              font-size: 15px;
+              text-transform: uppercase;
+              font-weight: 800;
+              border-bottom: 1px solid #e5e7eb;
+              padding-bottom: 5px;
+              margin-bottom: 15px;
+              letter-spacing: 0.5px;
+            }
+            .grid {
+              display: grid;
+              grid-template-columns: repeat(2, 1fr);
+              gap: 15px 30px;
+              margin-bottom: 20px;
+            }
+            .info-item {
+              font-size: 13px;
+            }
+            .info-label {
+              font-weight: 700;
+              color: #6b7280;
+              display: block;
+              text-transform: uppercase;
+              font-size: 10px;
+              letter-spacing: 0.5px;
+            }
+            .info-value {
+              font-weight: 600;
+              color: #1f2937;
+              font-size: 13px;
+            }
+            .plan-box {
+              background: #fafafb;
+              border: 1px solid #e5e7eb;
+              padding: 20px;
+              border-radius: 12px;
+              white-space: pre-wrap;
+              font-size: 13px;
+              color: #1f2937;
+              line-height: 1.7;
+            }
+            .footer {
+              margin-top: 40px;
+              border-top: 1px solid #e5e7eb;
+              padding-top: 15px;
+              text-align: center;
+              font-size: 11px;
+              color: #9ca3af;
+              font-weight: 500;
+            }
+            @media print {
+              body { padding: 20px; }
+              @page { margin: 1.5cm; }
+            }
+          </style>
+        </head>
+        <body>
+          <div class="header">
+            <h1>${lang === 'en' ? 'Clinical Birth Plan' : 'ক্লিনিক্যাল জন্ম পরিকল্পনা'}</h1>
+            <p>MaternaAI Safety Calibrated &bull; WHO Standards &bull; Bangladesh Context</p>
+          </div>
+
+          <div class="section">
+            <div class="section-title">${lang === 'en' ? "Mother's Information" : 'মায়ের তথ্য'}</div>
+            <div class="grid">
+              <div class="info-item">
+                <span class="info-label">${lang === 'en' ? 'Full Name' : 'পূর্ণ নাম'}</span>
+                <span class="info-value">${user?.name || '—'}</span>
+              </div>
+              <div class="info-item">
+                <span class="info-label">${lang === 'en' ? 'Phone Number' : 'মোবাইল নম্বর'}</span>
+                <span class="info-value">${user?.phone || '—'}</span>
+              </div>
+              <div class="info-item">
+                <span class="info-label">${lang === 'en' ? 'Pregnancy Timeline' : 'গর্ভাবস্থার সপ্তাহ'}</span>
+                <span class="info-value">${weeks ? `${weeks} ${lang === 'en' ? 'Weeks' : 'সপ্তাহ'}` : '—'}</span>
+              </div>
+              <div class="info-item">
+                <span class="info-label">${lang === 'en' ? 'Care Track' : 'কেয়ার ট্র্যাক'}</span>
+                <span class="info-value">${
+                  track === 'A' 
+                    ? (lang === 'en' ? 'Track A: Facility-Based Delivery' : 'ট্র্যাক A: হাসপাতালে প্রসব') 
+                    : (lang === 'en' ? 'Track B: Home/Community Delivery' : 'ট্র্যাক B: বাড়িতে/কমিউনিটিতে প্রসব')
+                }</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="section">
+            <div class="section-title">${lang === 'en' ? 'Birth Preferences & Form Credentials' : 'জন্মের পছন্দ ও তথ্যাবলী'}</div>
+            <div class="grid">
+              <div class="info-item" style="grid-column: span 2;">
+                <span class="info-label">${lang === 'en' ? 'Primary Delivery Facility' : 'প্রধান ডেলিভারি হাসপাতাল'}</span>
+                <span class="info-value">${localizedFacility}</span>
+              </div>
+              
+              ${track === 'A' ? `
+                <div class="info-item">
+                  <span class="info-label">${lang === 'en' ? 'Birth Companion' : 'জন্মের সময় সঙ্গী'}</span>
+                  <span class="info-value">${localizedCompanion}</span>
+                </div>
+                <div class="info-item">
+                  <span class="info-label">${lang === 'en' ? 'Pain Management' : 'ব্যথা ব্যবস্থাপনা'}</span>
+                  <span class="info-value">${localizedPain}</span>
+                </div>
+                <div class="info-item">
+                  <span class="info-label">${lang === 'en' ? 'Blood Group' : 'রক্তের গ্রুপ'}</span>
+                  <span class="info-value">${bloodGroup || (lang === 'en' ? 'Unknown' : 'অজানা')}</span>
+                </div>
+                <div class="info-item">
+                  <span class="info-label">${lang === 'en' ? 'C-Section Consent' : 'সিজারিয়ান অপারেশনে সম্মতি'}</span>
+                  <span class="info-value">${csectionLabel}</span>
+                </div>
+                <div class="info-item" style="grid-column: span 2;">
+                  <span class="info-label">${lang === 'en' ? 'Known Allergies' : 'পরিচিত অ্যালার্জি'}</span>
+                  <span class="info-value">${allergiesStr}</span>
+                </div>
+                <div class="info-item" style="grid-column: span 2;">
+                  <span class="info-label">${lang === 'en' ? 'Health Conditions' : 'স্বাস্থ্য সমস্যাসমূহ'}</span>
+                  <span class="info-value">${conditionsStr}</span>
+                </div>
+              ` : `
+                <div class="info-item">
+                  <span class="info-label">${lang === 'en' ? 'SBA Present' : 'প্রশিক্ষিত দাই উপস্থিতি'}</span>
+                  <span class="info-value">${sbaLabel}</span>
+                </div>
+                <div class="info-item">
+                  <span class="info-label">${lang === 'en' ? 'Danger Signs Acknowledged' : 'বিপদ চিহ্ন জানা আছে'}</span>
+                  <span class="info-value">${dangerSignsAck ? (lang === 'en' ? 'Yes, Confirmed' : 'হ্যাঁ, নিশ্চিত') : (lang === 'en' ? 'No' : 'না')}</span>
+                </div>
+                <div class="info-item" style="grid-column: span 2;">
+                  <span class="info-label">${lang === 'en' ? 'Backup Referral Facility' : 'জরুরি রেফারেল হাসপাতাল (ব্যাকআপ)'}</span>
+                  <span class="info-value">${referralPathway.facility ? getLocalizedFacilityLabel(referralPathway.facility, lang) : '—'}</span>
+                </div>
+                <div class="info-item" style="grid-column: span 2;">
+                  <span class="info-label">${lang === 'en' ? 'Birth Preparedness Completed' : 'প্রস্তুতকৃত বিষয়াবলী'}</span>
+                  <span class="info-value">${checklistItems.length > 0 ? checklistItems.join(', ') : '—'}</span>
+                </div>
+              `}
+
+              <div class="info-item">
+                <span class="info-label">${lang === 'en' ? 'Emergency Transport' : 'জরুরি যানবাহন'}</span>
+                <span class="info-value">${localizedTransport}</span>
+              </div>
+              <div class="info-item">
+                <span class="info-label">${lang === 'en' ? 'Emergency Contact Numbers' : 'জরুরি যোগাযোগ নম্বরসমূহ'}</span>
+                <span class="info-value">${contactsStr}</span>
+              </div>
+
+              ${specialNotes ? `
+                <div class="info-item" style="grid-column: span 2;">
+                  <span class="info-label">${lang === 'en' ? 'Special Instructions / Notes' : 'বিশেষ নোট/নির্দেশনা'}</span>
+                  <span class="info-value" style="font-weight: 500;">${specialNotes}</span>
+                </div>
+              ` : ''}
+            </div>
+          </div>
+
+          <div class="section">
+            <div class="section-title">${lang === 'en' ? 'AI Clinical Birth Plan Suggestions' : 'AI ক্লিনিক্যাল জন্ম পরিকল্পনা নির্দেশাবলী'}</div>
+            <div class="plan-box">${planText}</div>
+          </div>
+
+          <div class="footer">
+            ${lang === 'en' ? 'Generated on' : 'তৈরি হয়েছে'}: ${new Date().toLocaleDateString(lang === 'en' ? 'en-GB' : 'bn-BD')} &bull; MaternaAI Support Network &bull; 16263 National Helpline
+          </div>
+
+          <script>
+            window.onload = function() {
+              window.print();
+              setTimeout(function() { window.close(); }, 500);
+            };
+          </script>
+        </body>
+      </html>
+    `);
+    printWindow.document.close();
+  };
+
+  const handleSave = async () => {
+    const e = {};
+    if (!facility) e.facility = STRINGS[lang].errors.facility;
+    if (track === 'A') {
+      if (!companion) e.companion = STRINGS[lang].errors.companion;
+      if (!pain) e.pain = STRINGS[lang].errors.pain;
+      if (!transport) e.transport = STRINGS[lang].errors.transport;
+      if (!emergencyContact1.trim()) e.ec1 = STRINGS[lang].errors.ec1;
+    } else {
+      if (!sbaPresent) e.sbaPresent = STRINGS[lang].errors.sba;
+      if (!dangerSignsAck) e.dangerSignsAck = STRINGS[lang].errors.danger_ack;
+      if (!transport) e.transport = STRINGS[lang].errors.transport;
+      if (!emergencyContact1.trim()) e.ec1 = STRINGS[lang].errors.ec1;
+    }
+    setErrors(e);
+    if (Object.keys(e).length > 0) return;
+    setSaving(true);
+    const resolvedTrack = getTrack(facility);
+    const formattedContacts = [
+      { name: 'Primary Contact', phone: emergencyContact1, relation: 'Primary' },
+      ...(emergencyContact2.trim() ? [{ name: 'Secondary Contact', phone: emergencyContact2, relation: 'Secondary' }] : [])
+    ];
+    const payload = {
+      user_id: user?.id,
+      hospital_name: facility,
+      transport: transport,
+      support_person: resolvedTrack === 'A' ? companion : '',
+      pain_preference: resolvedTrack === 'A' ? pain : '',
+      special_notes: `Transport strategy: ${transport}. Notes: ${specialNotes}`,
+      emergency_contacts: formattedContacts,
+      profile: { weeks_pregnant: user?.weeks_pregnant || 24, location: user?.location || 'Unknown' },
+      track: resolvedTrack,
+      blood_group: bloodGroup || null,
+      rh_negative: bloodGroup?.includes('-') || false,
+      known_allergies: allergies.map(a => ({ name: a })),
+      medical_conditions: conditions,
+      csection_consent: csectionConsent,
+      neonatal_prefs: deliveryPrefs,
+      cultural_prefs: {},
+      sba_present: resolvedTrack === 'B' ? sbaPresent : null,
+      birth_prep_checklist: resolvedTrack === 'B' ? birthPrep : {},
+      referral_pathway: resolvedTrack === 'B' ? referralPathway : {},
+      danger_signs_acknowledged: resolvedTrack === 'B' ? dangerSignsAck : false,
+      language: lang
+    };
+    try {
+      const response = await fetch('/api/birth_plan/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      if (!response.ok) throw new Error(STRINGS[lang].errors.global);
+      const resData = await response.json();
+      setGeneratedPlanText(resData.generated_plan);
+      setGeneratedMeta({
+        readiness_score: resData.readiness_score ?? null,
+        readiness_gaps: resData.readiness_gaps ?? [],
+        version: resData.version ?? null,
+      });
+      setSaveSuccess(true);
+      setTimeout(() => setSaveSuccess(false), 3000);
+      // Snapshot medical fields — ref for same-session, localStorage for page reloads
+      const medSnap = {
+        medical_conditions: conditions,
+        known_allergies: allergies,
+        csection_consent: csectionConsent,
+        neonatal_prefs: deliveryPrefs,
+      };
+      savedMedicalRef.current = medSnap;
+      try { localStorage.setItem(`materna_medical_${user?.id}`, JSON.stringify(medSnap)); } catch {}
+      fetch(`/api/birth_plan/${user.id}`)
+        .then(r => r.ok ? r.json() : [])
+        .then(data => setExistingPlans(Array.isArray(data) ? data : []))
+        .catch(() => {});
+    } catch (err) {
+      setErrors({ global: err.message });
+    } finally {
+      setSaving(false);
     }
   };
 
+  // Validate the current step before advancing
   const validateStep = (stepIdx) => {
     const e = {};
     if (stepIdx === 0) {
@@ -634,6 +1131,8 @@ const BirthPlan = () => {
     }
     setLoading(true);
 
+    const resolvedTrack = getTrack(facility);
+
     const formattedContacts = [
       { name: "Primary Contact", phone: emergencyContact1, relation: "Primary" }
     ];
@@ -644,28 +1143,31 @@ const BirthPlan = () => {
     const payload = {
       user_id: user?.id || 1,
       hospital_name: facility,
-      support_person: track === 'A' ? companion : '',
-      pain_preference: track === 'A' ? pain : '',
+      transport: transport,
+      support_person: resolvedTrack === 'A' ? companion : '',
+      pain_preference: resolvedTrack === 'A' ? pain : '',
       special_notes: `Transport strategy: ${transport}. Notes: ${specialNotes}`,
       emergency_contacts: formattedContacts,
       profile: {
         weeks_pregnant: user?.weeks_pregnant || 24,
         location: user?.location || "Unknown"
       },
-      track,
+      track: resolvedTrack,
       blood_group: bloodGroup,
       rh_negative: bloodGroup?.includes('-') || false,
       known_allergies: allergies.map(a => ({ name: a })),
       medical_conditions: conditions,
       csection_consent: csectionConsent,
-      neonatal_prefs: {},
+      neonatal_prefs: deliveryPrefs,
       cultural_prefs: {},
-      sba_present: track === 'B' ? sbaPresent : null,
-      birth_prep_checklist: track === 'B' ? birthPrep : {},
-      referral_pathway: track === 'B' ? referralPathway : {},
-      danger_signs_acknowledged: track === 'B' ? dangerSignsAck : false,
+      sba_present: resolvedTrack === 'B' ? sbaPresent : null,
+      birth_prep_checklist: resolvedTrack === 'B' ? birthPrep : {},
+      referral_pathway: resolvedTrack === 'B' ? referralPathway : {},
+      danger_signs_acknowledged: resolvedTrack === 'B' ? dangerSignsAck : false,
       language: lang
     };
+
+    console.log("Sending payload:", JSON.stringify(payload, null, 2));
 
     try {
       const response = await fetch('/api/birth_plan/generate', {
@@ -679,8 +1181,32 @@ const BirthPlan = () => {
       }
 
       const resData = await response.json();
+      console.log("Response:", resData);
       setGeneratedPlanText(resData.generated_plan);
+      setGeneratedMeta({
+        readiness_score: resData.readiness_score ?? null,
+        readiness_gaps: resData.readiness_gaps ?? [],
+        version: resData.version ?? null,
+      });
       setGenerated(true);
+      setShowWizard(false);
+      setIsEditing(false);
+      // Snapshot medical fields — ref for same-session, localStorage for page reloads
+      const medSnap = {
+        medical_conditions: conditions,
+        known_allergies: allergies,
+        csection_consent: csectionConsent,
+        neonatal_prefs: deliveryPrefs,
+      };
+      savedMedicalRef.current = medSnap;
+      try { localStorage.setItem(`materna_medical_${user?.id}`, JSON.stringify(medSnap)); } catch {}
+      // Refresh history from API
+      if (user?.id) {
+        fetch(`/api/birth_plan/${user.id}`)
+          .then(r => r.ok ? r.json() : [])
+          .then(data => setExistingPlans(Array.isArray(data) ? data : []))
+          .catch(() => {});
+      }
     } catch (err) {
       setErrors({ global: err.message || STRINGS[lang].errors.global });
     } finally {
@@ -688,812 +1214,623 @@ const BirthPlan = () => {
     }
   };
 
-  const reset = () => {
-    setGenerated(false);
-    setGeneratedPlanText('');
-    setFacility(''); setCompanion(''); setPain(''); setTransport('');
-    setErrors({}); setActiveStep(0);
-    setDeliveryPrefs(Object.fromEntries(DELIVERY_PREFS.map(p => [p.id, p.default])));
-    setSpecialNotes('');
-    setTrack('A');
-    setBloodGroup('');
-    setAllergies([]);
-    setConditions([]);
-    setSbaPresent('');
-    setBirthPrep({});
-    setDangerSignsAck(false);
-    setReferralPathway({});
-    setCsectionConsent(true);
-    setEmergencyContact1(user?.emergency_contact || '');
-    setEmergencyContact2('');
-    stopTTS();
-  };
+
 
   const weeks = user?.weeks_pregnant || 24;
-  const facilityObj = FACILITIES.find(f => f.value === facility);
-  const companionObj = COMPANIONS.find(c => c.value === companion);
-  const painObj = PAIN_OPTIONS.find(p => p.value === pain);
-  const transportObj = TRANSPORT_OPTIONS.find(t => t.value === transport);
-  const chosenPrefs = DELIVERY_PREFS.filter(p => deliveryPrefs[p.id]);
 
-  // Generated Plan Card
-  if (generated) {
+  // Readiness score ring helper component
+  const ReadinessRing = ({ score, gaps = [], size = 'lg' }) => {
+    const isLg = size === 'lg';
+    const radius = isLg ? 44 : 24;
+    const stroke = isLg ? 7 : 4;
+    const circumference = 2 * Math.PI * radius;
+    const offset = circumference - (score / 100) * circumference;
+    const color = score >= 75 ? '#22c55e' : score >= 50 ? '#f59e0b' : '#ef4444';
+    const label = score >= 75 ? 'High Readiness' : score >= 50 ? 'Moderate Readiness' : 'Low Readiness';
+    const dim = isLg ? 110 : 60;
     return (
-      <div className="p-4 md:p-8 max-w-2xl mx-auto font-sans space-y-5 animate-[fadeIn_0.5s_ease-out]">
-
-        {/* Success header */}
-        <div className="bg-gradient-to-r from-primary-mauve to-bg-dark-mauve text-white rounded-2xl p-5 shadow-premium flex items-start gap-4">
-          <div className="w-12 h-12 rounded-xl bg-white/15 flex items-center justify-center shrink-0">
-            <FileText className="w-6 h-6" />
-          </div>
-          <div className="flex-1">
-            <div className="flex items-center justify-between">
-              <h2 className="font-black text-base">{STRINGS[lang].plan_title}</h2>
-              <button onClick={reset}
-                className="p-1.5 rounded-lg bg-white/15 hover:bg-white/25 transition-all cursor-pointer">
-                <RotateCcw className="w-4 h-4" />
-              </button>
-            </div>
-            <p className="text-xs font-semibold text-white/80 mt-0.5">
-              {STRINGS[lang].plan_stamp} · {STRINGS[lang].weeks_label} {weeks}
-            </p>
+      <div className={`flex ${isLg ? 'flex-col items-center gap-3' : 'items-center gap-2'}`}>
+        <div className="relative flex-shrink-0" style={{ width: dim, height: dim }}>
+          <svg width={dim} height={dim} viewBox={`0 0 ${dim} ${dim}`} style={{ transform: 'rotate(-90deg)' }}>
+            <circle cx={dim/2} cy={dim/2} r={radius} fill="none" stroke="#e9d5ff" strokeWidth={stroke} />
+            <circle cx={dim/2} cy={dim/2} r={radius} fill="none" stroke={color} strokeWidth={stroke}
+              strokeDasharray={circumference} strokeDashoffset={offset}
+              strokeLinecap="round"
+              style={{ transition: 'stroke-dashoffset 0.8s cubic-bezier(0.4,0,0.2,1)' }}
+            />
+          </svg>
+          <div className="absolute inset-0 flex flex-col items-center justify-center">
+            <span className={`font-black ${isLg ? 'text-xl' : 'text-sm'}`} style={{ color }}>{score}</span>
+            {isLg && <span className="text-[8px] font-bold text-text-muted">/ 100</span>}
           </div>
         </div>
-
-        {/* Plan Sheet */}
-        <div className="bg-white rounded-2xl border border-primary-mauve/10 shadow-premium p-5 space-y-4">
-
-          {/* Patient row */}
-          <div className="flex items-center gap-3 pb-4 border-b border-primary-mauve/8">
-            <div className="w-10 h-10 rounded-full bg-primary-mauve/10 flex items-center justify-center text-lg">👩‍🦰</div>
-            <div>
-              <h3 className="font-black text-sm text-text-dark">{user?.name || 'Patient'}</h3>
-              <p className="text-[10px] font-bold text-text-muted">{STRINGS[lang].weeks_label} {weeks} · {user?.location || 'Bangladesh'}</p>
-            </div>
-            <div className="ml-auto flex items-center gap-1.5 bg-success/10 text-success px-2.5 py-1 rounded-full text-[9px] font-black">
-              <CheckCircle2 className="w-3 h-3" /> {STRINGS[lang].ai_verified}
-            </div>
-          </div>
-
-          {/* Plan rows */}
-          <div className="flex items-start gap-3 p-3 rounded-xl bg-bg-rose-white border border-primary-mauve/5">
-            <div className="mt-0.5 shrink-0"><MapPin className="w-4 h-4 text-primary-mauve" /></div>
-            <div>
-              <p className="text-[10px] font-black text-text-muted uppercase tracking-wider">{track === 'A' ? STRINGS[lang].steps_A[0] : STRINGS[lang].steps_B[0]}</p>
-              <p className="text-xs font-black text-text-dark mt-0.5">{facilityObj ? getLocalizedFacilityLabel(facilityObj.value, lang) : ''}</p>
-              {facilityObj && <span className="text-[9px] font-bold text-primary-mauve">{facilityObj.tier} facility</span>}
-            </div>
-          </div>
-
-          {track === 'A' && companionObj && (
-            <div className="flex items-start gap-3 p-3 rounded-xl bg-bg-rose-white border border-primary-mauve/5">
-              <div className="mt-0.5 shrink-0"><Users className="w-4 h-4 text-primary-mauve" /></div>
-              <div>
-                <p className="text-[10px] font-black text-text-muted uppercase tracking-wider">{STRINGS[lang].steps_A[1]}</p>
-                <p className="text-xs font-black text-text-dark mt-0.5">{companionObj.emoji} {getLocalizedCompanionLabel(companionObj.value, lang)}</p>
-              </div>
-            </div>
-          )}
-
-          {track === 'A' && painObj && (
-            <div className="flex items-start gap-3 p-3 rounded-xl bg-bg-rose-white border border-primary-mauve/5">
-              <div className="mt-0.5 shrink-0"><Zap className="w-4 h-4 text-primary-mauve" /></div>
-              <div>
-                <p className="text-[10px] font-black text-text-muted uppercase tracking-wider">{STRINGS[lang].steps_A[2]}</p>
-                <p className="text-xs font-black text-text-dark mt-0.5">{getLocalizedPainLabel(painObj.value, lang)}</p>
-              </div>
-            </div>
-          )}
-
-          {transportObj && (
-            <div className="flex items-start gap-3 p-3 rounded-xl bg-bg-rose-white border border-primary-mauve/5">
-              <div className="mt-0.5 shrink-0"><Truck className="w-4 h-4 text-primary-mauve" /></div>
-              <div>
-                <p className="text-[10px] font-black text-text-muted uppercase tracking-wider">{track === 'A' ? STRINGS[lang].steps_A[5] : STRINGS[lang].steps_B[3]}</p>
-                <p className="text-xs font-black text-text-dark mt-0.5">{getLocalizedTransportLabel(transportObj.value, lang)}</p>
-              </div>
-            </div>
-          )}
-
-          {/* Track A Medical Profile details */}
-          {track === 'A' && (
-            <div className="p-3 rounded-xl bg-bg-rose-white border border-primary-mauve/5 space-y-2">
-              <p className="text-[10px] font-black text-primary-mauve uppercase tracking-wider">
-                {STRINGS[lang].steps_A[3]}
-              </p>
-              <div className="grid grid-cols-2 gap-2 text-xs">
-                <div>
-                  <span className="font-black text-text-muted">{STRINGS[lang].blood_group_label}:</span>{' '}
-                  <span className="font-bold text-text-dark">{bloodGroup || STRINGS[lang].blood_group_unknown}</span>
-                  {bloodGroup?.includes('-') && (
-                    <div className="text-[8px] font-bold text-danger mt-0.5">{STRINGS[lang].rh_warning}</div>
-                  )}
-                </div>
-                <div>
-                  <span className="font-black text-text-muted">{STRINGS[lang].csection_consent_label.split('(')[0].trim()}:</span>{' '}
-                  <span className="font-bold text-text-dark">{csectionConsent ? 'Yes' : 'No'}</span>
-                </div>
-              </div>
-              {allergies.length > 0 && (
-                <div className="text-xs">
-                  <span className="font-black text-text-muted">{STRINGS[lang].allergies_label}:</span>{' '}
-                  <span className="font-bold text-text-dark">{allergies.join(', ')}</span>
-                </div>
-              )}
-              {conditions.length > 0 && (
-                <div className="text-xs">
-                  <span className="font-black text-text-muted">{STRINGS[lang].conditions_label}:</span>{' '}
-                  <span className="font-bold text-text-dark">
-                    {conditions.map(c => STRINGS[lang].conditions.find(item => item.id === c)?.label || c).join(', ')}
-                  </span>
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* Track B SBA & Preparedness Details */}
-          {track === 'B' && (
-            <div className="p-3 rounded-xl bg-bg-rose-white border border-primary-mauve/5 space-y-2">
-              <p className="text-[10px] font-black text-primary-mauve uppercase tracking-wider">
-                {STRINGS[lang].steps_B[1]}
-              </p>
-              <div className="text-xs font-bold text-text-dark">
-                <span className="text-text-muted">{STRINGS[lang].sba_question}</span>{' '}
-                {sbaPresent === 'yes' && STRINGS[lang].sba_yes}
-                {sbaPresent === 'arranging' && STRINGS[lang].sba_arranging}
-                {sbaPresent === 'no' && (
-                  <span className="text-danger">{STRINGS[lang].sba_no} — {STRINGS[lang].sba_warning}</span>
-                )}
-              </div>
-              
-              {/* Preparedness Checklist */}
-              <div className="pt-1.5 border-t border-primary-mauve/5">
-                <p className="text-[10px] font-black text-text-muted uppercase tracking-wider mb-1">Preparedness Checklist</p>
-                <div className="space-y-1">
-                  {STRINGS[lang].prep_items.map(item => {
-                    const checked = birthPrep[item.id];
-                    return (
-                      <div key={item.id} className="flex items-center gap-1.5 text-[11px]">
-                        <CheckCircle2 className={`w-3.5 h-3.5 ${checked ? 'text-success' : 'text-text-muted/40'}`} />
-                        <span className={checked ? 'text-text-dark font-bold' : 'text-text-muted font-semibold line-through opacity-50'}>{item.label}</span>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-              
-              {/* Referral Backup */}
-              {referralPathway?.facility && (
-                <div className="pt-1.5 border-t border-primary-mauve/5">
-                  <p className="text-[10px] font-black text-text-muted uppercase tracking-wider mb-0.5">{STRINGS[lang].referral_facility_label}</p>
-                  <p className="text-xs font-bold text-text-dark">{getLocalizedFacilityLabel(referralPathway.facility, lang)}</p>
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* Track B Danger signs warning card (also prints) */}
-          {track === 'B' && (
-            <div className="p-3 rounded-xl bg-danger/5 border border-danger/20">
-              <p className="text-[10px] font-black text-danger uppercase tracking-wider mb-2 flex items-center gap-1.5">
-                <AlertCircle className="w-3.5 h-3.5 text-danger" /> {STRINGS[lang].danger_title}
-              </p>
-              <ol className="list-decimal pl-4 text-xs font-semibold text-text-dark space-y-1">
-                {STRINGS[lang].danger_signs.map((sign, idx) => (
-                  <li key={idx}>{sign}</li>
-                ))}
-              </ol>
-              <div className="mt-2 text-[9px] font-bold text-danger flex items-center gap-1.5">
-                <CheckCircle2 className="w-3.5 h-3.5 text-danger" /> {STRINGS[lang].danger_ack}
-              </div>
-            </div>
-          )}
-
-          {/* Delivery preferences */}
-          {track === 'A' && chosenPrefs.length > 0 && (
-            <div className="p-3 rounded-xl bg-bg-rose-white border border-primary-mauve/5">
-              <p className="text-[10px] font-black text-text-muted uppercase tracking-wider mb-2">Delivery Preferences</p>
-              <div className="space-y-1.5">
-                {chosenPrefs.map(p => (
-                  <div key={p.id} className="flex items-center gap-2 text-xs font-semibold text-text-dark">
-                    <CheckCircle2 className="w-3.5 h-3.5 text-success shrink-0" /> {getLocalizedPrefLabel(p.id, lang)}
+        {isLg && (
+          <div className="text-center">
+            <p className="text-xs font-black" style={{ color }}>{label}</p>
+            {gaps.length > 0 && (
+              <div className="mt-2 space-y-1 text-left">
+                {gaps.map((g, i) => (
+                  <div key={i} className="flex items-start gap-1.5 text-[10px] font-semibold text-text-muted">
+                    <ShieldAlert className="w-3 h-3 text-amber-500 shrink-0 mt-0.5" />
+                    {g}
                   </div>
                 ))}
               </div>
-            </div>
-          )}
-
-          {/* Emergency contacts */}
-          <div className="p-3 rounded-xl bg-danger/5 border border-danger/15">
-            <p className="text-[10px] font-black text-danger uppercase tracking-wider mb-2 flex items-center gap-1.5">
-              <Phone className="w-3 h-3" /> {STRINGS[lang].emergency_contacts_label}
-            </p>
-            <p className="text-xs font-bold text-text-dark">Primary: {emergencyContact1 || '—'}</p>
-            {emergencyContact2 && <p className="text-xs font-bold text-text-dark">Secondary: {emergencyContact2}</p>}
-            <p className="text-xs font-bold text-text-dark">{STRINGS[lang].national_hotline}</p>
+            )}
           </div>
-
-          {/* Special notes */}
-          {specialNotes && (
-            <div className="p-3 rounded-xl bg-primary-mauve/5 border border-primary-mauve/10">
-              <p className="text-[10px] font-black text-primary-mauve uppercase tracking-wider mb-1">Special Notes</p>
-              <p className="text-xs font-semibold text-text-dark leading-relaxed">{specialNotes}</p>
-            </div>
-          )}
-
-          {/* LLM Clinical AI Output Block with Speech Playback */}
-          {generatedPlanText && (
-            <div className="p-4 rounded-xl bg-primary-mauve/5 border border-primary-mauve/15 space-y-2">
-              <div className="flex items-center justify-between border-b border-primary-mauve/5 pb-2">
-                <p className="text-[10px] font-black text-primary-mauve uppercase tracking-wider flex items-center gap-1.5">
-                  <Sparkles className="w-3.5 h-3.5" /> {STRINGS[lang].guidance_details}
-                </p>
-                <button
-                  onClick={() => playTTS(generatedPlanText)}
-                  className={`flex items-center gap-1 px-2.5 py-1 rounded-md text-[10px] font-black uppercase tracking-wider transition-all cursor-pointer ${
-                    currentPlaybackMessage
-                      ? 'bg-danger text-white border border-danger/10'
-                      : 'bg-primary-mauve/10 hover:bg-primary-mauve/20 border border-primary-mauve/15 text-primary-mauve'
-                  }`}
-                >
-                  {currentPlaybackMessage ? (
-                    <>
-                      <VolumeX className="w-3.5 h-3.5 fill-current" />
-                      <span>{STRINGS[lang].stop}</span>
-                    </>
-                  ) : (
-                    <>
-                      <Volume2 className="w-3.5 h-3.5 fill-current" />
-                      <span>{STRINGS[lang].listen}</span>
-                    </>
-                  )}
-                </button>
-              </div>
-              <div className="text-xs font-medium text-text-dark leading-relaxed whitespace-pre-wrap">
-                {generatedPlanText}
-              </div>
-            </div>
-          )}
-
-          {/* Stamp */}
-          <div className="flex items-center justify-between pt-2 border-t border-primary-mauve/8">
-            <div className="flex items-center gap-1.5 text-[9px] font-black text-success">
-              <CheckCircle2 className="w-3.5 h-3.5" />
-              {STRINGS[lang].plan_stamp}
-            </div>
-            <span className="text-[9px] font-bold text-text-muted">
-              {new Date().toLocaleDateString(lang === 'en' ? 'en-GB' : 'bn-BD')}
-            </span>
-          </div>
-        </div>
-
-        {/* Actions */}
-        <div className="grid grid-cols-2 gap-3">
-          <button onClick={() => window.print()}
-            className="flex items-center justify-center gap-2 py-3 rounded-xl border border-primary-mauve/20 text-primary-mauve font-black text-xs hover:bg-primary-mauve/5 cursor-pointer transition-all">
-            <Printer className="w-4 h-4" /> {STRINGS[lang].print_plan}
-          </button>
-          <button onClick={() => alert(STRINGS[lang].plan_saved_alert)}
-            className="flex items-center justify-center gap-2 py-3 rounded-xl bg-success text-white font-black text-xs hover:opacity-90 cursor-pointer transition-all shadow-xs">
-            <Download className="w-4 h-4" /> {STRINGS[lang].save_to_profile}
-          </button>
-        </div>
-
-        <p className="text-center text-[10px] font-semibold text-text-muted pb-4">
-          {STRINGS[lang].share_plan_disclaimer}
-        </p>
+        )}
       </div>
     );
-  }
+  };
 
-  // Form View
+  // ── TWO-COLUMN LAYOUT ──
   return (
-    <div className="p-4 md:p-8 max-w-2xl mx-auto font-sans space-y-5">
+    <div className="p-4 md:p-6 max-w-6xl mx-auto font-sans animate-[fadeIn_0.5s_ease-out]">
 
-      {/* Header with Bilingual Toggle */}
-      <div className="bg-white rounded-2xl border border-primary-mauve/10 shadow-premium p-5 flex items-start justify-between gap-4">
-        <div className="flex items-start gap-4">
-          <div className="w-12 h-12 rounded-xl bg-primary-mauve/10 flex items-center justify-center shrink-0">
-            <FileText className="w-6 h-6 text-primary-mauve" />
+      {/* Header — full width */}
+      <div className="bg-white rounded-2xl border border-primary-mauve/10 shadow-premium p-4 flex items-center justify-between gap-4 mb-4">
+        <div className="flex items-center gap-3">
+          <div className="w-9 h-9 rounded-xl bg-primary-mauve/10 flex items-center justify-center shrink-0">
+            <FileText className="w-5 h-5 text-primary-mauve" />
           </div>
           <div>
-            <h2 className="font-black text-base text-text-dark">{STRINGS[lang].title}</h2>
-            <p className="text-xs font-semibold text-text-muted mt-1 leading-relaxed">
-              {STRINGS[lang].subtitle}
-            </p>
+            <h2 className="font-black text-sm text-text-dark">{STRINGS[lang].title}</h2>
+            <p className="text-[10px] font-semibold text-text-muted mt-0.5 hidden sm:block">{STRINGS[lang].subtitle}</p>
           </div>
         </div>
-        <button
-          onClick={() => { stopTTS(); setLang(l => l === 'en' ? 'bn' : 'en'); }}
-          className="px-3.5 py-1.5 rounded-xl text-xs font-black uppercase tracking-wider border border-primary-mauve/20 text-primary-mauve hover:bg-primary-mauve/5 transition-all cursor-pointer shrink-0"
-        >
-          {lang === 'en' ? 'বাংলা' : 'English'}
-        </button>
-      </div>
-
-      {/* Step indicator */}
-      <div className="bg-white rounded-2xl border border-primary-mauve/10 p-4">
-        <div className="flex items-center gap-1 overflow-x-auto pb-1">
-          {STEPS.map((step, i) => (
-            <React.Fragment key={step}>
-              <button type="button" onClick={() => { if (validateStep(activeStep) || i < activeStep) setActiveStep(i); }}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[9px] font-black whitespace-nowrap transition-all cursor-pointer ${activeStep === i ? 'bg-primary-mauve text-white' : 'bg-bg-rose-white text-text-muted hover:bg-primary-mauve/10'}`}>
-                <span className={`w-4 h-4 rounded-full flex items-center justify-center text-[8px] ${activeStep === i ? 'bg-white/30' : 'bg-primary-mauve/15'}`}>{i + 1}</span>
-                {step}
-              </button>
-              {i < STEPS.length - 1 && <div className="w-3 h-px bg-primary-mauve/20 shrink-0" />}
-            </React.Fragment>
-          ))}
-        </div>
-      </div>
-
-      {/* Step 0: Delivery Facility */}
-      {activeStep === 0 && (
-        <div className="bg-white rounded-2xl border border-primary-mauve/10 shadow-premium p-5 space-y-3">
-          <h3 className="font-black text-sm text-text-dark flex items-center gap-2">
-            <MapPin className="w-4 h-4 text-primary-mauve" /> {track === 'A' ? STRINGS[lang].steps_A[0] : STRINGS[lang].steps_B[0]}
-          </h3>
-          <SelectCard options={FACILITIES} value={facility} onChange={handleFacilityChange}
-            getLabel={o => getLocalizedFacilityLabel(o.value, lang)} getEmoji={() => '🏥'} getDesc={o => o.tier + ' facility'}
-            getTags={o => o.tags} />
-          {errors.facility && <p className="text-[10px] font-bold text-danger flex items-center gap-1"><AlertCircle className="w-3 h-3" /> {errors.facility}</p>}
-          <button onClick={handleNextStep0} disabled={!facility}
-            className="w-full py-3 bg-primary-mauve text-white rounded-xl text-xs font-black cursor-pointer hover:bg-bg-dark-mauve transition-all disabled:opacity-50">
-            {STRINGS[lang].next}: {track === 'A' ? STRINGS[lang].steps_A[1] : STRINGS[lang].steps_B[1]} →
+        <div className="flex items-center gap-2 shrink-0">
+          {loadingHistory && <Loader2 className="w-4 h-4 animate-spin text-primary-mauve" />}
+          <button
+            onClick={() => setLang(l => l === 'en' ? 'bn' : 'en')}
+            className="px-3 py-1.5 rounded-xl text-xs font-black uppercase tracking-wider border border-primary-mauve/20 text-primary-mauve hover:bg-primary-mauve/5 transition-all cursor-pointer"
+          >
+            {lang === 'en' ? 'বাংলা' : 'English'}
           </button>
         </div>
-      )}
+      </div>
 
-      {/* Track A Step 1: Birth Companions */}
-      {activeStep === 1 && track === 'A' && (
-        <div className="bg-white rounded-2xl border border-primary-mauve/10 shadow-premium p-5 space-y-3">
-          <h3 className="font-black text-sm text-text-dark flex items-center gap-2">
-            <Users className="w-4 h-4 text-primary-mauve" /> {STRINGS[lang].steps_A[1]}
-          </h3>
-          <SelectCard options={COMPANIONS} value={companion} onChange={setCompanion}
-            getLabel={o => getLocalizedCompanionLabel(o.value, lang)} getEmoji={o => o.emoji} />
-          {errors.companion && <p className="text-[10px] font-bold text-danger flex items-center gap-1"><AlertCircle className="w-3 h-3" /> {errors.companion}</p>}
-          <div className="flex gap-2">
-            <button onClick={() => setActiveStep(0)} className="flex-1 py-3 border border-primary-mauve/20 text-primary-mauve rounded-xl text-xs font-black cursor-pointer">← {STRINGS[lang].back}</button>
-            <button onClick={handleNextStep1} disabled={!companion}
-              className="flex-1 py-3 bg-primary-mauve text-white rounded-xl text-xs font-black cursor-pointer hover:bg-bg-dark-mauve transition-all disabled:opacity-50">
-              {STRINGS[lang].next}: {STRINGS[lang].steps_A[2]} →
-            </button>
-          </div>
-        </div>
-      )}
+      {/* Two-column body */}
+      <div className="flex flex-col md:flex-row gap-4 items-start">
 
-      {/* Track A Step 2: Pain Management */}
-      {activeStep === 2 && track === 'A' && (
-        <div className="bg-white rounded-2xl border border-primary-mauve/10 shadow-premium p-5 space-y-3">
-          <h3 className="font-black text-sm text-text-dark flex items-center gap-2">
-            <Zap className="w-4 h-4 text-primary-mauve" /> {STRINGS[lang].steps_A[2]}
-          </h3>
-          <SelectCard options={PAIN_OPTIONS} value={pain} onChange={setPain}
-            getLabel={o => getLocalizedPainLabel(o.value, lang)} getEmoji={o => o.emoji} getDesc={o => getLocalizedPainDesc(o.value, lang)} />
-          {errors.pain && <p className="text-[10px] font-bold text-danger flex items-center gap-1"><AlertCircle className="w-3 h-3" /> {errors.pain}</p>}
-          <div className="flex gap-2">
-            <button onClick={() => setActiveStep(1)} className="flex-1 py-3 border border-primary-mauve/20 text-primary-mauve rounded-xl text-xs font-black cursor-pointer">← {STRINGS[lang].back}</button>
-            <button onClick={handleNextStep2} disabled={!pain}
-              className="flex-1 py-3 bg-primary-mauve text-white rounded-xl text-xs font-black cursor-pointer hover:bg-bg-dark-mauve transition-all disabled:opacity-50">
-              {STRINGS[lang].next}: {STRINGS[lang].steps_A[3]} →
-            </button>
-          </div>
-        </div>
-      )}
+      {/* ── LEFT COLUMN: BIRTH PREFERENCES FORM ── */}
+      <div className="w-full md:w-1/2 md:sticky md:top-4 md:max-h-[calc(100vh-6rem)] md:overflow-y-auto">
+      {/* ── TABBED FORM ── */}
+      {(() => {
+        // Define tabs per track
+        const tabsA = [
+          { key: 'facility',   icon: '🏥', label: lang === 'en' ? 'Facility'   : 'হাসপাতাল' },
+          { key: 'companion',  icon: '👥', label: lang === 'en' ? 'Companions' : 'সঙ্গী' },
+          { key: 'pain',       icon: '⚡', label: lang === 'en' ? 'Pain'       : 'ব্যথা' },
+          { key: 'medical',    icon: '🩺', label: lang === 'en' ? 'Medical'    : 'স্বাস্থ্য' },
+          { key: 'transport',  icon: '🚐', label: lang === 'en' ? 'Transport'  : 'পরিবহন' },
+          { key: 'contacts',   icon: '📞', label: lang === 'en' ? 'Contacts'   : 'যোগাযোগ' },
+        ];
+        const tabsB = [
+          { key: 'facility',   icon: '🏥', label: lang === 'en' ? 'Facility'   : 'হাসপাতাল' },
+          { key: 'sba',        icon: '🤱', label: lang === 'en' ? 'Midwife'    : 'দাই' },
+          { key: 'danger',     icon: '⚠️', label: lang === 'en' ? 'Danger'     : 'বিপদ' },
+          { key: 'transport',  icon: '🚐', label: lang === 'en' ? 'Transport'  : 'পরিবহন' },
+          { key: 'contacts',   icon: '📞', label: lang === 'en' ? 'Contacts'   : 'যোগাযোগ' },
+        ];
+        const tabs = track === 'A' ? tabsA : tabsB;
+        const step = Math.min(activeStep, tabs.length - 1);
+        const currentTab = tabs[step].key;
 
-      {/* Track A Step 3: Medical Profile */}
-      {activeStep === 3 && track === 'A' && (
-        <div className="bg-white rounded-2xl border border-primary-mauve/10 shadow-premium p-5 space-y-4">
-          <h3 className="font-black text-sm text-text-dark flex items-center gap-2">
-            <AlertCircle className="w-4 h-4 text-primary-mauve" /> {STRINGS[lang].steps_A[3]}
-          </h3>
+        return (
+          <div className="bg-white rounded-2xl border border-primary-mauve/10 shadow-premium overflow-hidden">
 
-          {/* Blood Group Grid */}
-          <div>
-            <p className="text-[10px] font-black text-text-muted uppercase tracking-wider mb-2">{STRINGS[lang].blood_group_label}</p>
-            <div className="grid grid-cols-4 gap-2">
-              {['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'].map(bg => (
-                <button
-                  key={bg}
-                  type="button"
-                  onClick={() => setBloodGroup(bg)}
-                  className={`py-2 text-center rounded-xl border text-xs font-bold transition-all cursor-pointer ${
-                    bloodGroup === bg 
-                      ? 'bg-primary-mauve/10 border-primary-mauve text-primary-mauve shadow-xs' 
-                      : 'bg-bg-rose-white border-primary-mauve/8 hover:border-primary-mauve/25 text-text-dark'
-                  }`}
-                >
-                  {bg}
-                </button>
-              ))}
-            </div>
-            <button
-              type="button"
-              onClick={() => setBloodGroup('')}
-              className={`w-full py-2.5 mt-2 text-center rounded-xl border text-xs font-bold transition-all cursor-pointer ${
-                bloodGroup === '' 
-                  ? 'bg-primary-mauve/10 border-primary-mauve text-primary-mauve shadow-xs' 
-                  : 'bg-bg-rose-white border-primary-mauve/8 hover:border-primary-mauve/25 text-text-dark'
-              }`}
-            >
-              {STRINGS[lang].blood_group_unknown}
-            </button>
-
-            {/* Rh warning */}
-            {bloodGroup && bloodGroup.includes('-') && (
-              <div className="mt-3 bg-danger/8 border border-danger/20 text-danger p-3 rounded-xl text-xs font-bold flex items-start gap-2">
-                <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
-                <span>{STRINGS[lang].rh_warning}</span>
-              </div>
-            )}
-          </div>
-
-          {/* Allergies list */}
-          <div>
-            <p className="text-[10px] font-black text-text-muted uppercase tracking-wider mb-2">{STRINGS[lang].allergies_label}</p>
-            <div className="grid grid-cols-2 gap-2">
-              {['Penicillin', 'Latex', 'Iodine', 'NSAIDs', 'Anaesthesia agents', 'Sulfa drugs'].map(allg => {
-                const hasAllergy = allergies.includes(allg);
+            {/* Tab bar */}
+            <div className="flex overflow-x-auto border-b border-primary-mauve/10 bg-bg-rose-white">
+              {tabs.map((tab, idx) => {
+                const isActive = idx === step;
+                const isDone = idx < step;
                 return (
-                  <label 
-                    key={allg}
-                    className={`flex items-center gap-2 p-2.5 rounded-xl border cursor-pointer hover:border-primary-mauve/25 transition-all ${
-                      hasAllergy ? 'bg-primary-mauve/5 border-primary-mauve/30' : 'bg-bg-rose-white border-primary-mauve/8'
-                    }`}
-                  >
-                    <input 
-                      type="checkbox" 
-                      checked={hasAllergy}
-                      onChange={e => {
-                        if (e.target.checked) setAllergies(prev => [...prev, allg]);
-                        else setAllergies(prev => prev.filter(a => a !== allg));
-                      }}
-                      className="w-4 h-4 accent-primary-mauve" 
-                    />
-                    <span className="text-xs font-bold text-text-dark">{allg}</span>
-                  </label>
+                  <button key={tab.key} type="button"
+                    onClick={() => setActiveStep(idx)}
+                    className={`flex-1 min-w-0 flex flex-col items-center gap-0.5 py-2.5 px-1 text-center transition-all relative border-b-2 cursor-pointer ${
+                      isActive
+                        ? 'border-primary-mauve text-primary-mauve bg-white'
+                        : 'border-transparent text-text-muted hover:text-text-dark hover:bg-white/60'
+                    }`}>
+                    <span className="text-base leading-none">{isDone ? '✓' : tab.icon}</span>
+                    <span className={`text-[9px] font-black truncate w-full leading-tight ${isDone ? 'text-success' : ''}`}>
+                      {tab.label}
+                    </span>
+                  </button>
                 );
               })}
             </div>
-          </div>
 
-          {/* Conditions list */}
-          <div>
-            <p className="text-[10px] font-black text-text-muted uppercase tracking-wider mb-2">{STRINGS[lang].conditions_label}</p>
-            <div className="space-y-2">
-              {STRINGS[lang].conditions.map(cond => {
-                const hasCondition = conditions.includes(cond.id);
-                return (
-                  <label 
-                    key={cond.id}
-                    className={`flex items-center gap-2.5 p-2.5 rounded-xl border cursor-pointer hover:border-primary-mauve/25 transition-all ${
-                      hasCondition ? 'bg-primary-mauve/5 border-primary-mauve/30' : 'bg-bg-rose-white border-primary-mauve/8'
-                    }`}
-                  >
-                    <input 
-                      type="checkbox" 
-                      checked={hasCondition}
-                      onChange={e => {
-                        if (e.target.checked) setConditions(prev => [...prev, cond.id]);
-                        else setConditions(prev => prev.filter(c => c !== cond.id));
-                      }}
-                      className="w-4 h-4 accent-primary-mauve" 
-                    />
-                    <span className="text-xs font-bold text-text-dark leading-snug">{cond.label}</span>
-                  </label>
-                );
-              })}
-            </div>
-          </div>
+            {/* Tab content */}
+            <div className="p-5 space-y-4">
 
-          <div className="flex gap-2">
-            <button onClick={() => setActiveStep(2)} className="flex-1 py-3 border border-primary-mauve/20 text-primary-mauve rounded-xl text-xs font-black cursor-pointer">← {STRINGS[lang].back}</button>
-            <button onClick={handleNextStep3}
-              className="flex-1 py-3 bg-primary-mauve text-white rounded-xl text-xs font-black cursor-pointer hover:bg-bg-dark-mauve transition-all">
-              {STRINGS[lang].next}: {STRINGS[lang].steps_A[4]} →
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* Track A Step 4: Delivery Preferences */}
-      {activeStep === 4 && track === 'A' && (
-        <div className="bg-white rounded-2xl border border-primary-mauve/10 shadow-premium p-5 space-y-4">
-          <h3 className="font-black text-sm text-text-dark flex items-center gap-2">
-            <Sparkles className="w-4 h-4 text-primary-mauve" /> {STRINGS[lang].steps_A[4]}
-          </h3>
-
-          {/* Delivery prefs checklist */}
-          <div>
-            <p className="text-[10px] font-black text-text-muted uppercase tracking-wider mb-2">Delivery Preferences</p>
-            <div className="space-y-2">
-              {DELIVERY_PREFS.map(pref => (
-                <label key={pref.id} className="flex items-center gap-2.5 p-2.5 rounded-xl bg-bg-rose-white border border-primary-mauve/8 cursor-pointer hover:border-primary-mauve/25 transition-all">
-                  <input type="checkbox" checked={deliveryPrefs[pref.id]}
-                    onChange={e => setDeliveryPrefs(prev => ({ ...prev, [pref.id]: e.target.checked }))}
-                    className="w-4 h-4 accent-primary-mauve" />
-                  <span className="text-xs font-bold text-text-dark">{getLocalizedPrefLabel(pref.id, lang)}</span>
-                </label>
-              ))}
-            </div>
-          </div>
-
-          {/* C-section consent */}
-          <div className="pt-2 border-t border-primary-mauve/5">
-            <label className="flex items-center gap-2.5 p-2.5 rounded-xl bg-bg-rose-white border border-primary-mauve/8 cursor-pointer hover:border-primary-mauve/25 transition-all">
-              <input type="checkbox" checked={csectionConsent}
-                onChange={e => setCsectionConsent(e.target.checked)}
-                className="w-4 h-4 accent-primary-mauve" />
-              <span className="text-xs font-bold text-text-dark">{STRINGS[lang].csection_consent_label}</span>
-            </label>
-          </div>
-
-          <div className="flex gap-2">
-            <button onClick={() => setActiveStep(3)} className="flex-1 py-3 border border-primary-mauve/20 text-primary-mauve rounded-xl text-xs font-black cursor-pointer">← {STRINGS[lang].back}</button>
-            <button onClick={handleNextStep4}
-              className="flex-1 py-3 bg-primary-mauve text-white rounded-xl text-xs font-black cursor-pointer hover:bg-bg-dark-mauve transition-all">
-              {STRINGS[lang].next}: {STRINGS[lang].steps_A[5]} →
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* Track A Step 5: Emergency Transport */}
-      {activeStep === 5 && track === 'A' && (
-        <div className="bg-white rounded-2xl border border-primary-mauve/10 shadow-premium p-5 space-y-4">
-          <h3 className="font-black text-sm text-text-dark flex items-center gap-2">
-            <Truck className="w-4 h-4 text-primary-mauve" /> {STRINGS[lang].steps_A[5]}
-          </h3>
-          <SelectCard options={TRANSPORT_OPTIONS} value={transport} onChange={setTransport}
-            getLabel={o => getLocalizedTransportLabel(o.value, lang)} getEmoji={o => o.emoji} getDesc={o => getLocalizedTransportDesc(o.value, lang)} />
-          {errors.transport && <p className="text-[10px] font-bold text-danger flex items-center gap-1"><AlertCircle className="w-3 h-3" /> {errors.transport}</p>}
-
-          {/* Emergency contacts */}
-          <div className="space-y-2 pt-2 border-t border-primary-mauve/5">
-            <p className="text-[10px] font-black text-text-muted uppercase tracking-wider">{STRINGS[lang].emergency_contacts_label}</p>
-            <input type="tel" placeholder={STRINGS[lang].primary_contact_placeholder}
-              value={emergencyContact1} onChange={e => setEmergencyContact1(e.target.value)}
-              className="w-full px-4 py-2.5 border border-primary-mauve/15 rounded-xl text-xs font-bold text-text-dark focus:border-primary-mauve outline-none bg-bg-rose-white" />
-            {errors.ec1 && <p className="text-[10px] font-bold text-danger flex items-center gap-1"><AlertCircle className="w-3 h-3" /> {errors.ec1}</p>}
-            <input type="tel" placeholder={STRINGS[lang].secondary_contact_placeholder}
-              value={emergencyContact2} onChange={e => setEmergencyContact2(e.target.value)}
-              className="w-full px-4 py-2.5 border border-primary-mauve/15 rounded-xl text-xs font-bold text-text-dark focus:border-primary-mauve outline-none bg-bg-rose-white" />
-            <p className="text-[10px] font-semibold text-text-muted">{STRINGS[lang].national_hotline}</p>
-          </div>
-
-          {/* Special notes */}
-          <div className="pt-2 border-t border-primary-mauve/5">
-            <p className="text-[10px] font-black text-text-muted uppercase tracking-wider mb-2">{STRINGS[lang].special_notes_label}</p>
-            <textarea value={specialNotes} onChange={e => setSpecialNotes(e.target.value)}
-              placeholder={STRINGS[lang].special_notes_placeholder}
-              className="w-full px-4 py-3 border border-primary-mauve/15 rounded-xl text-xs font-bold text-text-dark focus:border-primary-mauve outline-none bg-bg-rose-white resize-none min-h-[80px]" />
-          </div>
-
-          {errors.global && <p className="text-[10px] font-bold text-danger flex items-center gap-1"><AlertCircle className="w-3 h-3" /> {errors.global}</p>}
-
-          <div className="flex gap-2">
-            <button onClick={() => setActiveStep(4)} className="flex-1 py-3 border border-primary-mauve/20 text-primary-mauve rounded-xl text-xs font-black cursor-pointer">← {STRINGS[lang].back}</button>
-            <button onClick={generate} disabled={loading}
-              className="flex-1 py-3 bg-primary-mauve text-white rounded-xl text-xs font-black cursor-pointer hover:bg-bg-dark-mauve transition-all shadow-glow flex items-center justify-center gap-1.5 disabled:opacity-70">
-              {loading ? (
-                <>
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                  {STRINGS[lang].generating}
-                </>
-              ) : (
-                <>
-                  <Sparkles className="w-4 h-4" />
-                  {STRINGS[lang].generate_btn}
-                </>
+              {/* FACILITY TAB */}
+              {currentTab === 'facility' && (
+                <div>
+                  <p className="text-[10px] font-black text-text-muted uppercase tracking-wider mb-3 flex items-center gap-1.5">
+                    <MapPin className="w-3.5 h-3.5 text-primary-mauve" /> {STRINGS[lang].steps_A[0]}
+                  </p>
+                  <SelectCard options={FACILITIES} value={facility}
+                    onChange={val => { setFacility(val); setTrack(getTrack(val)); }}
+                    getLabel={o => getLocalizedFacilityLabel(o.value, lang)}
+                    getEmoji={() => '🏥'} getDesc={o => o.tier + ' facility'} getTags={o => o.tags} />
+                  {errors.facility && <p className="text-[10px] font-bold text-danger mt-1 flex items-center gap-1"><AlertCircle className="w-3 h-3" />{errors.facility}</p>}
+                </div>
               )}
-            </button>
-          </div>
-        </div>
-      )}
 
-      {/* Track B Step 1: SBA & Preparedness */}
-      {activeStep === 1 && track === 'B' && (
-        <div className="bg-white rounded-2xl border border-primary-mauve/10 shadow-premium p-5 space-y-4">
-          <h3 className="font-black text-sm text-text-dark flex items-center gap-2">
-            <Users className="w-4 h-4 text-primary-mauve" /> {STRINGS[lang].steps_B[1]}
-          </h3>
+              {/* COMPANION TAB (Track A only) */}
+              {currentTab === 'companion' && (
+                <div>
+                  <p className="text-[10px] font-black text-text-muted uppercase tracking-wider mb-3 flex items-center gap-1.5">
+                    <Users className="w-3.5 h-3.5 text-primary-mauve" /> {STRINGS[lang].steps_A[1]}
+                  </p>
+                  <SelectCard options={COMPANIONS} value={companion} onChange={setCompanion}
+                    getLabel={o => getLocalizedCompanionLabel(o.value, lang)} getEmoji={o => o.emoji} />
+                  {errors.companion && <p className="text-[10px] font-bold text-danger mt-1 flex items-center gap-1"><AlertCircle className="w-3 h-3" />{errors.companion}</p>}
+                </div>
+              )}
 
-          {/* SBA Question */}
-          <div>
-            <p className="text-xs font-bold text-text-dark mb-2">{STRINGS[lang].sba_question}</p>
-            <div className="grid grid-cols-3 gap-2">
-              {[
-                { value: 'yes', label: STRINGS[lang].sba_yes },
-                { value: 'arranging', label: STRINGS[lang].sba_arranging },
-                { value: 'no', label: STRINGS[lang].sba_no }
-              ].map(opt => (
-                <button key={opt.value} type="button" onClick={() => setSbaPresent(opt.value)}
-                  className={`py-3 px-2 text-center rounded-xl border text-[10px] font-black transition-all cursor-pointer ${sbaPresent === opt.value ? 'bg-primary-mauve/10 border-primary-mauve text-primary-mauve shadow-xs' : 'bg-bg-rose-white border-primary-mauve/8 hover:border-primary-mauve/25 text-text-dark'}`}>
-                  {opt.label}
-                </button>
-              ))}
-            </div>
+              {/* PAIN TAB (Track A only) */}
+              {currentTab === 'pain' && (
+                <div>
+                  <p className="text-[10px] font-black text-text-muted uppercase tracking-wider mb-3 flex items-center gap-1.5">
+                    <Zap className="w-3.5 h-3.5 text-primary-mauve" /> {STRINGS[lang].steps_A[2]}
+                  </p>
+                  <SelectCard options={PAIN_OPTIONS} value={pain} onChange={setPain}
+                    getLabel={o => getLocalizedPainLabel(o.value, lang)}
+                    getEmoji={o => o.emoji} getDesc={o => getLocalizedPainDesc(o.value, lang)} />
+                  {errors.pain && <p className="text-[10px] font-bold text-danger mt-1 flex items-center gap-1"><AlertCircle className="w-3 h-3" />{errors.pain}</p>}
+                </div>
+              )}
 
-            {/* SBA warning */}
-            {sbaPresent === 'no' && (
-              <div className="mt-3 bg-danger/8 border border-danger/20 text-danger p-3 rounded-xl text-xs font-bold flex items-start gap-2 animate-fadeIn">
-                <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
-                <span>{STRINGS[lang].sba_warning}</span>
-              </div>
-            )}
-            {errors.sbaPresent && <p className="text-[10px] font-bold text-danger mt-1 flex items-center gap-1"><AlertCircle className="w-3 h-3" /> {errors.sbaPresent}</p>}
-          </div>
+              {/* MEDICAL TAB (Track A only) */}
+              {currentTab === 'medical' && (
+                <div className="space-y-5">
+                  <p className="text-[10px] font-black text-text-muted uppercase tracking-wider flex items-center gap-1.5">
+                    <AlertCircle className="w-3.5 h-3.5 text-primary-mauve" /> {STRINGS[lang].steps_A[3]}
+                  </p>
 
-          {/* Preparedness Checklist */}
-          <div className="pt-2 border-t border-primary-mauve/5">
-            <p className="text-[10px] font-black text-text-muted uppercase tracking-wider mb-2">Birth Preparedness Checklist</p>
-            <div className="space-y-2">
-              {STRINGS[lang].prep_items.map(item => {
-                const isChecked = birthPrep[item.id] || false;
-                return (
-                  <label key={item.id} className={`flex items-center gap-2.5 p-2.5 rounded-xl border cursor-pointer hover:border-primary-mauve/25 transition-all ${isChecked ? 'bg-primary-mauve/5 border-primary-mauve/30' : 'bg-bg-rose-white border-primary-mauve/8'}`}>
-                    <input type="checkbox" checked={isChecked}
-                      onChange={e => {
-                        setBirthPrep(prev => ({ ...prev, [item.id]: e.target.checked }));
-                        if (item.id === 'facility_identified' && !e.target.checked) {
-                          setReferralPathway({});
-                        }
-                      }}
+                  {/* Blood Group */}
+                  <div>
+                    <p className="text-[10px] font-black text-text-muted uppercase tracking-wider mb-2">{STRINGS[lang].blood_group_label}</p>
+                    <div className="grid grid-cols-4 gap-2">
+                      {['A+','A-','B+','B-','AB+','AB-','O+','O-'].map(bg => (
+                        <button key={bg} type="button" onClick={() => setBloodGroup(bg)}
+                          className={`py-2 text-center rounded-xl border text-xs font-bold transition-all cursor-pointer ${
+                            bloodGroup === bg
+                              ? 'bg-primary-mauve/10 border-primary-mauve text-primary-mauve'
+                              : 'bg-bg-rose-white border-primary-mauve/8 hover:border-primary-mauve/25 text-text-dark'
+                          }`}>{bg}</button>
+                      ))}
+                    </div>
+                    <button type="button" onClick={() => setBloodGroup('')}
+                      className={`w-full py-2.5 mt-2 text-center rounded-xl border text-xs font-bold transition-all cursor-pointer ${
+                        bloodGroup === ''
+                          ? 'bg-primary-mauve/10 border-primary-mauve text-primary-mauve'
+                          : 'bg-bg-rose-white border-primary-mauve/8 text-text-dark'
+                      }`}>{STRINGS[lang].blood_group_unknown}</button>
+                    {bloodGroup?.includes('-') && (
+                      <div className="mt-2 p-3 rounded-xl bg-danger/8 border border-danger/20 flex items-start gap-2">
+                        <AlertCircle className="w-4 h-4 text-danger shrink-0 mt-0.5" />
+                        <p className="text-[10px] font-bold text-danger">{STRINGS[lang].rh_warning}</p>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Allergies */}
+                  <div>
+                    <p className="text-[10px] font-black text-text-muted uppercase tracking-wider mb-2">{STRINGS[lang].allergies_label}</p>
+                    <div className="grid grid-cols-2 gap-2">
+                      {['Penicillin','Latex','Iodine','NSAIDs','Anaesthesia agents','Sulfa drugs'].map(allg => (
+                        <label key={allg} className={`flex items-center gap-2 p-2.5 rounded-xl border cursor-pointer transition-all ${
+                          allergies.includes(allg) ? 'bg-primary-mauve/5 border-primary-mauve/30' : 'bg-bg-rose-white border-primary-mauve/8'
+                        }`}>
+                          <input type="checkbox" checked={allergies.includes(allg)}
+                            onChange={e => setAllergies(prev => e.target.checked ? [...prev, allg] : prev.filter(a => a !== allg))}
+                            className="w-4 h-4 accent-primary-mauve" />
+                          <span className="text-xs font-bold text-text-dark">{allg}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Conditions */}
+                  <div>
+                    <p className="text-[10px] font-black text-text-muted uppercase tracking-wider mb-2">{STRINGS[lang].conditions_label}</p>
+                    <div className="space-y-2">
+                      {STRINGS[lang].conditions.map(cond => (
+                        <label key={cond.id} className={`flex items-center gap-2.5 p-2.5 rounded-xl border cursor-pointer transition-all ${
+                          conditions.includes(cond.id) ? 'bg-primary-mauve/5 border-primary-mauve/30' : 'bg-bg-rose-white border-primary-mauve/8'
+                        }`}>
+                          <input type="checkbox" checked={conditions.includes(cond.id)}
+                            onChange={e => setConditions(prev => e.target.checked ? [...prev, cond.id] : prev.filter(c => c !== cond.id))}
+                            className="w-4 h-4 accent-primary-mauve" />
+                          <span className="text-xs font-bold text-text-dark">{cond.label}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Delivery Preferences */}
+                  <div>
+                    <p className="text-[10px] font-black text-text-muted uppercase tracking-wider mb-2">
+                      {lang === 'en' ? 'Delivery Preferences' : 'ডেলিভারি পছন্দ'}
+                    </p>
+                    <div className="space-y-2">
+                      {DELIVERY_PREFS.map(pref => (
+                        <label key={pref.id} className="flex items-center gap-2.5 p-2.5 rounded-xl bg-bg-rose-white border border-primary-mauve/8 cursor-pointer hover:border-primary-mauve/25 transition-all">
+                          <input type="checkbox" checked={deliveryPrefs[pref.id]}
+                            onChange={e => setDeliveryPrefs(prev => ({ ...prev, [pref.id]: e.target.checked }))}
+                            className="w-4 h-4 accent-primary-mauve" />
+                          <span className="text-xs font-bold text-text-dark">{getLocalizedPrefLabel(pref.id, lang)}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* C-section consent */}
+                  <div>
+                    <p className="text-[10px] font-black text-text-muted uppercase tracking-wider mb-2">{STRINGS[lang].csection_consent_label}</p>
+                    <div className="grid grid-cols-3 gap-2">
+                      {[
+                        { val: 'yes',      label: lang === 'en' ? 'Yes, I consent' : 'হ্যাঁ, সম্মতি দিচ্ছি' },
+                        { val: 'no',       label: lang === 'en' ? 'No, I do not'   : 'না, সম্মতি নেই' },
+                        { val: 'not_sure', label: lang === 'en' ? 'Not sure yet'   : 'এখনো নিশ্চিত নই' },
+                      ].map(opt => (
+                        <button key={opt.val} type="button" onClick={() => setCsectionConsent(opt.val)}
+                          className={`py-2.5 rounded-xl border text-[10px] font-black transition-all cursor-pointer ${
+                            csectionConsent === opt.val
+                              ? opt.val === 'yes'      ? 'bg-green-50 border-green-400 text-green-700'
+                              : opt.val === 'no'       ? 'bg-red-50 border-red-400 text-red-700'
+                              :                          'bg-amber-50 border-amber-400 text-amber-700'
+                              : 'bg-bg-rose-white border-primary-mauve/8 text-text-dark hover:border-primary-mauve/25'
+                          }`}>{opt.label}</button>
+                      ))}
+                    </div>
+                    {csectionConsent === 'no' && (
+                      <div className="mt-2 p-3 rounded-xl bg-amber-50 border border-amber-200">
+                        <p className="text-[10px] font-bold text-amber-700">
+                          {lang === 'en' ? 'Please discuss this with your doctor before your due date.' : 'আপনার প্রসবের তারিখের আগে আপনার ডাক্তারের সাথে এটি আলোচনা করুন।'}
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* SBA TAB (Track B only) */}
+              {currentTab === 'sba' && (
+                <div className="space-y-4">
+                  <div>
+                    <p className="text-xs font-bold text-text-dark mb-2">{STRINGS[lang].sba_question}</p>
+                    <div className="grid grid-cols-3 gap-2">
+                      {[
+                        { value: 'yes', label: STRINGS[lang].sba_yes },
+                        { value: 'arranging', label: STRINGS[lang].sba_arranging },
+                        { value: 'no', label: STRINGS[lang].sba_no }
+                      ].map(opt => (
+                        <button key={opt.value} type="button" onClick={() => setSbaPresent(opt.value)}
+                          className={`py-3 rounded-xl border text-[10px] font-black transition-all cursor-pointer ${
+                            sbaPresent === opt.value
+                              ? 'bg-primary-mauve/10 border-primary-mauve text-primary-mauve'
+                              : 'bg-bg-rose-white border-primary-mauve/8 text-text-dark hover:border-primary-mauve/25'
+                          }`}>{opt.label}</button>
+                      ))}
+                    </div>
+                    {sbaPresent === 'no' && (
+                      <div className="mt-2 p-3 rounded-xl bg-danger/8 border border-danger/20 flex items-start gap-2">
+                        <AlertCircle className="w-4 h-4 text-danger shrink-0" />
+                        <p className="text-xs font-bold text-danger">{STRINGS[lang].sba_warning}</p>
+                      </div>
+                    )}
+                    {errors.sbaPresent && <p className="text-[10px] font-bold text-danger mt-1">{errors.sbaPresent}</p>}
+                  </div>
+
+                  {/* Birth Prep Checklist */}
+                  <div>
+                    <p className="text-[10px] font-black text-text-muted uppercase tracking-wider mb-2">
+                      {lang === 'en' ? 'Birth Preparedness Checklist' : 'প্রসব প্রস্তুতি তালিকা'}
+                    </p>
+                    <div className="space-y-2">
+                      {STRINGS[lang].prep_items.map(item => (
+                        <label key={item.id} className={`flex items-center gap-2.5 p-2.5 rounded-xl border cursor-pointer transition-all ${
+                          birthPrep[item.id] ? 'bg-primary-mauve/5 border-primary-mauve/30' : 'bg-bg-rose-white border-primary-mauve/8'
+                        }`}>
+                          <input type="checkbox" checked={birthPrep[item.id] || false}
+                            onChange={e => setBirthPrep(prev => ({ ...prev, [item.id]: e.target.checked }))}
+                            className="w-4 h-4 accent-primary-mauve" />
+                          <span className="text-xs font-bold text-text-dark">{item.label}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+
+                  {birthPrep.facility_identified && (
+                    <div>
+                      <p className="text-[10px] font-black text-text-muted uppercase tracking-wider mb-2">{STRINGS[lang].referral_facility_label}</p>
+                      <select value={referralPathway.facility || ''} onChange={e => setReferralPathway({ facility: e.target.value })}
+                        className="w-full px-4 py-2.5 border border-primary-mauve/15 rounded-xl text-xs font-bold text-text-dark focus:border-primary-mauve outline-none bg-bg-rose-white">
+                        <option value="">{STRINGS[lang].referral_facility_select}</option>
+                        {FACILITIES.filter(f => ['Tertiary','Secondary','Specialized','NGO Secondary'].includes(f.tier)).map(f => (
+                          <option key={f.value} value={f.value}>{getLocalizedFacilityLabel(f.value, lang)} ({f.tier})</option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* DANGER TAB (Track B only) */}
+              {currentTab === 'danger' && (
+                <div className="p-4 rounded-xl bg-danger/5 border border-danger/15">
+                  <p className="text-[10px] font-black text-danger uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                    <AlertCircle className="w-3.5 h-3.5" /> {STRINGS[lang].danger_title}
+                  </p>
+                  <p className="text-[10px] font-semibold text-text-muted mb-2">{STRINGS[lang].danger_subtitle}</p>
+                  <ol className="list-decimal pl-4 text-xs font-semibold text-text-dark space-y-1 mb-3">
+                    {STRINGS[lang].danger_signs.map((sign, i) => <li key={i}>{sign}</li>)}
+                  </ol>
+                  <label className="flex items-center gap-2.5 cursor-pointer">
+                    <input type="checkbox" checked={dangerSignsAck} onChange={e => setDangerSignsAck(e.target.checked)}
                       className="w-4 h-4 accent-primary-mauve" />
-                    <span className="text-xs font-bold text-text-dark leading-snug">{item.label}</span>
+                    <span className="text-xs font-black text-danger">{STRINGS[lang].danger_ack}</span>
                   </label>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* EmONC backup facility selector */}
-          {birthPrep.facility_identified && (
-            <div className="pt-2 border-t border-primary-mauve/5 animate-fadeIn">
-              <p className="text-[10px] font-black text-text-muted uppercase tracking-wider mb-2">{STRINGS[lang].referral_facility_label}</p>
-              <select value={referralPathway.facility || ''} onChange={e => setReferralPathway({ facility: e.target.value })}
-                className="w-full px-4 py-2.5 border border-primary-mauve/15 rounded-xl text-xs font-bold text-text-dark focus:border-primary-mauve outline-none bg-bg-rose-white">
-                <option value="">{STRINGS[lang].referral_facility_select}</option>
-                {FACILITIES.filter(f => f.tier === 'Tertiary' || f.tier === 'Secondary' || f.tier === 'Specialized' || f.tier === 'NGO Secondary').map(f => (
-                  <option key={f.value} value={f.value}>{getLocalizedFacilityLabel(f.value, lang)} ({f.tier})</option>
-                ))}
-              </select>
-            </div>
-          )}
-
-          <div className="flex gap-2">
-            <button onClick={() => setActiveStep(0)} className="flex-1 py-3 border border-primary-mauve/20 text-primary-mauve rounded-xl text-xs font-black cursor-pointer">← {STRINGS[lang].back}</button>
-            <button onClick={handleNextStep1} disabled={!sbaPresent}
-              className="flex-1 py-3 bg-primary-mauve text-white rounded-xl text-xs font-black cursor-pointer hover:bg-bg-dark-mauve transition-all disabled:opacity-50">
-              {STRINGS[lang].next}: {STRINGS[lang].steps_B[2]} →
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* Track B Step 2: Danger Signs */}
-      {activeStep === 2 && track === 'B' && (
-        <div className="bg-white rounded-2xl border border-primary-mauve/10 shadow-premium p-5 space-y-4">
-          <h3 className="font-black text-sm text-text-dark flex items-center gap-2 text-danger">
-            <AlertCircle className="w-4 h-4 text-danger animate-pulse" /> {STRINGS[lang].danger_title}
-          </h3>
-          <p className="text-xs font-bold text-text-muted leading-relaxed">{STRINGS[lang].danger_subtitle}</p>
-
-          <ol className="list-decimal pl-5 text-xs font-bold text-text-dark space-y-2 bg-danger/5 p-4 rounded-xl border border-danger/10">
-            {STRINGS[lang].danger_signs.map((sign, idx) => (
-              <li key={idx} className="leading-snug">{sign}</li>
-            ))}
-          </ol>
-
-          <div className="pt-2">
-            <label className="flex items-center gap-2.5 p-2.5 rounded-xl bg-bg-rose-white border border-primary-mauve/8 cursor-pointer hover:border-primary-mauve/25 transition-all">
-              <input type="checkbox" checked={dangerSignsAck} onChange={e => setDangerSignsAck(e.target.checked)}
-                className="w-4 h-4 accent-primary-mauve" />
-              <span className="text-xs font-black text-danger leading-snug">{STRINGS[lang].danger_ack}</span>
-            </label>
-            {errors.dangerSignsAck && <p className="text-[10px] font-bold text-danger mt-1 flex items-center gap-1"><AlertCircle className="w-3 h-3" /> {errors.dangerSignsAck}</p>}
-          </div>
-
-          <div className="flex gap-2">
-            <button onClick={() => setActiveStep(1)} className="flex-1 py-3 border border-primary-mauve/20 text-primary-mauve rounded-xl text-xs font-black cursor-pointer">← {STRINGS[lang].back}</button>
-            <button onClick={handleNextStep2} disabled={!dangerSignsAck}
-              className="flex-1 py-3 bg-primary-mauve text-white rounded-xl text-xs font-black cursor-pointer hover:bg-bg-dark-mauve transition-all disabled:opacity-50">
-              {STRINGS[lang].next}: {STRINGS[lang].steps_B[3]} →
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* Track B Step 3: Emergency Contacts */}
-      {activeStep === 3 && track === 'B' && (
-        <div className="bg-white rounded-2xl border border-primary-mauve/10 shadow-premium p-5 space-y-4">
-          <h3 className="font-black text-sm text-text-dark flex items-center gap-2">
-            <Phone className="w-4 h-4 text-primary-mauve" /> {STRINGS[lang].steps_B[3]}
-          </h3>
-
-          <SelectCard options={TRANSPORT_OPTIONS} value={transport} onChange={setTransport}
-            getLabel={o => getLocalizedTransportLabel(o.value, lang)} getEmoji={o => o.emoji} getDesc={o => getLocalizedTransportDesc(o.value, lang)} />
-          {errors.transport && <p className="text-[10px] font-bold text-danger flex items-center gap-1"><AlertCircle className="w-3 h-3" /> {errors.transport}</p>}
-
-          <div className="space-y-2 pt-2 border-t border-primary-mauve/5">
-            <p className="text-[10px] font-black text-text-muted uppercase tracking-wider">{STRINGS[lang].emergency_contacts_label}</p>
-            <input type="tel" placeholder={STRINGS[lang].primary_contact_placeholder}
-              value={emergencyContact1} onChange={e => setEmergencyContact1(e.target.value)}
-              className="w-full px-4 py-2.5 border border-primary-mauve/15 rounded-xl text-xs font-bold text-text-dark focus:border-primary-mauve outline-none bg-bg-rose-white" />
-            {errors.ec1 && <p className="text-[10px] font-bold text-danger flex items-center gap-1"><AlertCircle className="w-3 h-3" /> {errors.ec1}</p>}
-            <input type="tel" placeholder={STRINGS[lang].secondary_contact_placeholder}
-              value={emergencyContact2} onChange={e => setEmergencyContact2(e.target.value)}
-              className="w-full px-4 py-2.5 border border-primary-mauve/15 rounded-xl text-xs font-bold text-text-dark focus:border-primary-mauve outline-none bg-bg-rose-white" />
-            <p className="text-[10px] font-semibold text-text-muted">{STRINGS[lang].national_hotline}</p>
-          </div>
-
-          <div className="pt-2 border-t border-primary-mauve/5">
-            <p className="text-[10px] font-black text-text-muted uppercase tracking-wider mb-2">{STRINGS[lang].special_notes_label}</p>
-            <textarea value={specialNotes} onChange={e => setSpecialNotes(e.target.value)}
-              placeholder={STRINGS[lang].special_notes_placeholder}
-              className="w-full px-4 py-3 border border-primary-mauve/15 rounded-xl text-xs font-bold text-text-dark focus:border-primary-mauve outline-none bg-bg-rose-white resize-none min-h-[80px]" />
-          </div>
-
-          {errors.global && <p className="text-[10px] font-bold text-danger flex items-center gap-1"><AlertCircle className="w-3 h-3" /> {errors.global}</p>}
-
-          <div className="flex gap-2">
-            <button onClick={() => setActiveStep(2)} className="flex-1 py-3 border border-primary-mauve/20 text-primary-mauve rounded-xl text-xs font-black cursor-pointer">← {STRINGS[lang].back}</button>
-            <button onClick={generate} disabled={loading}
-              className="flex-1 py-3 bg-primary-mauve text-white rounded-xl text-xs font-black cursor-pointer hover:bg-bg-dark-mauve transition-all shadow-glow flex items-center justify-center gap-1.5 disabled:opacity-70">
-              {loading ? (
-                <>
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                  {STRINGS[lang].generating}
-                </>
-              ) : (
-                <>
-                  <Sparkles className="w-4 h-4" />
-                  {STRINGS[lang].generate_btn}
-                </>
+                  {errors.dangerSignsAck && <p className="text-[10px] font-bold text-danger mt-1">{errors.dangerSignsAck}</p>}
+                </div>
               )}
-            </button>
+
+              {/* TRANSPORT TAB (shared A & B) */}
+              {currentTab === 'transport' && (
+                <div>
+                  <p className="text-[10px] font-black text-text-muted uppercase tracking-wider mb-3 flex items-center gap-1.5">
+                    <Truck className="w-3.5 h-3.5 text-primary-mauve" /> {STRINGS[lang].steps_A[5]}
+                  </p>
+                  <SelectCard options={TRANSPORT_OPTIONS} value={transport} onChange={setTransport}
+                    getLabel={o => getLocalizedTransportLabel(o.value, lang)}
+                    getEmoji={o => o.emoji} getDesc={o => getLocalizedTransportDesc(o.value, lang)} />
+                  {errors.transport && <p className="text-[10px] font-bold text-danger mt-1 flex items-center gap-1"><AlertCircle className="w-3 h-3" />{errors.transport}</p>}
+                </div>
+              )}
+
+              {/* CONTACTS TAB (shared A & B) */}
+              {currentTab === 'contacts' && (
+                <div className="space-y-3">
+                  <p className="text-[10px] font-black text-text-muted uppercase tracking-wider flex items-center gap-1.5">
+                    <Phone className="w-3.5 h-3.5 text-primary-mauve" /> {STRINGS[lang].emergency_contacts_label}
+                  </p>
+                  <input type="tel" placeholder={STRINGS[lang].primary_contact_placeholder}
+                    value={emergencyContact1} onChange={e => setEmergencyContact1(e.target.value)}
+                    className="w-full px-4 py-2.5 border border-primary-mauve/15 rounded-xl text-xs font-bold text-text-dark focus:border-primary-mauve outline-none bg-bg-rose-white" />
+                  {errors.ec1 && <p className="text-[10px] font-bold text-danger flex items-center gap-1"><AlertCircle className="w-3 h-3" />{errors.ec1}</p>}
+                  <input type="tel" placeholder={STRINGS[lang].secondary_contact_placeholder}
+                    value={emergencyContact2} onChange={e => setEmergencyContact2(e.target.value)}
+                    className="w-full px-4 py-2.5 border border-primary-mauve/15 rounded-xl text-xs font-bold text-text-dark focus:border-primary-mauve outline-none bg-bg-rose-white" />
+                  <p className="text-[10px] font-semibold text-text-muted">{STRINGS[lang].national_hotline}</p>
+
+                  {/* Special notes sit here since contacts is the last tab */}
+                  <div className="pt-3 border-t border-primary-mauve/5">
+                    <p className="text-[10px] font-black text-text-muted uppercase tracking-wider mb-2">{STRINGS[lang].special_notes_label}</p>
+                    <textarea value={specialNotes} onChange={e => setSpecialNotes(e.target.value)}
+                      placeholder={STRINGS[lang].special_notes_placeholder}
+                      className="w-full px-4 py-3 border border-primary-mauve/15 rounded-xl text-xs font-bold text-text-dark focus:border-primary-mauve outline-none bg-bg-rose-white resize-none min-h-[70px]" />
+                  </div>
+                </div>
+              )}
+
+              {/* Bottom nav: Back / Next or Generate */}
+              <div className="flex items-center gap-2 pt-2 border-t border-primary-mauve/5">
+                {/* Live estimate ring — dynamic, updates as form changes */}
+                <div className="flex items-center gap-1.5">
+                  <ReadinessRing score={estimateReadinessScore()} size="sm" />
+                  <span className="text-[9px] font-bold text-text-muted leading-tight max-w-[48px]">
+                    {lang === 'en' ? 'Live est.' : 'লাইভ'}
+                  </span>
+                </div>
+
+                <div className="flex gap-2 ml-auto">
+                  {step > 0 && (
+                    <button type="button" onClick={() => setActiveStep(step - 1)}
+                      className="px-4 py-2 rounded-xl border border-primary-mauve/20 text-xs font-black text-primary-mauve hover:bg-primary-mauve/5 transition-all cursor-pointer">
+                      {STRINGS[lang].back}
+                    </button>
+                  )}
+                  {step < tabs.length - 1 ? (
+                    <button type="button" onClick={() => { validateStep(step); setActiveStep(step + 1); }}
+                      className="px-4 py-2 rounded-xl bg-primary-mauve text-white text-xs font-black hover:bg-bg-dark-mauve transition-all cursor-pointer">
+                      {STRINGS[lang].next}
+                    </button>
+                  ) : (
+                    <button type="button" onClick={handleSave} disabled={saving}
+                      className="px-4 py-2 rounded-xl bg-primary-mauve text-white text-xs font-black hover:bg-bg-dark-mauve transition-all cursor-pointer flex items-center gap-1.5 disabled:opacity-70">
+                      {saving ? (
+                        <><Loader2 className="w-3.5 h-3.5 animate-spin" /> {STRINGS[lang].generating}</>
+                      ) : saveSuccess ? (
+                        <><CheckCircle2 className="w-3.5 h-3.5" /> {lang === 'en' ? 'Updated!' : 'আপডেট হয়েছে!'}</>
+                      ) : (
+                        <><Sparkles className="w-3.5 h-3.5" /> {STRINGS[lang].generate_btn}</>
+                      )}
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {errors.global && (
+                <p className="text-[10px] font-bold text-danger flex items-center gap-1">
+                  <AlertCircle className="w-3 h-3" /> {errors.global}
+                </p>
+              )}
+
+            </div>
           </div>
+        );
+      })()}
+      </div>
+
+      {/* ── RIGHT COLUMN: PLAN OUTPUT + HISTORY ── */}
+      <div className="w-full md:w-1/2 flex flex-col gap-4">
+
+      {/* Empty state — show only when no plan at all */}
+      {!generatedPlanText && !existingPlans.find(p => p.is_active) && !loadingHistory && (
+        <div className="bg-white rounded-2xl border border-dashed border-primary-mauve/20 p-8 flex flex-col items-center justify-center text-center gap-3">
+          <div className="w-12 h-12 rounded-full bg-primary-mauve/8 flex items-center justify-center">
+            <Sparkles className="w-5 h-5 text-primary-mauve/50" />
+          </div>
+          <p className="text-xs font-black text-text-muted">
+            {lang === 'en' ? 'Your birth plan will appear here' : 'আপনার জন্ম পরিকল্পনা এখানে দেখা যাবে'}
+          </p>
+          <p className="text-[10px] font-semibold text-text-muted/70 max-w-[200px]">
+            {lang === 'en' ? 'Fill in the form and tap "Generate Birth Plan"' : 'ফর্ম পূরণ করুন এবং "জন্ম পরিকল্পনা তৈরি করুন" চাপুন'}
+          </p>
         </div>
       )}
 
-      {/* Summary preview (all steps completed) */}
-      {facility && companion && pain && transport && track === 'A' && (
-        <div className="bg-primary-mauve/5 border border-primary-mauve/15 rounded-2xl p-4 space-y-2">
-          <p className="text-[10px] font-black text-primary-mauve uppercase tracking-wider">{STRINGS[lang].preview_title}</p>
-          {[
-            { label: STRINGS[lang].steps_A[0], val: getLocalizedFacilityLabel(facility, lang) },
-            { label: STRINGS[lang].steps_A[1], val: getLocalizedCompanionLabel(companion, lang) },
-            { label: STRINGS[lang].steps_A[2], val: getLocalizedPainLabel(pain, lang) },
-            { label: STRINGS[lang].steps_A[5], val: getLocalizedTransportLabel(transport, lang) },
-          ].map(row => (
-            <div key={row.label} className="flex gap-2 text-xs">
-              <span className="font-black text-text-muted w-24 shrink-0">{row.label}:</span>
-              <span className="font-bold text-text-dark">{row.val}</span>
+      {/* ── CURRENT PLAN ── */}
+      {(() => {
+        const planText = generatedPlanText || existingPlans.find(p => p.is_active)?.generated_plan;
+        const activePlan = existingPlans.find(p => p.is_active);
+        const meta = generatedMeta || {
+          readiness_score: activePlan?.readiness_score,
+          readiness_gaps: activePlan?.readiness_gaps ?? [],
+        };
+        if (!planText) return null;
+        return (
+          <div className="bg-white rounded-2xl border border-primary-mauve/10 shadow-premium p-5 space-y-4">
+            <div className="flex items-center justify-between">
+              <p className="text-[10px] font-black text-primary-mauve uppercase tracking-wider flex items-center gap-1.5">
+                <Sparkles className="w-3.5 h-3.5" /> {STRINGS[lang].plan_title}
+              </p>
+              <div className="flex items-center gap-2">
+                <button onClick={() => playTTS(planText)}
+                  className={`flex items-center gap-1 px-2.5 py-1 rounded-md text-[10px] font-black uppercase tracking-wider transition-all cursor-pointer ${
+                    currentPlaybackMessage
+                      ? 'bg-danger text-white'
+                      : 'bg-primary-mauve/10 text-primary-mauve border border-primary-mauve/15'
+                  }`}>
+                  {currentPlaybackMessage
+                    ? <><VolumeX className="w-3.5 h-3.5" />{STRINGS[lang].stop}</>
+                    : <><Volume2 className="w-3.5 h-3.5" />{STRINGS[lang].listen}</>}
+                </button>
+                <button onClick={handlePrintPlan}
+                  className="flex items-center gap-1 px-2.5 py-1 rounded-md text-[10px] font-black text-primary-mauve bg-primary-mauve/10 border border-primary-mauve/15 transition-all cursor-pointer">
+                  <Printer className="w-3.5 h-3.5" /> {STRINGS[lang].print_plan}
+                </button>
+              </div>
             </div>
-          ))}
-        </div>
-      )}
 
-      {facility && sbaPresent && transport && track === 'B' && (
-        <div className="bg-primary-mauve/5 border border-primary-mauve/15 rounded-2xl p-4 space-y-2">
-          <p className="text-[10px] font-black text-primary-mauve uppercase tracking-wider">{STRINGS[lang].preview_title}</p>
-          {[
-            { label: STRINGS[lang].steps_B[0], val: getLocalizedFacilityLabel(facility, lang) },
-            {
-              label: STRINGS[lang].sba_question,
-              val: sbaPresent === 'yes' ? STRINGS[lang].sba_yes : (sbaPresent === 'arranging' ? STRINGS[lang].sba_arranging : STRINGS[lang].sba_no)
-            },
-            { label: STRINGS[lang].steps_B[3], val: getLocalizedTransportLabel(transport, lang) },
-          ].map(row => (
-            <div key={row.label} className="flex gap-2 text-xs">
-              <span className="font-black text-text-muted w-24 shrink-0">{row.label}:</span>
-              <span className="font-bold text-text-dark leading-tight">{row.val}</span>
+            {/* Readiness score — AI-scored from last generation */}
+            {meta.readiness_score != null && (
+              <div className="flex items-center gap-4 p-3 rounded-xl bg-bg-rose-white border border-primary-mauve/8">
+                <ReadinessRing score={meta.readiness_score} size="sm" />
+                <div className="flex-1">
+                  <p className="text-[9px] font-black text-text-muted uppercase tracking-wider mb-0.5">
+                    {lang === 'en' ? 'AI Plan Score' : 'AI স্কোর'}
+                  </p>
+                  <p className="text-xs font-black" style={{
+                    color: meta.readiness_score >= 75 ? '#22c55e'
+                      : meta.readiness_score >= 50 ? '#f59e0b' : '#ef4444'
+                  }}>
+                    {meta.readiness_score >= 75 ? (lang === 'en' ? 'Well Prepared' : 'ভালোভাবে প্রস্তুত')
+                      : meta.readiness_score >= 50 ? (lang === 'en' ? 'Moderately Prepared' : 'মোটামুটি প্রস্তুত')
+                      : (lang === 'en' ? 'Low Readiness' : 'প্রস্তুতি কম')}
+                  </p>
+                  <p className="text-[9px] text-text-muted mt-0.5">
+                    {lang === 'en' ? 'Scored from your last generated plan' : 'সর্বশেষ তৈরি পরিকল্পনা থেকে'}
+                  </p>
+                  {meta.readiness_gaps?.length > 0 && (
+                    <div className="mt-1 space-y-0.5">
+                      {meta.readiness_gaps.map((gap, i) => (
+                        <div key={i} className="flex items-center gap-1.5 text-[10px] text-amber-700">
+                          <ShieldAlert className="w-3 h-3 shrink-0" /> {gap}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            <p className="text-xs font-medium text-text-dark whitespace-pre-wrap leading-relaxed">{planText}</p>
+
+            <div className="flex items-center justify-between pt-2 border-t border-primary-mauve/8">
+              <div className="flex items-center gap-1.5 text-[9px] font-black text-success">
+                <CheckCircle2 className="w-3.5 h-3.5" /> {STRINGS[lang].plan_stamp}
+              </div>
+              <span className="text-[9px] font-bold text-text-muted">
+                {new Date().toLocaleDateString(lang === 'en' ? 'en-GB' : 'bn-BD')}
+              </span>
             </div>
-          ))}
+          </div>
+        );
+      })()}
+
+      {/* ── PREVIOUS VERSIONS ── */}
+      {existingPlans.filter(p => !p.is_active).length > 0 && (
+        <div className="bg-white rounded-2xl border border-primary-mauve/10 p-4">
+          <p className="text-[10px] font-black text-text-muted uppercase tracking-wider mb-3 flex items-center gap-1.5">
+            <History className="w-3.5 h-3.5 text-primary-mauve" /> Previous Versions
+          </p>
+          <div className="space-y-2">
+            {existingPlans
+              .filter(p => !p.is_active)
+              .slice(0, showAllVersions ? undefined : 5)
+              .map(plan => (
+                <div key={plan.id} className="rounded-xl border border-primary-mauve/8 overflow-hidden">
+                  <button type="button"
+                    onClick={() => setExpandedPlanId(expandedPlanId === plan.id ? null : plan.id)}
+                    className="w-full flex items-center justify-between p-3 hover:bg-primary-mauve/3 transition-all">
+                    <div className="flex items-center gap-2">
+                      <span className="text-[9px] font-black bg-primary-mauve/10 text-primary-mauve px-1.5 py-0.5 rounded-full">
+                        v{plan.version}
+                      </span>
+                      <span className="text-[10px] font-bold text-text-dark truncate max-w-[140px]">{plan.hospital_name}</span>
+                      <span className="text-[9px] text-text-muted">
+                        {new Date(plan.created_at).toLocaleDateString(lang === 'en' ? 'en-GB' : 'bn-BD', { day: 'numeric', month: 'short' })}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <span className={`text-xs font-black ${
+                        plan.readiness_score >= 75 ? 'text-green-600'
+                        : plan.readiness_score >= 50 ? 'text-amber-600'
+                        : plan.readiness_score > 0 ? 'text-red-500'
+                        : 'text-gray-400'
+                      }`}>{plan.readiness_score > 0 ? plan.readiness_score : '—'}</span>
+                      <ChevronDown className={`w-4 h-4 text-text-muted transition-transform duration-200 ${
+                        expandedPlanId === plan.id ? 'rotate-180' : ''
+                      }`} />
+                    </div>
+                  </button>
+                  {expandedPlanId === plan.id && (
+                    <div className="px-3 pb-3 border-t border-primary-mauve/8 pt-3 bg-bg-rose-white">
+                      <p className="text-xs text-text-dark whitespace-pre-wrap leading-relaxed">
+                        {plan.generated_plan || 'Plan content not available for this version.'}
+                      </p>
+                      {plan.readiness_gaps?.length > 0 && (
+                        <div className="mt-2 space-y-1">
+                          {plan.readiness_gaps.map((gap, i) => (
+                            <div key={i} className="flex items-center gap-2 text-xs text-amber-700 bg-amber-50 px-2 py-1 rounded-lg">
+                              <span>⚠</span> {gap}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              ))}
+          </div>
+          {existingPlans.filter(p => !p.is_active).length > 5 && (
+            <button type="button" onClick={() => setShowAllVersions(prev => !prev)}
+              className="w-full py-2.5 mt-2 text-[10px] font-black text-primary-mauve border border-primary-mauve/15 rounded-xl hover:bg-primary-mauve/5 transition-all cursor-pointer">
+              {showAllVersions
+                ? `▲ Show less`
+                : `▼ Load more (${existingPlans.filter(p => !p.is_active).length - 5} more versions)`}
+            </button>
+          )}
         </div>
       )}
 
+      </div>
+      </div>
     </div>
   );
 };
