@@ -19,12 +19,12 @@ import {
   Loader2,
 } from 'lucide-react';
 
- // Sync Daily Plan with localStorage on mount
-  const DEFAULT_PLAN = [
-    { id: 'default-1', title: 'Iron & Folate Supplementation', desc: 'Ensure you ingest your WHO recommended daily iron + folic acid pill with fresh lemon juice for maximum iron absorption.' },
-    { id: 'default-2', title: 'Local Nutrient Targets', desc: 'Include calcium-rich small mola fish, eggs, and leafy green spinach in your lunch box today to combat pregnancy-induced anemia.' },
-    { id: 'default-3', title: 'Pelvic Muscle Pre-stretches', desc: 'Engage in 10-15 minutes of gentle breathing and pelvic tilts. Avoid lifting heavy water pots or packages.' }
-  ];
+// Sync Daily Plan with localStorage on mount
+const DEFAULT_PLAN = [
+  { id: 'default-1', title: 'Iron & Folate Supplementation', desc: 'Ensure you ingest your WHO recommended daily iron + folic acid pill with fresh lemon juice for maximum iron absorption.' },
+  { id: 'default-2', title: 'Local Nutrient Targets', desc: 'Include calcium-rich small mola fish, eggs, and leafy green spinach in your lunch box today to combat pregnancy-induced anemia.' },
+  { id: 'default-3', title: 'Pelvic Muscle Pre-stretches', desc: 'Engage in 10-15 minutes of gentle breathing and pelvic tilts. Avoid lifting heavy water pots or packages.' }
+];
 
 const Home = () => {
   const { user, updateProfile } = useAuth();
@@ -55,333 +55,357 @@ const Home = () => {
 
   const [aiPlanError, setAiPlanError] = useState(null);
 
-// Mood Journal AI State
-const [moodInput, setMoodInput] = useState('');
-const [moodScores, setMoodScores] = useState(null);
-const [moodAnalysis, setMoodAnalysis] = useState('');
+  // Mood Journal AI State
+  const [moodInput, setMoodInput] = useState('');
+  const [moodScores, setMoodScores] = useState(null);
+  const [moodAnalysis, setMoodAnalysis] = useState('');
 
-const [isGeneratingPlan, setIsGeneratingPlan] = useState(false);
-const [aiPlanGenerated, setAiPlanGenerated] = useState(false);
+  const [isGeneratingPlan, setIsGeneratingPlan] = useState(false);
+  const [aiPlanGenerated, setAiPlanGenerated] = useState(false);
 
-// Vitals Log Modal States
-const [showLogModal, setShowLogModal] = useState(false);
-const [bpInput, setBpInput] = useState('120/80');
-const [glucoseInput, setGlucoseInput] = useState('5.4');
-const [weightInput, setWeightInput] = useState('6.2');
+  // Vitals Log Modal States
+  const [showLogModal, setShowLogModal] = useState(false);
+  const [bpInput, setBpInput] = useState('120/80');
+  const [glucoseInput, setGlucoseInput] = useState('5.4');
+  const [weightInput, setWeightInput] = useState('6.2');
 
-// Clinician States
-const [alerts, setAlerts] = useState([]);
-const [stats, setStats] = useState(null);
-const [isClinicianLoading, setIsClinicianLoading] = useState(false);
+  // Clinician States
+  const [alerts, setAlerts] = useState([]);
+  const [stats, setStats] = useState(null);
+  const [isClinicianLoading, setIsClinicianLoading] = useState(false);
 
-// Sync Vitals, Stats, and Risk Profile on Load
-useEffect(() => {
-  if (user?.role === 'clinician') {
-    loadClinicianData();
-  } else {
-    loadPatientVitals();
-    loadPatientRisk(riskLanguage);
-  }
-}, [user, riskLanguage]);
+  // Sync Vitals, Stats, and Risk Profile on Load
+  useEffect(() => {
+    if (user?.role === 'clinician') {
+      loadClinicianData();
+    } else {
+      loadPatientVitals();
+      loadPatientRisk(riskLanguage);
+    }
+  }, [user, riskLanguage]);
 
-useEffect(() => {
-  const handleStorageChange = () => {
+  useEffect(() => {
+    const handleStorageChange = () => {
+      try {
+        const stored = localStorage.getItem('imported_medications');
+        const parsed = stored ? JSON.parse(stored) : [];
+        setDailyPlan(Array.isArray(parsed) ? parsed : []);
+      } catch {
+        setDailyPlan([]);
+      }
+    };
+    window.addEventListener('imported_medications_updated', handleStorageChange);
+    return () => window.removeEventListener('imported_medications_updated', handleStorageChange);
+  }, []);
+
+  // Load Patient Vitals on mount
+  const loadPatientVitals = async () => {
     try {
-      const stored = localStorage.getItem('imported_medications');
-      const parsed = stored ? JSON.parse(stored) : [];
-      setDailyPlan(Array.isArray(parsed) ? parsed : []);
-    } catch {
-      setDailyPlan([]);
+      const history = await healthAPI.getVitalsHistory(1);
+      if (history && history.length > 0) {
+        const latest = history[0];
+        setWaterLogged(latest.water_intake || 1.6);
+        setBpInput(`${latest.bp_systolic || 120}/${latest.bp_diastolic || 80}`);
+        setGlucoseInput(`${latest.blood_glucose || 5.4}`);
+        setWeightInput(`${latest.weight_gain || 6.2}`);
+      }
+    } catch (err) {
+      console.error('Failed to fetch patient vitals on mount:', err);
     }
   };
-  window.addEventListener('imported_medications_updated', handleStorageChange);
-  return () => window.removeEventListener('imported_medications_updated', handleStorageChange);
-}, []);
 
-// Load Patient Vitals on mount
-const loadPatientVitals = async () => {
-  try {
-    const history = await healthAPI.getVitalsHistory(1);
-    if (history && history.length > 0) {
-      const latest = history[0];
-      setWaterLogged(latest.water_intake || 1.6);
-      setBpInput(`${latest.bp_systolic || 120}/${latest.bp_diastolic || 80}`);
-      setGlucoseInput(`${latest.blood_glucose || 5.4}`);
-      setWeightInput(`${latest.weight_gain || 6.2}`);
+  // Load Patient Risk Profile
+  const loadPatientRisk = async (lang) => {
+    setRiskLoading(true);
+    try {
+      const profile = await riskAPI.getLatestProfile(lang);
+      setRiskProfile(profile);
+    } catch (err) {
+      console.error('Failed to load risk profile:', err);
+    } finally {
+      setRiskLoading(false);
     }
-  } catch (err) {
-    console.error('Failed to fetch patient vitals on mount:', err);
-  }
-};
-
-// Load Patient Risk Profile
-const loadPatientRisk = async (lang) => {
-  setRiskLoading(true);
-  try {
-    const profile = await riskAPI.getLatestProfile(lang);
-    setRiskProfile(profile);
-  } catch (err) {
-    console.error('Failed to load risk profile:', err);
-  } finally {
-    setRiskLoading(false);
-  }
-};
-
-// Trigger Risk Recomputation
-const handleRecomputeRisk = async () => {
-  setRiskLoading(true);
-  try {
-    const profile = await riskAPI.recomputeRisk(riskLanguage);
-    setRiskProfile(profile);
-  } catch (err) {
-    console.error('Failed to recompute risk profile:', err);
-    alert('Risk recomputation failed. Please try again.');
-  } finally {
-    setRiskLoading(false);
-  }
-};
-
-// Load Clinician portal analytics and active alert dispatches
-const loadClinicianData = async () => {
-  setIsClinicianLoading(true);
-  try {
-    const list = await clinicianAPI.getAlerts();
-    setAlerts(list || []);
-    const statistics = await clinicianAPI.getStats();
-    setStats(statistics);
-  } catch (err) {
-    console.error('Failed to load clinician dashboard info:', err);
-  } finally {
-    setIsClinicianLoading(false);
-  }
-};
-
-// Dismiss Clinician alert log
-const handleDismissAlert = async (alertId) => {
-  try {
-    await clinicianAPI.dismissAlert(alertId);
-    loadClinicianData();
-  } catch (err) {
-    console.error('Failed to dismiss clinician alert:', err);
-  }
-};
-
-// Gestational calculations
-const weeks = user?.weeks_pregnant || 24;
-const daysToBirth = Math.max(0, (40 - weeks) * 7);
-const progressPercent = Math.min(100, Math.round((weeks / 40) * 100));
-
-// Determine baby size information dynamically
-const getBabySizeInfo = (w) => {
-  const weekData = {
-    1: { emoji: '🫧', name: 'Tiny Bubble', desc: 'Fertilization may be happening now as the journey of development begins.' },
-    2: { emoji: '🌱', name: 'Sesame Seed', desc: 'Cells are rapidly dividing and beginning to organize into the earliest structures.' },
-    3: { emoji: '🌾', name: 'Poppy Seed', desc: 'Baby has implanted in the uterus and the foundations of the placenta are beginning to form.' },
-    4: { emoji: '🌱', name: 'Poppy Seed', desc: 'Baby is beginning to form the neural tube, which becomes the brain and spinal cord.' },
-    5: { emoji: '🍎', name: 'Apple Seed', desc: 'Tiny heart cells are starting to beat for the very first time.' },
-    6: { emoji: '🫐', name: 'Blueberry', desc: 'Facial features are beginning to take shape, and little arm buds are growing.' },
-    7: { emoji: '🫒', name: 'Olive', desc: "Baby's hands and feet are starting to develop, though still tiny and paddle-like." },
-    8: { emoji: '🍇', name: 'Grape', desc: 'Tiny fingers are forming, and baby is beginning little spontaneous movements.' },
-    9: { emoji: '🍒', name: 'Cherry', desc: 'Eyelids are forming and the heart is now beating strongly and rhythmically.' },
-    10: { emoji: '🍓', name: 'Strawberry', desc: 'Baby is growing fingernails and tooth buds beneath the gums.' },
-    11: { emoji: '🍋', name: 'Lime', desc: "Baby can kick, stretch, and move around, even if you can't feel it yet." },
-    12: { emoji: '🍑', name: 'Plum', desc: 'Reflexes are developing quickly, and baby may be opening and closing tiny fingers.' },
-    13: { emoji: '🍋', name: 'Lemon', desc: 'Vocal cords are forming, and fingerprints are beginning to develop.' },
-    14: { emoji: '🍊', name: 'Orange', desc: 'Baby can now make facial expressions like squinting and frowning.' },
-    15: { emoji: '🍎', name: 'Apple', desc: 'Bones are hardening and baby may start sensing light through closed eyelids.' },
-    16: { emoji: '🥑', name: 'Avocado', desc: 'Baby can hear muffled sounds, including your heartbeat and voice.' },
-    17: { emoji: '🥔', name: 'Potato', desc: 'Fat stores are beginning to form under the skin for warmth and energy.' },
-    18: { emoji: '🫑', name: 'Bell Pepper', desc: 'Baby can yawn, hiccup, and may even suck a thumb.' },
-    19: { emoji: '🥭', name: 'Mango', desc: 'Sensory development is growing rapidly—touch, smell, hearing, taste, and vision are all developing.' },
-    20: { emoji: '🍌', name: 'Banana', desc: 'Baby is practicing swallowing and may be kicking strongly enough to feel.' },
-    21: { emoji: '🥕', name: 'Carrot', desc: 'Eyebrows and tiny eyelashes are becoming more visible.' },
-    22: { emoji: '🌽', name: 'Corn Cob', desc: "Baby's grip is getting stronger and sleep cycles are beginning to form." },
-    23: { emoji: '🍈', name: 'Grapefruit', desc: 'Tiny lungs are developing air sacs in preparation for breathing.' },
-    24: { emoji: '🌽', name: 'Ear of Corn', desc: 'Baby can respond to sounds and may recognize your voice.' },
-    25: { emoji: '🥬', name: 'Rutabaga', desc: "Baby's skin is smoothing out as more fat develops underneath." },
-    26: { emoji: '🥒', name: 'Zucchini', desc: 'Eyes can begin opening, and baby may respond to bright light.' },
-    27: { emoji: '🥦', name: 'Cauliflower', desc: 'Brain development is accelerating rapidly and baby is very active.' },
-    28: { emoji: '🍆', name: 'Eggplant', desc: 'Baby is blinking now and dreaming during sleep cycles.' },
-    29: { emoji: '🎃', name: 'Butternut Squash', desc: 'Muscles and lungs continue maturing as baby gains weight quickly.' },
-    30: { emoji: '🥥', name: 'Coconut', desc: 'Baby can regulate body temperature better with growing fat stores.' },
-    31: { emoji: '🍍', name: 'Pineapple', desc: 'Baby can turn their head side to side and react to familiar voices.' },
-    32: { emoji: '🥒', name: 'Squash', desc: 'Toenails are fully formed and baby is practicing breathing motions.' },
-    33: { emoji: '🥬', name: 'Celery Bunch', desc: 'Bones are hardening, though still soft enough for birth.' },
-    34: { emoji: '🍈', name: 'Melon', desc: "Baby's nervous system is maturing and lungs are nearly ready." },
-    35: { emoji: '🍯', name: 'Honeydew Melon', desc: 'Baby is gaining about half a pound each week now.' },
-    36: { emoji: '🥬', name: 'Romaine Lettuce', desc: 'Baby is likely moving into a head-down position for birth.' },
-    37: { emoji: '🥒', name: 'Swiss Chard', desc: 'Baby is considered early term and continues practicing breathing.' },
-    38: { emoji: '🍉', name: 'Mini Watermelon', desc: "Baby's organs are fully developed and ready for life outside the womb." },
-    39: { emoji: '🍉', name: 'Watermelon', desc: 'Baby is full term and continuing to gain weight and strength.' },
-    40: { emoji: '🎉', name: 'Pumpkin', desc: 'Fully formed and ready to meet you any day now 💛' }
   };
-  if (w < 1) return weekData[1];
-  if (w > 40) return weekData[40];
-  return weekData[w];
-};
 
-const babySize = getBabySizeInfo(weeks);
-
-// Danger checklist check changes
-const handleSymptomChange = (symptomKey) => {
-  setSymptoms(prev => ({
-    ...prev,
-    [symptomKey]: !prev[symptomKey]
-  }));
-};
-
-const hasCriticalSymptoms = symptoms.bleeding || symptoms.headache || symptoms.swelling || symptoms.fever;
-
-// Log water progress
-const logWater = async () => {
-  const newVal = Math.min(3.5, Math.round((waterLogged + 0.25) * 100) / 100);
-  setWaterLogged(newVal);
-  const bpParts = bpInput.split('/');
-  const bp_systolic = parseInt(bpParts[0]) || 120;
-  const bp_diastolic = parseInt(bpParts[1]) || 80;
-  const payload = {
-    bp_systolic,
-    bp_diastolic,
-    blood_glucose: parseFloat(glucoseInput) || 5.4,
-    weight_gain: parseFloat(weightInput) || 6.2,
-    water_intake: newVal
+  // Trigger Risk Recomputation
+  const handleRecomputeRisk = async () => {
+    setRiskLoading(true);
+    try {
+      const profile = await riskAPI.recomputeRisk(riskLanguage);
+      setRiskProfile(profile);
+    } catch (err) {
+      console.error('Failed to recompute risk profile:', err);
+      alert('Risk recomputation failed. Please try again.');
+    } finally {
+      setRiskLoading(false);
+    }
   };
-  try {
-    await healthAPI.logVitals(payload);
-    await updateProfile({ water_logged: newVal });
-  } catch (e) {
-    console.error('Hydration logging failed:', e);
-  }
-};
 
-// Submit Vitals logs
-const handleVitalsSave = async () => {
-  const bpParts = bpInput.split('/');
-  const bp_systolic = parseInt(bpParts[0]) || 120;
-  const bp_diastolic = parseInt(bpParts[1]) || 80;
-  const payload = {
-    bp_systolic,
-    bp_diastolic,
-    blood_glucose: parseFloat(glucoseInput) || 5.4,
-    weight_gain: parseFloat(weightInput) || 6.2,
-    water_intake: waterLogged
+  // Load Clinician portal analytics and active alert dispatches
+  const loadClinicianData = async () => {
+    setIsClinicianLoading(true);
+    try {
+      const list = await clinicianAPI.getAlerts();
+      setAlerts(list || []);
+      const statistics = await clinicianAPI.getStats();
+      setStats(statistics);
+    } catch (err) {
+      console.error('Failed to load clinician dashboard info:', err);
+    } finally {
+      setIsClinicianLoading(false);
+    }
   };
-  try {
-    await healthAPI.logVitals(payload);
-    setShowLogModal(false);
-    loadPatientVitals();
-  } catch (err) {
-    console.error('Failed to log maternal vitals:', err);
-    alert('Could not log vitals. Ensure your connection is stable.');
-  }
-};
 
-// Trigger emergency SOS alert dispatches
-const handleTriggerSOS = async () => {
-  const activeSymptoms = Object.keys(symptoms).filter(k => symptoms[k]);
-  try {
-    const res = await sosAPI.triggerSOS({
-      user_id: user?.id,
-      location: user?.location || 'Unknown Location',
-      symptoms: activeSymptoms,
-      reason: 'Danger Symptoms flagged on patient home dashboard'
-    });
-    if (res.alert_sent) {
-      alert('🚨 EMERGENCY SOS DISPATCHED SUCCESSFULLY. Community healthcare systems notified.');
-      setSymptoms({ bleeding: false, headache: false, swelling: false, fever: false });
-    } else {
-      alert('Direct alert failed. Call community midwife immediately.');
+  // Dismiss Clinician alert log
+  const handleDismissAlert = async (alertId) => {
+    try {
+      await clinicianAPI.dismissAlert(alertId);
+      loadClinicianData();
+    } catch (err) {
+      console.error('Failed to dismiss clinician alert:', err);
     }
-  } catch (e) {
-    console.error(e);
-    alert('🚨 Emergency connection initiated. Directing to midwife emergency contact.');
-  }
-};
+  };
 
-// Toggle (complete/remove) a daily plan item and sync localStorage
-const toggleDailyPlanItem = (id) => {
-  setDailyPlan(prev => {
-    const updated = prev.filter(i => i.id !== id);
-    const remainingImported = updated.filter(i => i.isImported);
-    localStorage.setItem('imported_medications', JSON.stringify(remainingImported));
-    return updated;
-  });
-};
-// Local Mood Analysis (AI Simulation)
-const analyzeMood = () => {
-  if (!moodInput.trim()) return;
-  setTimeout(() => {
-    const text = moodInput.toLowerCase();
-    let anxiety = 10, sadness = 10, isolation = 10, pain = 10;
-    let cta = 'Your emotional state looks balanced. Keep sharing your journey!';
-    if (text.includes('tired') || text.includes('exhausted') || text.includes('sleep')) {
-      anxiety += 30; pain += 20;
+  // Gestational calculations
+  const getCalculatedWeeks = () => {
+    const anchorDate = user?.weeks_updated_at ? new Date(user.weeks_updated_at) : new Date(user?.created_at || Date.now());
+    const today = new Date();
+    const startWeek = user?.weeks_pregnant || 24;
+
+    const diffInMs = today - anchorDate;
+    const weeksPassed = Math.floor(diffInMs / (1000 * 60 * 60 * 24 * 7));
+
+    const currWeek = startWeek + weeksPassed;
+
+    return Math.min(40, Math.max(1, currWeek));
+  };
+
+  const weeks = getCalculatedWeeks();
+  const daysToBirth = Math.max(0, (40 - weeks) * 7);
+  const progressPercent = Math.min(100, Math.round((weeks / 40) * 100));
+
+  // Determine baby size information dynamically
+  const getBabySizeInfo = (w) => {
+    const weekData = {
+      1: { emoji: '🫧', name: 'Tiny Bubble', desc: 'Fertilization may be happening now as the journey of development begins.' },
+      2: { emoji: '🌱', name: 'Sesame Seed', desc: 'Cells are rapidly dividing and beginning to organize into the earliest structures.' },
+      3: { emoji: '🌾', name: 'Poppy Seed', desc: 'Baby has implanted in the uterus and the foundations of the placenta are beginning to form.' },
+      4: { emoji: '🌱', name: 'Poppy Seed', desc: 'Baby is beginning to form the neural tube, which becomes the brain and spinal cord.' },
+      5: { emoji: '🍎', name: 'Apple Seed', desc: 'Tiny heart cells are starting to beat for the very first time.' },
+      6: { emoji: '🫐', name: 'Blueberry', desc: 'Facial features are beginning to take shape, and little arm buds are growing.' },
+      7: { emoji: '🫒', name: 'Olive', desc: "Baby's hands and feet are starting to develop, though still tiny and paddle-like." },
+      8: { emoji: '🍇', name: 'Grape', desc: 'Tiny fingers are forming, and baby is beginning little spontaneous movements.' },
+      9: { emoji: '🍒', name: 'Cherry', desc: 'Eyelids are forming and the heart is now beating strongly and rhythmically.' },
+      10: { emoji: '🍓', name: 'Strawberry', desc: 'Baby is growing fingernails and tooth buds beneath the gums.' },
+      11: { emoji: '🍋', name: 'Lime', desc: "Baby can kick, stretch, and move around, even if you can't feel it yet." },
+      12: { emoji: '🍑', name: 'Plum', desc: 'Reflexes are developing quickly, and baby may be opening and closing tiny fingers.' },
+      13: { emoji: '🍋', name: 'Lemon', desc: 'Vocal cords are forming, and fingerprints are beginning to develop.' },
+      14: { emoji: '🍊', name: 'Orange', desc: 'Baby can now make facial expressions like squinting and frowning.' },
+      15: { emoji: '🍎', name: 'Apple', desc: 'Bones are hardening and baby may start sensing light through closed eyelids.' },
+      16: { emoji: '🥑', name: 'Avocado', desc: 'Baby can hear muffled sounds, including your heartbeat and voice.' },
+      17: { emoji: '🥔', name: 'Potato', desc: 'Fat stores are beginning to form under the skin for warmth and energy.' },
+      18: { emoji: '🫑', name: 'Bell Pepper', desc: 'Baby can yawn, hiccup, and may even suck a thumb.' },
+      19: { emoji: '🥭', name: 'Mango', desc: 'Sensory development is growing rapidly—touch, smell, hearing, taste, and vision are all developing.' },
+      20: { emoji: '🍌', name: 'Banana', desc: 'Baby is practicing swallowing and may be kicking strongly enough to feel.' },
+      21: { emoji: '🥕', name: 'Carrot', desc: 'Eyebrows and tiny eyelashes are becoming more visible.' },
+      22: { emoji: '🌽', name: 'Corn Cob', desc: "Baby's grip is getting stronger and sleep cycles are beginning to form." },
+      23: { emoji: '🍈', name: 'Grapefruit', desc: 'Tiny lungs are developing air sacs in preparation for breathing.' },
+      24: { emoji: '🌽', name: 'Ear of Corn', desc: 'Baby can respond to sounds and may recognize your voice.' },
+      25: { emoji: '🥬', name: 'Rutabaga', desc: "Baby's skin is smoothing out as more fat develops underneath." },
+      26: { emoji: '🥒', name: 'Zucchini', desc: 'Eyes can begin opening, and baby may respond to bright light.' },
+      27: { emoji: '🥦', name: 'Cauliflower', desc: 'Brain development is accelerating rapidly and baby is very active.' },
+      28: { emoji: '🍆', name: 'Eggplant', desc: 'Baby is blinking now and dreaming during sleep cycles.' },
+      29: { emoji: '🎃', name: 'Butternut Squash', desc: 'Muscles and lungs continue maturing as baby gains weight quickly.' },
+      30: { emoji: '🥥', name: 'Coconut', desc: 'Baby can regulate body temperature better with growing fat stores.' },
+      31: { emoji: '🍍', name: 'Pineapple', desc: 'Baby can turn their head side to side and react to familiar voices.' },
+      32: { emoji: '🥒', name: 'Squash', desc: 'Toenails are fully formed and baby is practicing breathing motions.' },
+      33: { emoji: '🥬', name: 'Celery Bunch', desc: 'Bones are hardening, though still soft enough for birth.' },
+      34: { emoji: '🍈', name: 'Melon', desc: "Baby's nervous system is maturing and lungs are nearly ready." },
+      35: { emoji: '🍯', name: 'Honeydew Melon', desc: 'Baby is gaining about half a pound each week now.' },
+      36: { emoji: '🥬', name: 'Romaine Lettuce', desc: 'Baby is likely moving into a head-down position for birth.' },
+      37: { emoji: '🥒', name: 'Swiss Chard', desc: 'Baby is considered early term and continues practicing breathing.' },
+      38: { emoji: '🍉', name: 'Mini Watermelon', desc: "Baby's organs are fully developed and ready for life outside the womb." },
+      39: { emoji: '🍉', name: 'Watermelon', desc: 'Baby is full term and continuing to gain weight and strength.' },
+      40: { emoji: '🎉', name: 'Pumpkin', desc: 'Fully formed and ready to meet you any day now 💛' }
+    };
+    if (w < 1) return weekData[1];
+    if (w > 40) return weekData[40];
+    return weekData[w];
+  };
+
+  const babySize = getBabySizeInfo(weeks);
+
+  // Danger checklist check changes
+  const handleSymptomChange = (symptomKey) => {
+    setSymptoms(prev => ({
+      ...prev,
+      [symptomKey]: !prev[symptomKey]
+    }));
+  };
+
+  const hasCriticalSymptoms = symptoms.bleeding || symptoms.headache || symptoms.swelling || symptoms.fever;
+
+  // Log water progress
+  const logWater = async () => {
+    const newVal = Math.min(3.5, Math.round((waterLogged + 0.25) * 100) / 100);
+    setWaterLogged(newVal);
+    const bpParts = bpInput.split('/');
+    const bp_systolic = parseInt(bpParts[0]) || 120;
+    const bp_diastolic = parseInt(bpParts[1]) || 80;
+    const payload = {
+      bp_systolic,
+      bp_diastolic,
+      blood_glucose: parseFloat(glucoseInput) || 5.4,
+      weight_gain: parseFloat(weightInput) || 6.2,
+      water_intake: newVal
+    };
+    try {
+      await healthAPI.logVitals(payload);
+      await updateProfile({ water_logged: newVal });
+    } catch (e) {
+      console.error('Hydration logging failed:', e);
     }
-    if (text.includes('sad') || text.includes('cry') || text.includes('lonely') || text.includes('alone')) {
-      sadness += 50; isolation += 40;
-      cta = '💖 Support Alert: Reach out to our Community Peer Support Group to connect with other new mothers.';
+  };
+
+  // Submit Vitals logs
+  const handleVitalsSave = async () => {
+    const bpParts = bpInput.split('/');
+    const bp_systolic = parseInt(bpParts[0]) || 120;
+    const bp_diastolic = parseInt(bpParts[1]) || 80;
+    const payload = {
+      bp_systolic,
+      bp_diastolic,
+      blood_glucose: parseFloat(glucoseInput) || 5.4,
+      weight_gain: parseFloat(weightInput) || 6.2,
+      water_intake: waterLogged
+    };
+    try {
+      await healthAPI.logVitals(payload);
+      setShowLogModal(false);
+      loadPatientVitals();
+    } catch (err) {
+      console.error('Failed to log maternal vitals:', err);
+      alert('Could not log vitals. Ensure your connection is stable.');
     }
-    if (text.includes('pain') || text.includes('hurt') || text.includes('cramp')) {
-      pain += 60; anxiety += 40;
-      cta = '⚠️ Pre-care Alert: If you feel continuous physical cramping or localized pain, contact your verified midwife.';
-    }
-    if (text.includes('scared') || text.includes('worry') || text.includes('anxious') || text.includes('stress')) {
-      anxiety += 60;
-      cta = '✨ Deep breathing tips are available in our Learning Hub. Connect with our AI chatbot for immediate breathing coaching.';
-    }
-    setMoodScores({ anxiety, sadness, isolation, pain });
-    setMoodAnalysis(cta);
-  }, 450);
-};
+  };
 
-// Helper formatting for dynamic vitals badges
-const getBPCategory = () => {
-  const parts = bpInput.split('/');
-  const systolic = parseInt(parts[0]) || 120;
-  if (systolic >= 140) return { label: 'Danger', class: 'bg-danger/10 text-danger' };
-  if (systolic >= 130) return { label: 'Elevated', class: 'bg-warning/10 text-warning' };
-  return { label: 'Optimal', class: 'bg-success/10 text-success' };
-};
-
-const getGlucoseCategory = () => {
-  const val = parseFloat(glucoseInput) || 5.4;
-  if (val >= 7.8) return { label: 'High Risk', class: 'bg-danger/10 text-danger' };
-  return { label: 'Fasting', class: 'bg-info/10 text-info' };
-};
-
-const generateAICarePlan = async () => {
-  setIsGeneratingPlan(true);
-  setAiPlanError(null);
-  try {
-    const parsed = await healthAPI.generateCarePlan({
-      weeks_pregnant: weeks,
-      bp: bpInput,
-      glucose: parseFloat(glucoseInput),
-      weight: parseFloat(weightInput),
-      water: waterLogged
-    });
-
-    if (Array.isArray(parsed) && parsed.length > 0) {
-      setDailyPlan(prev => {
-        const importedOnly = prev.filter(i => i.isImported);
-        return [...importedOnly, ...parsed.map(i => ({ ...i, isAI: true }))];
+  // Trigger emergency SOS alert dispatches
+  const handleTriggerSOS = async () => {
+    const activeSymptoms = Object.keys(symptoms).filter(k => symptoms[k]);
+    try {
+      const res = await sosAPI.triggerSOS({
+        user_id: user?.id,
+        location: user?.location || 'Unknown Location',
+        symptoms: activeSymptoms,
+        reason: 'Danger Symptoms flagged on patient home dashboard'
       });
-      setAiPlanGenerated(true);
-    } else {
-      throw new Error('Empty response');
+      if (res.alert_sent) {
+        alert('🚨 EMERGENCY SOS DISPATCHED SUCCESSFULLY. Community healthcare systems notified.');
+        setSymptoms({ bleeding: false, headache: false, swelling: false, fever: false });
+      } else {
+        alert('Direct alert failed. Call community midwife immediately.');
+      }
+    } catch (e) {
+      console.error(e);
+      alert('🚨 Emergency connection initiated. Directing to midwife emergency contact.');
     }
-  } catch (err) {
-    console.error('AI care plan generation failed:', err);
-    setAiPlanError('Could not generate AI plan. Default care guidelines are shown below.');
-  } finally {
-    setIsGeneratingPlan(false);
-  }
-};
+  };
 
-const bpCat = getBPCategory();
-const glucoseCat = getGlucoseCategory();
+  // Toggle (complete/remove) a daily plan item and sync localStorage
+  const toggleDailyPlanItem = (id) => {
+    setDailyPlan(prev => {
+      const updated = prev.filter(i => i.id !== id);
+      const remainingImported = updated.filter(i => i.isImported);
+      localStorage.setItem('imported_medications', JSON.stringify(remainingImported));
+      return updated;
+    });
+  };
+  // Local Mood Analysis (AI Simulation)
+  const analyzeMood = () => {
+    if (!moodInput.trim()) return;
+    setTimeout(() => {
+      const text = moodInput.toLowerCase();
+      let anxiety = 10, sadness = 10, isolation = 10, pain = 10;
+      let cta = 'Your emotional state looks balanced. Keep sharing your journey!';
+      if (text.includes('tired') || text.includes('exhausted') || text.includes('sleep')) {
+        anxiety += 30; pain += 20;
+      }
+      if (text.includes('sad') || text.includes('cry') || text.includes('lonely') || text.includes('alone')) {
+        sadness += 50; isolation += 40;
+        cta = '💖 Support Alert: Reach out to our Community Peer Support Group to connect with other new mothers.';
+      }
+      if (text.includes('pain') || text.includes('hurt') || text.includes('cramp')) {
+        pain += 60; anxiety += 40;
+        cta = '⚠️ Pre-care Alert: If you feel continuous physical cramping or localized pain, contact your verified midwife.';
+      }
+      if (text.includes('scared') || text.includes('worry') || text.includes('anxious') || text.includes('stress')) {
+        anxiety += 60;
+        cta = '✨ Deep breathing tips are available in our Learning Hub. Connect with our AI chatbot for immediate breathing coaching.';
+      }
+      setMoodScores({ anxiety, sadness, isolation, pain });
+      setMoodAnalysis(cta);
+    }, 450);
+  };
 
-return (
+  // Helper formatting for dynamic vitals badges
+  const getBPCategory = () => {
+    const parts = bpInput.split('/');
+    const systolic = parseInt(parts[0]) || 120;
+    if (systolic >= 140) return { label: 'Danger', class: 'bg-danger/10 text-danger' };
+    if (systolic >= 130) return { label: 'Elevated', class: 'bg-warning/10 text-warning' };
+    return { label: 'Optimal', class: 'bg-success/10 text-success' };
+  };
+
+  const getGlucoseCategory = () => {
+    const val = parseFloat(glucoseInput) || 5.4;
+    if (val >= 7.8) return { label: 'High Risk', class: 'bg-danger/10 text-danger' };
+    return { label: 'Fasting', class: 'bg-info/10 text-info' };
+  };
+
+  const generateAICarePlan = async () => {
+    setIsGeneratingPlan(true);
+    setAiPlanError(null);
+    try {
+      const parsed = await healthAPI.generateCarePlan({
+        weeks_pregnant: weeks,
+        bp: bpInput,
+        glucose: parseFloat(glucoseInput),
+        weight: parseFloat(weightInput),
+        water: waterLogged
+      });
+
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        setDailyPlan(prev => {
+          const importedOnly = prev.filter(i => i.isImported);
+          return [...importedOnly, ...parsed.map(i => ({ ...i, isAI: true }))];
+        });
+        setAiPlanGenerated(true);
+      } else {
+        throw new Error('Empty response');
+      }
+    } catch (err) {
+      console.error('AI care plan generation failed:', err);
+      setAiPlanError('Could not generate AI plan. Default care guidelines are shown below.');
+    } finally {
+      setIsGeneratingPlan(false);
+    }
+  };
+
+  useEffect(() => {
+    const calculated = getCalculatedWeeks();
+
+    if (calculated > user.weeks_pregnant) {
+      updateProfile({
+        weeks_pregnant: calculated,
+        weeks_updated_at: new Date().toISOString()
+      });
+    }
+  }, [user]);
+
+  const bpCat = getBPCategory();
+  const glucoseCat = getGlucoseCategory();
+
+  return (
     <div className="p-4 md:p-8 max-w-7xl mx-auto space-y-6 font-sans">
       {user?.role !== 'clinician' ? (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -448,27 +472,25 @@ return (
                       {riskLanguage === 'bn' ? 'লাইভ ঝুঁকি প্রোফাইল' : 'Live Risk Profile'}
                     </h3>
                   </div>
-                  
+
                   <div className="flex items-center gap-3">
                     {/* Language Toggle */}
                     <div className="inline-flex rounded-lg border border-primary-mauve/20 p-0.5 bg-bg-rose-white">
                       <button
                         onClick={() => setRiskLanguage('bn')}
-                        className={`px-2.5 py-1 rounded-md text-[10px] font-black uppercase transition-all cursor-pointer ${
-                          riskLanguage === 'bn'
-                            ? 'bg-primary-mauve text-white shadow-xs'
-                            : 'text-text-muted hover:text-text-dark bg-transparent'
-                        }`}
+                        className={`px-2.5 py-1 rounded-md text-[10px] font-black uppercase transition-all cursor-pointer ${riskLanguage === 'bn'
+                          ? 'bg-primary-mauve text-white shadow-xs'
+                          : 'text-text-muted hover:text-text-dark bg-transparent'
+                          }`}
                       >
                         বাংলা
                       </button>
                       <button
                         onClick={() => setRiskLanguage('en')}
-                        className={`px-2.5 py-1 rounded-md text-[10px] font-black uppercase transition-all cursor-pointer ${
-                          riskLanguage === 'en'
-                            ? 'bg-primary-mauve text-white shadow-xs'
-                            : 'text-text-muted hover:text-text-dark bg-transparent'
-                        }`}
+                        className={`px-2.5 py-1 rounded-md text-[10px] font-black uppercase transition-all cursor-pointer ${riskLanguage === 'en'
+                          ? 'bg-primary-mauve text-white shadow-xs'
+                          : 'text-text-muted hover:text-text-dark bg-transparent'
+                          }`}
                       >
                         EN
                       </button>
@@ -506,15 +528,14 @@ return (
                           {riskLanguage === 'bn' ? 'ঝুঁকির স্তর:' : 'Risk Level:'}
                         </div>
                         <span
-                          className={`px-3 py-1 rounded-full text-[11px] font-black uppercase tracking-wider shadow-xs ${
-                            riskProfile.risk_level === 'Critical'
-                              ? 'bg-danger/10 text-danger border border-danger/20 animate-pulse-slow font-black'
-                              : riskProfile.risk_level === 'High'
+                          className={`px-3 py-1 rounded-full text-[11px] font-black uppercase tracking-wider shadow-xs ${riskProfile.risk_level === 'Critical'
+                            ? 'bg-danger/10 text-danger border border-danger/20 animate-pulse-slow font-black'
+                            : riskProfile.risk_level === 'High'
                               ? 'bg-orange-500/10 text-orange-600 border border-orange-500/20 font-black'
                               : riskProfile.risk_level === 'Medium'
-                              ? 'bg-amber-500/10 text-amber-600 border border-amber-500/20 font-black'
-                              : 'bg-success/10 text-success border border-success/20 font-black'
-                          }`}
+                                ? 'bg-amber-500/10 text-amber-600 border border-amber-500/20 font-black'
+                                : 'bg-success/10 text-success border border-success/20 font-black'
+                            }`}
                         >
                           {riskProfile.risk_level === 'Critical' && (riskLanguage === 'bn' ? 'গুরুতর (Critical)' : 'Critical')}
                           {riskProfile.risk_level === 'High' && (riskLanguage === 'bn' ? 'উচ্চ (High)' : 'High')}
@@ -522,7 +543,7 @@ return (
                           {riskProfile.risk_level === 'Low' && (riskLanguage === 'bn' ? 'কম (Low)' : 'Low')}
                         </span>
                       </div>
-                      
+
                       {/* Condition flags */}
                       <div className="flex flex-wrap gap-1.5">
                         {riskProfile.condition_flags && riskProfile.condition_flags.map((flag, idx) => (
@@ -547,15 +568,14 @@ return (
                     </div>
 
                     {/* Action Recommendation */}
-                    <div className={`p-4 rounded-xl border flex gap-3 ${
-                      riskProfile.risk_level === 'Critical'
-                        ? 'bg-danger/5 border-danger/15 text-danger'
-                        : riskProfile.risk_level === 'High'
+                    <div className={`p-4 rounded-xl border flex gap-3 ${riskProfile.risk_level === 'Critical'
+                      ? 'bg-danger/5 border-danger/15 text-danger'
+                      : riskProfile.risk_level === 'High'
                         ? 'bg-orange-500/5 border-orange-500/15 text-orange-700'
                         : riskProfile.risk_level === 'Medium'
-                        ? 'bg-amber-500/5 border-amber-500/15 text-amber-700'
-                        : 'bg-success/5 border-success/15 text-success'
-                    }`}>
+                          ? 'bg-amber-500/5 border-amber-500/15 text-amber-700'
+                          : 'bg-success/5 border-success/15 text-success'
+                      }`}>
                       <div className="w-5 h-5 rounded-full flex items-center justify-center bg-white/60 shrink-0 text-sm shadow-xs select-none">
                         {riskProfile.risk_level === 'Critical' ? '🚨' : riskProfile.risk_level === 'High' ? '⚠️' : riskProfile.risk_level === 'Medium' ? '⚡' : '✓'}
                       </div>
@@ -665,9 +685,8 @@ return (
 
                 {/* Imported prescription + AI items — removable */}
                 {dailyPlan.map(item => (
-                  <div key={item.id} className={`flex items-start gap-3 p-3 rounded-lg border hover:bg-white transition-all animate-fadeIn ${
-                    item.isImported ? 'bg-warning/5 border-warning/15' : 'bg-primary-mauve/5 border-primary-mauve/10'
-                  }`}>
+                  <div key={item.id} className={`flex items-start gap-3 p-3 rounded-lg border hover:bg-white transition-all animate-fadeIn ${item.isImported ? 'bg-warning/5 border-warning/15' : 'bg-primary-mauve/5 border-primary-mauve/10'
+                    }`}>
                     <button
                       type="button"
                       onClick={() => toggleDailyPlanItem(item.id)}

@@ -20,6 +20,7 @@ CREATE TABLE users (
     address_details TEXT,
     emergency_contact VARCHAR(20),
     fcm_token VARCHAR(255),
+    weeks_updated_at TIMESTAMPTZ DEFAULT NOW(),
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
