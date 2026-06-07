@@ -1,5 +1,7 @@
 import React, { createContext, useState, useEffect, useContext } from 'react';
 import { authAPI } from '../api';
+import { getToken } from 'firebase/messaging';
+import { messaging } from '../api/firebase';
 
 const AuthContext = createContext(null);
 
@@ -27,6 +29,31 @@ export const AuthProvider = ({ children }) => {
 
     initializeAuth();
   }, []);
+
+  useEffect(() => {
+    const registerFCM = async () => {
+      if (user && messaging) {
+        try {
+          const permission = await Notification.requestPermission();
+          if (permission === 'granted') {
+            const swUrl = `/firebase-messaging-sw.js?apiKey=${import.meta.env.VITE_FIREBASE_API_KEY}&authDomain=${import.meta.env.VITE_FIREBASE_AUTH_DOMAIN}&projectId=${import.meta.env.VITE_FIREBASE_PROJECT_ID}&storageBucket=${import.meta.env.VITE_FIREBASE_STORAGE_BUCKET}&messagingSenderId=${import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID}&appId=${import.meta.env.VITE_FIREBASE_APP_ID}`;
+            const registration = await navigator.serviceWorker.register(swUrl);
+            const currentToken = await getToken(messaging, {
+              vapidKey: 'BAeHZdOeWrqGB81qvIGoi1VBGJgMI6MgPyoy-vOieKv8gyZGs-esSRb6WCDrttiZUh-KYt_LkNEHpT9xkLMOqkk',
+              serviceWorkerRegistration: registration
+            });
+            if (currentToken) {
+              await authAPI.registerFCM(currentToken);
+              console.log('FCM Token registered');
+            }
+          }
+        } catch (error) {
+          console.error('An error occurred while retrieving token. ', error);
+        }
+      }
+    };
+    registerFCM();
+  }, [user]);
 
   const login = async (phone, password) => {
     try {

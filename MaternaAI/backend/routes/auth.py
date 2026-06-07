@@ -1,8 +1,54 @@
 from flask import Blueprint, request, jsonify, g
+import random
 from db import query
 from services.auth import hash_password, check_password, create_token, require_auth
+from services.sms import send_simulated_sms
 
 auth_bp = Blueprint("auth", __name__)
+
+@auth_bp.route("/otp/send", methods=["POST"])
+def send_otp():
+    data = request.get_json() or {}
+    phone = data.get("phone", "").strip()
+    if not phone:
+        return jsonify({"error": "Phone number is required"}), 400
+        
+    code = f"{random.randint(100000, 999999)}"
+    
+    query("""
+        INSERT INTO phone_verifications (phone, code, expires_at)
+        VALUES (%s, %s, NOW() + INTERVAL '10 minutes')
+        ON CONFLICT (phone) DO UPDATE
+        SET code = EXCLUDED.code, created_at = NOW(), expires_at = EXCLUDED.expires_at
+    """, (phone, code), fetch="none")
+    
+    send_simulated_sms(phone, f"MaternaAI: Your OTP for registration is {code}. It is valid for 10 minutes.")
+    
+    # Send the code back so the frontend can display the simulated SMS notification
+    return jsonify({
+        "success": True, 
+        "message": "OTP sent successfully.",
+        "simulated_code": code
+    }), 200
+
+@auth_bp.route("/otp/verify", methods=["POST"])
+def verify_otp():
+    data = request.get_json() or {}
+    phone = data.get("phone", "").strip()
+    code = data.get("code", "").strip()
+    
+    if not phone or not code:
+        return jsonify({"error": "phone and code are required"}), 400
+        
+    verification = query("""
+        SELECT * FROM phone_verifications
+        WHERE phone = %s AND code = %s AND expires_at > NOW()
+    """, (phone, code), fetch="one")
+    
+    if not verification:
+        return jsonify({"error": "Invalid or expired OTP code"}), 400
+        
+    return jsonify({"success": True, "message": "Phone number verified successfully."}), 200
 
 @auth_bp.route("/register", methods=["POST"])
 def register():
@@ -15,13 +61,26 @@ def register():
     division = data.get("division", "").strip()
     district = data.get("district", "").strip()
     area = data.get("area", "").strip()
+    otp_code = data.get("otp_code", "").strip()
 
-    if not name or not phone or not password or not division or not district or not area:
-        return jsonify({"error": "name, phone, password, division, district and area are required"}), 400
+    if not name or not phone or not password or not division or not district or not area or not otp_code:
+        return jsonify({"error": "name, phone, password, division, district, area and otp_code are required"}), 400
  
+    # Verify OTP
+    verification = query("""
+        SELECT * FROM phone_verifications
+        WHERE phone = %s AND code = %s AND expires_at > NOW()
+    """, (phone, otp_code), fetch="one")
+    if not verification:
+        return jsonify({"error": "Invalid or expired OTP code"}), 400
+
     existing = query("SELECT id FROM users WHERE phone = %s", (phone,), fetch="one")
     if existing:
         return jsonify({"error": "Phone number already registered"}), 409
+ 
+    # Clean up verification entry on successful validation
+    query("DELETE FROM phone_verifications WHERE phone = %s", (phone,), fetch="none")
+
  
     pw_hash = hash_password(password)
     user = query(
@@ -116,3 +175,14 @@ def change_password():
 def delete_account():
     query("DELETE FROM users WHERE id = %s", (g.user["id"],), fetch="none")
     return jsonify({"message": "Account permanently deleted"}), 200
+
+@auth_bp.route("/me/fcm", methods=["POST"])
+@require_auth
+def register_fcm_token():
+    data = request.get_json() or {}
+    token = data.get("fcmToken", "").strip()
+    if not token:
+        return jsonify({"error": "Token is required"}), 400
+
+    query("UPDATE users SET fcm_token = %s WHERE id = %s", (token, g.user["id"]), fetch="none")
+    return jsonify({"message": "FCM token registered successfully."}), 200

@@ -13,16 +13,22 @@ def _require_clinician():
         return jsonify({"error": "Clinician access required"}), 403
     return None
 
+from services.firebase_service import sync_notification_to_firestore
+
 def _create_notification(user_id, title, body, notif_type="info", data=None):
     payload = json.dumps(data) if data is not None else None
-    query(
+    res = query(
         """
         INSERT INTO notifications (user_id, title, body, type, data)
         VALUES (%s, %s, %s, %s, %s)
+        RETURNING id
         """,
         (user_id, title, body, notif_type, payload),
-        fetch="none"
+        fetch="one"
     )
+    notif_id = res["id"] if res else None
+    # Sync to Firestore in real-time
+    sync_notification_to_firestore(user_id, title, body, notif_type, data, document_id=notif_id)
 
 @clinician_bp.route("/alerts", methods=["GET"])
 @require_auth

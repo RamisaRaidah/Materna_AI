@@ -45,6 +45,9 @@ app.register_blueprint(sos_bp, url_prefix="/api/sos")
 from routes.notifications import notifications_bp
 app.register_blueprint(notifications_bp, url_prefix="/api/notifications")
 
+from routes.sms_routes import sms_bp
+app.register_blueprint(sms_bp, url_prefix="/api/sms")
+
 @app.route("/")
 def home():
     return {"status": "MaternaAI backend is running"}

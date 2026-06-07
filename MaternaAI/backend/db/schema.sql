@@ -19,6 +19,7 @@ CREATE TABLE users (
     area VARCHAR(100),
     address_details TEXT,
     emergency_contact VARCHAR(20),
+    fcm_token VARCHAR(255),
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
@@ -203,6 +204,23 @@ CREATE TABLE appointments (
     appt_date DATE,
     appt_time VARCHAR(20),
     status VARCHAR(20) DEFAULT 'confirmed',
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Phone Verifications
+CREATE TABLE phone_verifications (
+    phone VARCHAR(20) PRIMARY KEY,
+    code VARCHAR(10) NOT NULL,
+    expires_at TIMESTAMPTZ NOT NULL,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- SMS Logs
+CREATE TABLE sms_logs (
+    id SERIAL PRIMARY KEY,
+    recipient_phone VARCHAR(20) NOT NULL,
+    body TEXT NOT NULL,
+    status VARCHAR(20) DEFAULT 'sent',
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 

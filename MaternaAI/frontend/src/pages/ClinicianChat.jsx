@@ -1,18 +1,84 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState, useRef } from 'react';
 import { MessageSquare, Search } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { communityAPI } from '../api';
+import { db } from '../api/firebase';
+import {
+  collection,
+  doc,
+  addDoc,
+  setDoc,
+  updateDoc,
+  query as fsQuery,
+  where,
+  orderBy,
+  onSnapshot,
+  getDoc,
+  writeBatch
+} from 'firebase/firestore';
 
 const ClinicianChat = () => {
   const { user } = useAuth();
   const [contacts, setContacts] = useState([]);
   const [activeContact, setActiveContact] = useState(null);
   const [thread, setThread] = useState([]);
+  const [mysqlThread, setMysqlThread] = useState([]);
   const [message, setMessage] = useState('');
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
   const [loadingThread, setLoadingThread] = useState(false);
   const [error, setError] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [inbox, setInbox] = useState([]);
+
+  const threadUnsubscribeRef = useRef(null);
+  const inboxUnsubscribeRef = useRef(null);
+  const threadEndRef = useRef(null);
+
+  useEffect(() => {
+    return () => {
+      if (threadUnsubscribeRef.current) threadUnsubscribeRef.current();
+      if (inboxUnsubscribeRef.current) inboxUnsubscribeRef.current();
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!user?.id || !db) return;
+
+    const q = fsQuery(
+      collection(db, 'rooms'),
+      where('participants', 'array-contains', user.id)
+    );
+
+    if (inboxUnsubscribeRef.current) {
+      inboxUnsubscribeRef.current();
+    }
+
+    inboxUnsubscribeRef.current = onSnapshot(q, (snapshot) => {
+      const inboxData = [];
+      snapshot.forEach((roomDoc) => {
+        const data = roomDoc.data();
+        const partnerIdStr = Object.keys(data.partnerNames || {}).find(id => id !== String(user.id));
+        if (partnerIdStr) {
+          inboxData.push({
+            partner_id: Number(partnerIdStr),
+            last_message: data.lastMessage,
+            last_sent_at: data.lastSentAt,
+            unread_count: data.unreadCount?.[String(user.id)] || 0
+          });
+        }
+      });
+      setInbox(inboxData);
+    }, (err) => {
+      console.error("Firestore inbox listener error:", err);
+    });
+  }, [user, db]);
+
+  const getRoomId = (uid1, uid2) => {
+    const id1 = Math.min(Number(uid1), Number(uid2));
+    const id2 = Math.max(Number(uid1), Number(uid2));
+    return `room_${id1}_${id2}`;
+  };
 
   useEffect(() => {
     let isActive = true;
@@ -45,73 +111,233 @@ const ClinicianChat = () => {
   }, []);
 
   useEffect(() => {
-    let isActive = true;
-    const loadThread = async () => {
-      if (!activeContact || !user?.id) {
-        setThread([]);
-        return;
-      }
-      try {
-        setLoadingThread(true);
-        const data = await communityAPI.getDMThread(user.id, activeContact.id);
-        if (!isActive) {
-          return;
-        }
-        setThread(Array.isArray(data) ? data : []);
-      } catch (err) {
-        if (!isActive) {
-          return;
-        }
-        setThread([]);
-      } finally {
-        if (isActive) {
-          setLoadingThread(false);
-        }
-      }
-    };
+    if (!activeContact || !user?.id || !db) {
+      setThread([]);
+      setMysqlThread([]);
+      return;
+    }
 
-    loadThread();
+    setLoadingThread(true);
+    setThread([]);
+    setMysqlThread([]);
+
+    // Load legacy MySQL messages
+    communityAPI.getDMThread(user.id, activeContact.id)
+      .then(data => setMysqlThread(Array.isArray(data) ? data : []))
+      .catch(err => console.warn("Could not load legacy thread:", err));
+
+    const roomId = getRoomId(user.id, activeContact.id);
+
+    // Mark room as read for the current user
+    const roomRef = doc(db, 'rooms', roomId);
+    setDoc(roomRef, {
+      unreadCount: {
+        [String(user.id)]: 0
+      }
+    }, { merge: true }).catch(() => { });
+
+    const q = fsQuery(
+      collection(db, 'rooms', roomId, 'messages'),
+      orderBy('createdAt', 'asc')
+    );
+
+    if (threadUnsubscribeRef.current) {
+      threadUnsubscribeRef.current();
+    }
+
+    threadUnsubscribeRef.current = onSnapshot(q, { includeMetadataChanges: true }, (snapshot) => {
+      const msgs = [];
+
+      snapshot.forEach((msgDoc) => {
+        const data = msgDoc.data();
+        msgs.push({
+          id: msgDoc.id,
+          sender_id: data.senderId,
+          receiver_id: data.receiverId,
+          content: data.content,
+          created_at: data.createdAt,
+          status: data.status || 'sent',
+          hasPendingWrites: msgDoc.metadata.hasPendingWrites
+        });
+      });
+
+      if (!snapshot.metadata.hasPendingWrites) {
+        const batch = writeBatch(db);
+        let hasUpdates = false;
+        snapshot.forEach((msgDoc) => {
+          const data = msgDoc.data();
+          if (data.senderId !== user.id && data.status !== 'read') {
+            batch.update(doc(db, 'rooms', roomId, 'messages', msgDoc.id), { status: 'read' });
+            hasUpdates = true;
+          }
+        });
+        if (hasUpdates) {
+          batch.update(doc(db, 'rooms', roomId), {
+            [`unreadCount.${user.id}`]: 0
+          });
+          batch.commit().catch(() => { });
+        }
+      }
+
+      setThread(msgs);
+      setLoadingThread(false);
+    }, (err) => {
+      console.error("Firestore thread listener error:", err);
+      setLoadingThread(false);
+    });
+
     return () => {
-      isActive = false;
+      if (threadUnsubscribeRef.current) threadUnsubscribeRef.current();
     };
   }, [activeContact, user]);
+
+  const combinedThread = useMemo(() => {
+    const earliestFirebaseTime = thread.reduce((min, m) => {
+      const t = new Date(m.created_at).getTime();
+      return t < min ? t : min;
+    }, Infinity);
+
+    const map = new Map();
+
+    mysqlThread.forEach(m => {
+      const t = new Date(m.created_at).getTime();
+      if (t < earliestFirebaseTime) {
+        map.set(`sql_${m.id}`, {
+          ...m,
+          sender_id: m.sender_id,
+          created_at: m.created_at,
+          status: m.is_read ? 'read' : 'sent',
+          hasPendingWrites: false
+        });
+      }
+    });
+
+    thread.forEach(m => map.set(m.id, m));
+    return Array.from(map.values()).sort((a, b) =>
+      new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+    );
+  }, [mysqlThread, thread]);
+
+  // Auto-scroll to bottom when messages change
+  useEffect(() => {
+    threadEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [combinedThread]);
 
   const filteredContacts = useMemo(() => {
     const needle = search.trim().toLowerCase();
     const baseList = needle
       ? contacts.filter((contact) =>
-          `${contact.name || ''} ${contact.phone || ''}`.toLowerCase().includes(needle)
-        )
+        `${contact.name || ''} ${contact.phone || ''}`.toLowerCase().includes(needle)
+      )
       : contacts;
 
-    return [...baseList].sort((first, second) => {
-      const firstName = (first.name || '').trim();
-      const secondName = (second.name || '').trim();
-      const nameCompare = firstName.localeCompare(secondName, undefined, { sensitivity: 'base' });
-      if (nameCompare !== 0) {
-        return nameCompare;
-      }
-      const firstPhone = (first.phone || '').trim();
-      const secondPhone = (second.phone || '').trim();
-      return firstPhone.localeCompare(secondPhone, undefined, { sensitivity: 'base' });
+    // Merge inbox data for real-time sorting and unread counts
+    const mergedList = baseList.map(contact => {
+      const inboxData = inbox.find(i => String(i.partner_id) === String(contact.id));
+      return {
+        ...contact,
+        unread_count: inboxData?.unread_count || 0,
+        last_sent_at: inboxData?.last_sent_at || null
+      };
     });
-  }, [contacts, search]);
+
+    return mergedList.sort((a, b) => {
+      const hasUnreadA = a.unread_count > 0;
+      const hasUnreadB = b.unread_count > 0;
+
+      // 1. Unread messages go to top
+      if (hasUnreadA && !hasUnreadB) return -1;
+      if (!hasUnreadA && hasUnreadB) return 1;
+
+      // 2. Sort by latest message time
+      if (a.last_sent_at || b.last_sent_at) {
+        const timeA = a.last_sent_at ? new Date(a.last_sent_at).getTime() : 0;
+        const timeB = b.last_sent_at ? new Date(b.last_sent_at).getTime() : 0;
+        if (timeA !== timeB) return timeB - timeA;
+      }
+
+      // 3. Fallback to alphabetical name sort
+      const nameA = (a.name || '').trim();
+      const nameB = (b.name || '').trim();
+      return nameA.localeCompare(nameB, undefined, { sensitivity: 'base' });
+    });
+  }, [contacts, search, inbox]);
 
   const handleSend = async (event) => {
     event.preventDefault();
-    if (!message.trim() || !activeContact || !user?.id) {
+    if (!message.trim() || !activeContact || !user?.id || !db) {
       return;
     }
 
-    const payload = { sender_id: user.id, content: message.trim() };
+    const text = message.trim();
     setMessage('');
+    setIsSubmitting(true);
+
+    const roomId = getRoomId(user.id, activeContact.id);
 
     try {
-      await communityAPI.sendDM(activeContact.id, payload);
-      const data = await communityAPI.getDMThread(user.id, activeContact.id);
-      setThread(Array.isArray(data) ? data : []);
+      const timestamp = new Date().toISOString();
+      const messagesRef = collection(db, 'rooms', roomId, 'messages');
+
+      await addDoc(messagesRef, {
+        senderId: user.id,
+        receiverId: activeContact.id,
+        content: text,
+        createdAt: timestamp,
+        status: 'sent'
+      });
+
+      const roomRef = doc(db, 'rooms', roomId);
+
+      let partnerUnread = 0;
+      const roomSnapData = await getDoc(roomRef);
+      if (roomSnapData.exists()) {
+        const roomData = roomSnapData.data();
+        partnerUnread = roomData.unreadCount?.[String(activeContact.id)] || 0;
+      }
+
+      await setDoc(roomRef, {
+        participants: [user.id, activeContact.id],
+        lastMessage: text,
+        lastSentAt: timestamp,
+        partnerNames: {
+          [String(user.id)]: user.name,
+          [String(activeContact.id)]: activeContact.name || 'Clinician'
+        },
+        unreadCount: {
+          [String(activeContact.id)]: partnerUnread + 1,
+          [String(user.id)]: 0
+        }
+      }, { merge: true });
+
+      // Sync to MySQL
+      try {
+        await communityAPI.sendDM(activeContact.id, { sender_id: user.id, content: text });
+      } catch (sqlErr) {
+        console.warn("Failed to sync message to MySQL:", sqlErr);
+      }
+
+      // Trigger simulated offline SMS notification if online
+      if (navigator.onLine && activeContact.phone) {
+        try {
+          await fetch('/api/sms/send_offline_notify', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              sender_name: user.name,
+              recipient_phone: activeContact.phone,
+              message_content: text
+            })
+          });
+        } catch (smsErr) {
+          console.warn("Simulated SMS gateway failed:", smsErr);
+        }
+      }
     } catch (err) {
+      console.error("DM Firestore dispatch failed:", err);
       setError('Unable to send message. Please retry.');
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -161,16 +387,31 @@ const ClinicianChat = () => {
                   key={contact.id}
                   type="button"
                   onClick={() => setActiveContact(contact)}
-                  className={`w-full text-left p-3 rounded-xl border transition-all ${
-                    activeContact?.id === contact.id
-                      ? 'border-primary-mauve bg-primary-mauve/5'
-                      : 'border-primary-mauve/10 bg-bg-rose-white hover:border-primary-mauve/30'
-                  }`}
+                  className={`w-full text-left p-3 rounded-xl border transition-all relative ${activeContact?.id === contact.id
+                    ? 'border-primary-mauve bg-primary-mauve/5'
+                    : 'border-primary-mauve/10 bg-bg-rose-white hover:border-primary-mauve/30'
+                    }`}
                 >
-                  <p className="text-sm font-bold text-text-dark">{contact.name || 'Clinician'}</p>
-                  <p className="text-[11px] font-semibold text-text-muted">
-                    {contact.phone || 'No phone'} · {contact.location || 'Location unknown'}
-                  </p>
+                  <div className="flex justify-between items-start">
+                    <div>
+                      <p className="text-sm font-bold text-text-dark">{contact.name || 'Clinician'}</p>
+                      <p className="text-[11px] font-semibold text-text-muted mt-0.5">
+                        {contact.phone || 'No phone'} · {contact.location || 'Location unknown'}
+                      </p>
+                    </div>
+                    <div className="flex flex-col items-end gap-1">
+                      {contact.last_sent_at && (
+                        <span className="text-[9px] font-bold text-text-muted">
+                          {new Date(contact.last_sent_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        </span>
+                      )}
+                      {contact.unread_count > 0 && (
+                        <span className="bg-primary-mauve text-white text-[10px] font-black px-1.5 py-0.5 rounded-full">
+                          {contact.unread_count} new
+                        </span>
+                      )}
+                    </div>
+                  </div>
                 </button>
               ))
             )}
@@ -186,7 +427,7 @@ const ClinicianChat = () => {
               </p>
             </div>
             <span className="text-[10px] font-extrabold text-text-muted bg-white border border-primary-mauve/10 px-2.5 py-1 rounded-lg">
-              {thread.length} Messages
+              {combinedThread.length} Messages
             </span>
           </div>
 
@@ -203,36 +444,53 @@ const ClinicianChat = () => {
               </div>
             ) : loadingThread ? (
               <div className="text-xs font-semibold text-text-muted">Loading thread...</div>
-            ) : thread.length === 0 ? (
+            ) : combinedThread.length === 0 ? (
               <div className="text-xs font-semibold text-text-muted">No messages yet. Start the conversation.</div>
             ) : (
-              thread.map((msg) => {
+              combinedThread.map((msg) => {
                 const isSelf = msg.sender_id === user?.id;
                 return (
                   <div key={msg.id} className={`flex items-start gap-3 ${isSelf ? 'flex-row-reverse' : 'flex-row'}`}>
-                    <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 text-sm font-bold shadow-xs ${
-                      isSelf ? 'bg-primary-mauve text-white' : 'bg-bg-rose-white text-text-dark border border-primary-mauve/10'
-                    }`}>
+                    <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 text-sm font-bold shadow-xs ${isSelf ? 'bg-primary-mauve text-white' : 'bg-bg-rose-white text-text-dark border border-primary-mauve/10'
+                      }`}>
                       {isSelf ? '🤰' : '🩺'}
                     </div>
                     <div className="flex flex-col max-w-[80%] space-y-1">
-                      <div className={`p-4 rounded-2xl border text-sm font-medium leading-relaxed ${
-                        isSelf
-                          ? 'bg-primary-mauve text-white border-primary-mauve/15 rounded-tr-none'
-                          : 'bg-bg-rose-white text-text-dark border-primary-mauve/5 rounded-tl-none'
-                      }`}>
+                      <div className={`p-4 rounded-2xl border text-sm font-medium leading-relaxed ${isSelf
+                        ? 'bg-primary-mauve text-white border-primary-mauve/15 rounded-tr-none'
+                        : 'bg-bg-rose-white text-text-dark border-primary-mauve/5 rounded-tl-none'
+                        }`}>
                         {msg.content}
                       </div>
-                      <span className={`text-[9px] font-bold text-text-muted px-1.5 ${isSelf ? 'self-end' : 'self-start'}`}>
-                        {msg.created_at ? new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Just now'}
-                      </span>
+                      <div className={`flex items-center gap-1 mt-1 text-[9px] font-bold text-text-muted px-1.5 ${isSelf ? 'justify-end' : 'justify-start'}`}>
+                        <span>
+                          {msg.created_at ? new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Just now'}
+                        </span>
+                        {isSelf && (
+                          <span className="text-[11px] font-black leading-none ml-1">
+                            {msg.hasPendingWrites ? (
+                              <span className="text-text-muted/40" title="Sending...">🕒</span>
+                            ) : msg.status === 'read' ? (
+                              <span style={{ color: '#3b82f6' }} title="Read">✓✓</span>
+                            ) : (
+                              <span className="text-text-muted/50" title="Sent">✓✓</span>
+                            )}
+                          </span>
+                        )}
+                      </div>
                     </div>
                   </div>
                 );
               })
             )}
+            <div ref={threadEndRef} />
           </div>
 
+          {!navigator.onLine && (
+            <p className="mx-4 my-2 text-[10px] font-bold text-[#d93d59] text-center bg-danger/10 py-1.5 rounded-lg animate-pulse">
+              ⚠️ You are offline. Click "SMS" to send via carrier.
+            </p>
+          )}
           <form
             onSubmit={handleSend}
             className="p-4 border-t border-primary-mauve/10 bg-bg-rose-white/30 flex items-center gap-2.5"
@@ -242,12 +500,28 @@ const ClinicianChat = () => {
               value={message}
               onChange={(event) => setMessage(event.target.value)}
               placeholder="Write a secure message..."
-              disabled={!activeContact}
+              disabled={!activeContact || isSubmitting}
               className="flex-1 px-4 py-3 bg-white border border-primary-mauve/15 focus:border-primary-mauve outline-hidden text-xs font-semibold text-text-dark rounded-xl"
             />
+            {!navigator.onLine && (
+              <button
+                type="button"
+                onClick={() => {
+                  if (activeContact?.phone) {
+                    window.open(`sms:${activeContact.phone}?body=${encodeURIComponent(message)}`, '_blank');
+                  } else {
+                    alert("Recipient's phone number not found.");
+                  }
+                }}
+                disabled={!message.trim()}
+                className="px-3.5 py-3 bg-[#4f46e5] text-white rounded-xl text-[10px] font-black uppercase hover:bg-[#4338ca] transition-all cursor-pointer shrink-0"
+              >
+                SMS
+              </button>
+            )}
             <button
               type="submit"
-              disabled={!message.trim() || !activeContact}
+              disabled={!message.trim() || !activeContact || isSubmitting}
               className="p-3 bg-primary-mauve text-white rounded-xl hover:bg-bg-dark-mauve transition-all shadow-glow cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <MessageSquare className="w-4.5 h-4.5" />
