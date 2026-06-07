@@ -177,12 +177,32 @@ const HealthTracker = () => {
 
     setIsAnalyzing(true);
     setReportResult(null);
+    const formData = new FormData();
+    formData.append('file', reportFile);
+    const token = localStorage.getItem('token');
     try {
-      const data = await healthAPI.analyzeReport(reportFile, '');
+      const response = await fetch('/api/health/analyze-report', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        },
+        body: formData
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        if (data.error === 'not_medical') {
+          setReportError('⚠️ This doesn\'t look like a medical document. Please upload a prescription, lab report, or ultrasound scan.');
+        } else {
+          setReportError(data.message || 'Failed to analyze document. Please try again.');
+        }
+        return;
+      }
+
       setReportResult(data);
     } catch (err) {
-      console.error('Report analysis failed:', err);
-      setReportError('❌ Analysis failed. Please check the file and try again.');
+      setReportError(err.message || "Failed to analyze document.");
     } finally {
       setIsAnalyzing(false);
     }
@@ -551,6 +571,139 @@ const HealthTracker = () => {
             </button>
           </div>
 
+          {/* ─── AI Report Analyzer ─────────────────────────────── */}
+          <div className="bg-white border border-primary-mauve/10 rounded-2xl p-6 shadow-premium space-y-5">
+            <div className="flex items-center justify-between border-b border-primary-mauve/5 pb-3">
+              <h3 className="font-sans font-black text-sm uppercase tracking-wider text-text-dark flex items-center gap-2">
+                <Clipboard className="w-5 h-5 text-primary-mauve" />
+                AI Medical Report & Prescription Analyzer
+              </h3>
+              <span className="text-[9px] font-black bg-primary-mauve text-white px-2 py-0.5 rounded-full uppercase">
+                OCR + Gemini
+              </span>
+            </div>
+
+            {/* File upload */}
+            {/* File upload */}
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <p className="text-[10px] font-black text-text-muted uppercase tracking-wider">
+                  Upload Prescription or Scan (PDF / Image)
+                </p>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setReportFile(null);
+                    setReportResult(null);
+                    setReportError(null);
+                    setReportAddedToPlan(false);
+                  }}
+                  className="flex items-center gap-1 text-[10px] font-black text-text-muted hover:text-primary-mauve transition-colors cursor-pointer"
+                  title="Clear and reset"
+                >
+                  <RotateCcw className="w-3 h-3" />
+                  <span>Reset</span>
+                </button>
+              </div>
+              <label className="flex flex-col items-center justify-center gap-2 p-6 border-2 border-dashed border-primary-mauve/20 rounded-xl cursor-pointer hover:border-primary-mauve/50 hover:bg-bg-rose-white transition-all">
+                <Sparkles className="w-6 h-6 text-primary-mauve/50" />
+                <span className="text-xs font-semibold text-text-muted">
+                  {reportFile ? reportFile.name : 'Click to select a prescription or scan'}
+                </span>
+                <input
+                  type="file"
+                  accept=".pdf,image/*"
+                  className="hidden"
+                  onChange={(e) => {
+                    setReportFile(e.target.files[0] || null);
+                    setReportResult(null);  // clear previous result on new file
+                    setReportError(null);
+                    setReportAddedToPlan(false);
+                  }}
+                />
+              </label>
+
+              {reportError && (
+                <p className="text-[11px] font-bold text-danger mt-2">{reportError}</p>
+              )}
+
+              <button
+                onClick={handleAnalyzeReport}
+                disabled={isAnalyzing}
+                className="mt-3 w-full py-2.5 bg-primary-mauve text-white rounded-xl text-xs font-black uppercase tracking-wider hover:bg-bg-dark-mauve cursor-pointer shadow-glow transition-all flex items-center justify-center gap-2"
+              >
+                {isAnalyzing
+                  ? <><Loader2 className="w-4 h-4 animate-spin" /> Analyzing...</>
+                  : <span>Analyze with AI</span>
+                }
+              </button>
+            </div>
+
+            {isAnalyzing && (
+              <div className="flex items-center gap-2 text-xs font-bold text-text-muted">
+                <Loader2 className="w-4 h-4 animate-spin text-primary-mauve" />
+                Analyzing document with Gemini OCR...
+              </div>
+            )}
+
+            {/* Result */}
+            {reportResult && (
+              <div className="space-y-4 animate-fadeIn">
+                <div className="p-4 bg-bg-rose-white border border-primary-mauve/10 rounded-xl">
+                  <h4 className="font-black text-sm text-text-dark">{reportResult.title}</h4>
+                  <p className="text-[10px] font-bold text-text-muted mt-1">{reportResult.date}</p>
+                  <div
+                    className="text-xs font-medium text-text-dark mt-3 leading-relaxed"
+                    dangerouslySetInnerHTML={{ __html: reportResult.findings }}
+                  />
+                </div>
+
+                {reportResult.meds?.map((med, i) => (
+                  <div
+                    key={i}
+                    className={`p-4 rounded-xl border space-y-1.5 ${med.danger ? 'border-danger/25 bg-danger/5' : 'border-primary-mauve/10 bg-bg-rose-white'
+                      }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-black text-text-dark">{med.name}</span>
+                      <span className={`text-[9px] font-black px-2 py-0.5 rounded-full ${med.danger ? 'bg-danger/15 text-danger' : 'bg-success/15 text-success'
+                        }`}>{med.safety}</span>
+                    </div>
+                    <p className="text-[11px] font-bold text-primary-mauve">{med.purpose}</p>
+                    <p className="text-[11px] font-semibold text-text-dark">{med.timing}</p>
+                    <p className="text-[11px] font-bold text-warning">⚠️ {med.warning}</p>
+                  </div>
+                ))}
+
+                {/* Add to Care Plan button */}
+                <button
+                  onClick={() => {
+                    if (!reportResult?.meds?.length) return;
+                    const importedItems = reportResult.meds.map((med, i) => ({
+                      id: `imported-${Date.now()}-${i}`,
+                      title: med.name,
+                      desc: `${med.purpose} — ${med.timing} | ⚠️ ${med.warning}`,
+                      isImported: true,
+                    }));
+                    localStorage.setItem('imported_medications', JSON.stringify(importedItems));
+                    window.dispatchEvent(new Event('imported_medications_updated'));
+                    setReportAddedToPlan(true);
+                  }}
+                  disabled={reportAddedToPlan}
+                  className={`w-full py-2.5 rounded-xl text-xs font-black uppercase tracking-wider transition-all flex items-center justify-center gap-2 ${reportAddedToPlan
+                    ? 'bg-success/10 border border-success/25 text-success cursor-default'
+                    : 'bg-primary-mauve text-white hover:bg-bg-dark-mauve cursor-pointer shadow-glow'
+                    }`}
+                >
+                  {reportAddedToPlan
+                    ? '✅ Added to AI Pregnancy Care Advisor'
+                    : '+ Add Instructions to Care Plan'
+                  }
+                </button>
+              </div>
+            )}
+          </div>
+
         </div>
 
         {/* RIGHT PANEL (Col Span 5): Kick Counter & History */}
@@ -720,18 +873,16 @@ const HealthTracker = () => {
                 <button
                   type="button"
                   onClick={() => setTimelineTab('chart')}
-                  className={`px-3 py-1 text-[10px] font-black uppercase tracking-wider rounded-md transition-all cursor-pointer ${
-                    timelineTab === 'chart' ? 'bg-primary-mauve text-white shadow-xs' : 'text-text-muted hover:text-text-dark'
-                  }`}
+                  className={`px-3 py-1 text-[10px] font-black uppercase tracking-wider rounded-md transition-all cursor-pointer ${timelineTab === 'chart' ? 'bg-primary-mauve text-white shadow-xs' : 'text-text-muted hover:text-text-dark'
+                    }`}
                 >
                   Trends Chart
                 </button>
                 <button
                   type="button"
                   onClick={() => setTimelineTab('list')}
-                  className={`px-3 py-1 text-[10px] font-black uppercase tracking-wider rounded-md transition-all cursor-pointer ${
-                    timelineTab === 'list' ? 'bg-primary-mauve text-white shadow-xs' : 'text-text-muted hover:text-text-dark'
-                  }`}
+                  className={`px-3 py-1 text-[10px] font-black uppercase tracking-wider rounded-md transition-all cursor-pointer ${timelineTab === 'list' ? 'bg-primary-mauve text-white shadow-xs' : 'text-text-muted hover:text-text-dark'
+                    }`}
                 >
                   Logs List
                 </button>
@@ -761,11 +912,10 @@ const HealthTracker = () => {
                             key={v.id}
                             type="button"
                             onClick={() => setSelectedVital(v.id)}
-                            className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-[10px] font-black transition-all cursor-pointer whitespace-nowrap ${
-                              selectedVital === v.id
-                                ? 'bg-primary-mauve text-white border-primary-mauve shadow-xs'
-                                : 'border-primary-mauve/10 text-text-muted hover:text-text-dark hover:bg-bg-rose-white'
-                            }`}
+                            className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-[10px] font-black transition-all cursor-pointer whitespace-nowrap ${selectedVital === v.id
+                              ? 'bg-primary-mauve text-white border-primary-mauve shadow-xs'
+                              : 'border-primary-mauve/10 text-text-muted hover:text-text-dark hover:bg-bg-rose-white'
+                              }`}
                           >
                             <Icon className="w-3.5 h-3.5 shrink-0" />
                             <span>{v.label}</span>
@@ -794,8 +944,8 @@ const HealthTracker = () => {
                           <AreaChart data={chartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                             <defs>
                               <linearGradient id="glucoseGrad" x1="0" y1="0" x2="0" y2="1">
-                                <stop offset="5%" stopColor="#e69d30" stopOpacity={0.2}/>
-                                <stop offset="95%" stopColor="#e69d30" stopOpacity={0.0}/>
+                                <stop offset="5%" stopColor="#e69d30" stopOpacity={0.2} />
+                                <stop offset="95%" stopColor="#e69d30" stopOpacity={0.0} />
                               </linearGradient>
                             </defs>
                             <CartesianGrid strokeDasharray="3 3" stroke="rgba(171, 115, 151, 0.05)" />
@@ -824,8 +974,8 @@ const HealthTracker = () => {
                           <AreaChart data={chartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                             <defs>
                               <linearGradient id="waterGrad" x1="0" y1="0" x2="0" y2="1">
-                                <stop offset="5%" stopColor="#ab7397" stopOpacity={0.2}/>
-                                <stop offset="95%" stopColor="#ab7397" stopOpacity={0.0}/>
+                                <stop offset="5%" stopColor="#ab7397" stopOpacity={0.2} />
+                                <stop offset="95%" stopColor="#ab7397" stopOpacity={0.0} />
                               </linearGradient>
                             </defs>
                             <CartesianGrid strokeDasharray="3 3" stroke="rgba(171, 115, 151, 0.05)" />
@@ -890,140 +1040,6 @@ const HealthTracker = () => {
                     );
                   })
                 )}
-              </div>
-            )}
-          </div>
-
-          {/* ─── AI Report Analyzer ─────────────────────────────── */}
-          <div className="bg-white border border-primary-mauve/10 rounded-2xl p-6 shadow-premium space-y-5">
-            <div className="flex items-center justify-between border-b border-primary-mauve/5 pb-3">
-              <h3 className="font-sans font-black text-sm uppercase tracking-wider text-text-dark flex items-center gap-2">
-                <Clipboard className="w-5 h-5 text-primary-mauve" />
-                AI Medical Report & Prescription Analyzer
-              </h3>
-              <span className="text-[9px] font-black bg-primary-mauve text-white px-2 py-0.5 rounded-full uppercase">
-                OCR + Gemini
-              </span>
-            </div>
-
-            {/* Preset buttons */}
-            <div>
-              <p className="text-[10px] font-black text-text-muted uppercase tracking-wider mb-2">Quick Presets</p>
-              <div className="flex gap-2 flex-wrap">
-                {['prescription', 'ultrasound'].map(preset => (
-                  <button
-                    key={preset}
-                    onClick={() => handleAnalyzeReport(null, preset)}
-                    disabled={isAnalyzing}
-                    className="px-4 py-2 rounded-lg border border-primary-mauve/20 text-primary-mauve text-xs font-black hover:bg-primary-mauve hover:text-white transition-all cursor-pointer capitalize"
-                  >
-                    {preset === 'prescription' ? '💊 Antenatal Prescription' : '🔬 Ultrasound Scan'}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* File upload */}
-            {/* File upload */}
-            <div>
-              <p className="text-[10px] font-black text-text-muted uppercase tracking-wider mb-2">
-                Upload Prescription or Scan (PDF / Image)
-              </p>
-              <label className="flex flex-col items-center justify-center gap-2 p-6 border-2 border-dashed border-primary-mauve/20 rounded-xl cursor-pointer hover:border-primary-mauve/50 hover:bg-bg-rose-white transition-all">
-                <Sparkles className="w-6 h-6 text-primary-mauve/50" />
-                <span className="text-xs font-semibold text-text-muted">
-                  {reportFile ? reportFile.name : 'Click to select a prescription or scan'}
-                </span>
-                <input
-                  type="file"
-                  accept=".pdf,image/*"
-                  className="hidden"
-                  onChange={(e) => {
-                    setReportFile(e.target.files[0] || null);
-                    setReportResult(null);  // clear previous result on new file
-                    setReportError(null);
-                    setReportAddedToPlan(false);
-                  }}
-                />
-              </label>
-
-              {reportError && (
-                <p className="text-[11px] font-bold text-danger mt-2">{reportError}</p>
-              )}
-
-              <button
-                onClick={handleAnalyzeReport}
-                disabled={isAnalyzing}
-                className="mt-3 w-full py-2.5 bg-primary-mauve text-white rounded-xl text-xs font-black uppercase tracking-wider hover:bg-bg-dark-mauve cursor-pointer shadow-glow transition-all flex items-center justify-center gap-2"
-              >
-                {isAnalyzing
-                  ? <><Loader2 className="w-4 h-4 animate-spin" /> Analyzing...</>
-                  : <span>Analyze with AI</span>
-                }
-              </button>
-            </div>
-
-            {isAnalyzing && (
-              <div className="flex items-center gap-2 text-xs font-bold text-text-muted">
-                <Loader2 className="w-4 h-4 animate-spin text-primary-mauve" />
-                Analyzing document with Gemini OCR...
-              </div>
-            )}
-
-            {/* Result */}
-            {reportResult && (
-              <div className="space-y-4 animate-fadeIn">
-                <div className="p-4 bg-bg-rose-white border border-primary-mauve/10 rounded-xl">
-                  <h4 className="font-black text-sm text-text-dark">{reportResult.title}</h4>
-                  <p className="text-[10px] font-bold text-text-muted mt-1">{reportResult.date}</p>
-                  <div
-                    className="text-xs font-medium text-text-dark mt-3 leading-relaxed"
-                    dangerouslySetInnerHTML={{ __html: reportResult.findings }}
-                  />
-                </div>
-
-                {reportResult.meds?.map((med, i) => (
-                  <div
-                    key={i}
-                    className={`p-4 rounded-xl border space-y-1.5 ${med.danger ? 'border-danger/25 bg-danger/5' : 'border-primary-mauve/10 bg-bg-rose-white'
-                      }`}
-                  >
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs font-black text-text-dark">{med.name}</span>
-                      <span className={`text-[9px] font-black px-2 py-0.5 rounded-full ${med.danger ? 'bg-danger/15 text-danger' : 'bg-success/15 text-success'
-                        }`}>{med.safety}</span>
-                    </div>
-                    <p className="text-[11px] font-bold text-primary-mauve">{med.purpose}</p>
-                    <p className="text-[11px] font-semibold text-text-dark">{med.timing}</p>
-                    <p className="text-[11px] font-bold text-warning">⚠️ {med.warning}</p>
-                  </div>
-                ))}
-
-                {/* Add to Care Plan button */}
-                <button
-                  onClick={() => {
-                    if (!reportResult?.meds?.length) return;
-                    const importedItems = reportResult.meds.map((med, i) => ({
-                      id: `imported-${Date.now()}-${i}`,
-                      title: med.name,
-                      desc: `${med.purpose} — ${med.timing} | ⚠️ ${med.warning}`,
-                      isImported: true,
-                    }));
-                    localStorage.setItem('imported_medications', JSON.stringify(importedItems));
-                    window.dispatchEvent(new Event('imported_medications_updated'));
-                    setReportAddedToPlan(true);
-                  }}
-                  disabled={reportAddedToPlan}
-                  className={`w-full py-2.5 rounded-xl text-xs font-black uppercase tracking-wider transition-all flex items-center justify-center gap-2 ${reportAddedToPlan
-                      ? 'bg-success/10 border border-success/25 text-success cursor-default'
-                      : 'bg-primary-mauve text-white hover:bg-bg-dark-mauve cursor-pointer shadow-glow'
-                    }`}
-                >
-                  {reportAddedToPlan
-                    ? '✅ Added to AI Pregnancy Care Advisor'
-                    : '+ Add Instructions to Care Plan'
-                  }
-                </button>
               </div>
             )}
           </div>

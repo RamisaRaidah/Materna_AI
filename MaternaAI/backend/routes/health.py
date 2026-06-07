@@ -198,121 +198,67 @@ def _create_glucose_alert(patient_id, glucose):
 @health_bp.route("/analyze-report", methods=["POST"])
 @require_auth
 def analyze_report():
-    # Supports JSON payload {"preset": "..."} or file upload "file"
-    preset = None
-    file_bytes = None
-    mime_type = None
-
-    if request.is_json:
-        data = request.get_json() or {}
-        preset = data.get("preset")
-    else:
-        preset = request.form.get("preset")
-        if "file" in request.files:
-            uploaded_file = request.files["file"]
-            file_bytes = uploaded_file.read()
-            mime_type = uploaded_file.mimetype or "application/pdf"
-
-    # Presets database
-    presets = {
-        "prescription": {
-            "title": "Antenatal Prescription (Sreemangal Complex)",
-            "date": "Prescription Date: 2026-05-24 | Patient: Mim Akter (24 Weeks)",
-            "findings": "• **Clinical Status:** Gestational Hypertension detected (BP 142/92 mmHg on arrival). Fetal heart rate is active (138 bpm). Fetal movement is reported as normal by mother.<br>• **Safety Guidance:** BP must be logged twice daily. Take Labetalol strictly as directed. Avoid high-sodium foods (dry fish, extra salt).<br>• **Obstetrician Note:** \"Patient has borderline high blood pressure. Started low-dose labetalol. Report any headache or vision changes immediately.\"",
-            "meds": [
-                { "name": "Labetalol 100mg", "purpose": "For High Blood Pressure (Hypertension)", "timing": "Take twice daily: 1 tablet in morning (8 AM) and 1 tablet in evening (8 PM) after food.", "safety": "Category C (Physician-prescribed only).", "warning": "Check blood pressure BEFORE taking. Do not skip doses.", "danger": True },
-                { "name": "Ferrous Sulfate 200mg (Iron)", "purpose": "For Anemia Prevention", "timing": "Take once daily: 1 tablet in afternoon (2 PM) with orange/guava juice.", "safety": "Category A (Essential in pregnancy).", "warning": "Do not take with milk or hot tea (tannins block iron absorption).", "danger": False },
-                { "name": "Calcium Carbonate 500mg", "purpose": "For Fetal Bone Growth & Preeclampsia Prevention", "timing": "Take twice daily: 1 tablet with breakfast (9 AM) and 1 tablet with dinner (9 PM).", "safety": "Category A (Essential supplement).", "warning": "Take at least 2 hours apart from your Iron tablet to ensure full absorption.", "danger": False }
-            ]
-        },
-        "ultrasound": {
-            "title": "Ultrasound Growth Scan Report",
-            "date": "Scan Date: 2026-05-24 | Facility: Sreemangal Diagnostic Center",
-            "findings": "• **Ultrasonography Findings:** Single viable intrauterine fetus in cephalic (head-down) presentation. Placenta is posterior and high-riding. Amniotic Fluid Index (AFI) is 12 cm, which is completely normal for Week 28.<br>• **Fetal Development:** Fetal heart rate is steady at 144 bpm. Estimated fetal weight is 1.15 kg, placing baby on the 55th percentile for growth.<br>• **Radiologist Note:** \"No gross congenital anomalies detected. Fetal growth is active and consistent with gestational age.\"",
-            "meds": [
-                { "name": "Increase Fluid Intake (Water)", "purpose": "Maintain Amniotic Fluid Volume", "timing": "Drink 2.5 Liters of filtered water daily (log in hydration counter).", "safety": "Category A (Crucial).", "warning": "Track your water intake using the dashboard logger.", "danger": False },
-                { "name": "Guava & Citrus Fruits", "purpose": "Boost Vitamin C & Placental Strength", "timing": "Eat 1 serving daily at 11 AM.", "safety": "Category A (Natural nutrition).", "warning": "Helps absorb iron supplements and strengthens immunity.", "danger": False }
-            ]
-        }
-    }
-
-    if preset and preset in presets:
-        return jsonify(presets[preset]), 200
-
-    if not file_bytes:
-        return jsonify({"error": "No file uploaded or invalid preset name"}), 400
+    import re
+    if "file" not in request.files:
+        return jsonify({"error": "No file uploaded"}), 400
+    
+    uploaded_file = request.files["file"]
+    file_bytes = uploaded_file.read()
+    mime_type = uploaded_file.mimetype or "image/png"
 
     if not GEMINI_API_KEY:
-        # Fallback to prescription preset if API key is not configured
-        return jsonify(presets["prescription"]), 200
+        return jsonify({"error": "analysis_failed", "message": "AI service not configured."}), 500
 
     try:
-        genai.configure(api_key=GEMINI_API_KEY)
         model = genai.GenerativeModel("gemini-2.5-flash")
+
+        val_prompt = """Is this a medical document (prescription, lab report, or ultrasound scan)?
+        Reply ONLY with valid JSON, no markdown fences: {"is_medical": true} or {"is_medical": false}"""
+
+        val_response = model.generate_content(
+            [{"mime_type": mime_type, "data": file_bytes}, val_prompt]
+        )
+
+        clean_val = re.sub(r"```[a-zA-Z]*", "", val_response.text, flags=re.IGNORECASE).strip().strip("`").strip()
+
+        try:
+            val_data = json.loads(clean_val)
+        except json.JSONDecodeError:
+            # Gemini returned something unparseable — check for a plain-text "false" signal
+            lower = clean_val.lower()
+            if "false" in lower and "true" not in lower:
+                val_data = {"is_medical": False}
+            else:
+                val_data = {"is_medical": True}
+
+
+        if val_data.get("is_medical") is False:
+            return jsonify({
+                "error": "not_medical",
+                "message": "This doesn't look like a medical document. Please upload a prescription, lab report, or scan."
+            }), 400
         
-        prompt = """
-        You are a highly skilled clinical OCR and prescription explanation engine.
-        Analyze this uploaded medical document (image or PDF). Perform the following tasks:
-        1. Extract the document's main Title (e.g., "Antenatal Prescription", "Lab Report", "Ultrasound Scan").
-        2. Format a descriptive Date string (e.g. "Prescription Date: 2026-05-24 | Patient: Mim Akter").
-        3. Compile a "findings" section containing a bulleted clinical summary and critical warnings. Use <br> tags for line breaks instead of raw newlines so it displays nicely in HTML.
-        4. Identify all medications, supplements, or fluid recommendations. For each identified item, generate a JSON object with:
-           - "name": The medication name and dosage (e.g., "Labetalol 100mg").
-           - "purpose": Simple explanation of why it was prescribed (e.g. "For High Blood Pressure").
-           - "timing": Clear schedule instructions (e.g. "Take twice daily: 1 in morning, 1 in evening").
-           - "safety": Pregnancy risk safety category (e.g. "Category A" or "Category C" or "Natural").
-           - "warning": Pregnancy caution warning (e.g. "Avoid taking with tea or milk").
-           - "danger": Boolean indicating if it is a high-risk medication requiring blood pressure or special monitoring (e.g., Labetalol, Insulin, anticoagulants = true).
+        ext_prompt = """Extract details from this medical document into JSON.
+        Return ONLY valid JSON, no markdown, no backticks:
+        {"title": "", "date": "", "findings": "", "meds": [{"name": "", "purpose": "", "timing": "", "safety": "", "warning": "", "danger": true}]}"""
 
-        CRITICAL: Your output must be a valid JSON object matching the schema below. Do not wrap it in markdown block quotes or backticks. Return ONLY the raw JSON string.
-        {
-          "title": "Document Title",
-          "date": "Date and metadata string",
-          "findings": "Bulleted clinical findings summary",
-          "meds": [
-            {
-              "name": "Medication Name",
-              "purpose": "Purpose of medication",
-              "timing": "When and how to take",
-              "safety": "FDA Pregnancy Category (A, B, C, D, X or Natural)",
-              "warning": "Specific pregnancy caution warning",
-              "danger": true
-            }
-          ]
-        }
-        """
+        ext_response = model.generate_content(
+            [{"mime_type": mime_type, "data": file_bytes}, ext_prompt],
+            generation_config={"response_mime_type": "application/json"}
+        )
 
-        response = model.generate_content([
-            {
-                "mime_type": mime_type,
-                "data": file_bytes
-            },
-            prompt
-        ], generation_config={
-            "response_mime_type": "application/json",
-            "temperature": 0.1
-        })
+        try:
+            clean_ext = re.sub(r"```(?:json)?", "", ext_response.text, flags=re.IGNORECASE).strip().rstrip("```").strip()
+            result = json.loads(clean_ext)
+        except (json.JSONDecodeError, AttributeError):
+            return jsonify({"error": "analysis_failed", "message": "Could not parse document data. Please try again."}), 500
 
-        if response and response.text:
-            parsed_data = json.loads(response.text.strip())
-            # Basic validation
-            if "title" in parsed_data and "meds" in parsed_data:
-                return jsonify(parsed_data), 200
-
-        raise Exception("Failed to retrieve valid structured JSON from Gemini OCR model.")
+        return jsonify(result), 200
 
     except Exception as e:
-        print("Gemini OCR Analysis failed:", e)
-        # Fallback to dynamic template to ensure resilience
-        return jsonify({
-            "title": "Analyzed Medical Document",
-            "date": f"Analysis Date: 2026-05-29 | Patient: {g.user.get('name', 'Mim Akter')}",
-            "findings": "• **OCR Reading:** The document was parsed successfully. Borderline metrics observed.<br>• **Clinical Precaution:** Monitor physical vitals regularly. If symptoms worsen, consult your midwife.<br>• **Note:** Ingest iron supplements with citrus fruits for optimal absorption.",
-            "meds": [
-                { "name": "Ferrous Sulfate 200mg (Iron)", "purpose": "For Anemia Prevention", "timing": "Take once daily: 1 tablet in afternoon (2 PM) with orange/guava juice.", "safety": "Category A (Essential)", "warning": "Do not take with milk or tea.", "danger": False },
-                { "name": "Calcium Carbonate 500mg", "purpose": "Fetal Bone Development", "timing": "Take twice daily with breakfast (9 AM) and dinner (9 PM).", "safety": "Category A", "warning": "Take at least 2 hours apart from Iron.", "danger": False }
-            ]
-        }), 200
+        print("CRITICAL ERROR:", e)
+        return jsonify({"error": "analysis_failed", "message": "Failed to analyze document. Please try again."}), 500
+
 
 @health_bp.route("/care-plan", methods=["POST"])
 @require_auth
