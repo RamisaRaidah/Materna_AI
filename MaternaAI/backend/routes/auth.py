@@ -127,7 +127,7 @@ def me():
 def update_me():
     data = request.get_json() or {}
     allowed = ["name", "age", "weeks_pregnant", "is_postpartum", "persona",
-               "division", "district", "area", "emergency_contact", "due_date"]
+               "division", "district", "area", "emergency_contact", "due_date", "profile_image"]
     updates = {k: v for k, v in data.items() if k in allowed}
     if not updates:
         return jsonify({"error": "Nothing to update"}), 400

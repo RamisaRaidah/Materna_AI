@@ -21,6 +21,7 @@ CREATE TABLE users (
     emergency_contact VARCHAR(20),
     fcm_token VARCHAR(255),
     weeks_updated_at TIMESTAMPTZ DEFAULT NOW(),
+    profile_image TEXT,
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
