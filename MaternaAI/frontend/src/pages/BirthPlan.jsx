@@ -5,32 +5,32 @@ import { useAuth } from '../context/AuthContext';
 // Data
 const FACILITIES = [
   // --- DHAKA DIVISION ---
-  { value: 'Dhaka Medical College Hospital', label: 'Dhaka Medical College Hospital (DMCH)', tier: 'Tertiary', tags: ['NICU', '24/7 Emergency OT', 'High-Risk OB'] },
-  { value: 'Sir Salimullah Medical College Hospital', label: 'Sir Salimullah Medical College Hospital (Mitford)', tier: 'Tertiary', tags: ['NICU', 'Emergency Obstetric Care', 'Dhaka'] },
-  { value: 'Maternal and Child Health Training Institute', label: 'Maternal & Child Health Training Institute (Azimpur MCHTI)', tier: 'Specialized', tags: ['Dedicated Maternal', 'ANC/PNC', 'Dhaka'] },
-  { value: 'Upazila Health Complex – Baliakandi', label: 'Upazila Health Complex – Baliakandi (Rajbari)', tier: 'Secondary', tags: ['Basic EmONC', 'Emergency Referral', 'Rural'] },
+  { value: 'Dhaka Medical College Hospital', label: 'Dhaka Medical College Hospital (DMCH)', tier: 'Tertiary', tags: ['NICU', '24/7 Emergency OT', 'High-Risk OB'], division: 'Dhaka' },
+  { value: 'Sir Salimullah Medical College Hospital', label: 'Sir Salimullah Medical College Hospital (Mitford)', tier: 'Tertiary', tags: ['NICU', 'Emergency Obstetric Care', 'Dhaka'], division: 'Dhaka' },
+  { value: 'Maternal and Child Health Training Institute', label: 'Maternal & Child Health Training Institute (Azimpur MCHTI)', tier: 'Specialized', tags: ['Dedicated Maternal', 'ANC/PNC', 'Dhaka'], division: 'Dhaka' },
+  { value: 'Upazila Health Complex – Baliakandi', label: 'Upazila Health Complex – Baliakandi (Rajbari)', tier: 'Secondary', tags: ['Basic EmONC', 'Emergency Referral', 'Rural'], division: 'Dhaka' },
 
   // --- CHITTAGONG / COX'S BAZAR DIVISION ---
-  { value: 'Chittagong Medical College Hospital', label: 'Chittagong Medical College Hospital (CMCH)', tier: 'Tertiary', tags: ['NICU', 'Advanced Neonatal Care', '24/7 OB'] },
-  { value: 'Cox\'s Bazar District Hospital', label: 'Cox\'s Bazar District Hospital', tier: 'Secondary', tags: ['Comprehensive EmONC', 'C-Section Capable'] },
-  { value: 'Upazila Health Complex – Ukhiya', label: 'Upazila Health Complex – Ukhiya', tier: 'Secondary', tags: ['Basic EmONC', 'Midwife-Led Delivery'] },
+  { value: 'Chittagong Medical College Hospital', label: 'Chittagong Medical College Hospital (CMCH)', tier: 'Tertiary', tags: ['NICU', 'Advanced Neonatal Care', '24/7 OB'], division: 'Chittagong' },
+  { value: 'Cox\'s Bazar District Hospital', label: 'Cox\'s Bazar District Hospital', tier: 'Secondary', tags: ['Comprehensive EmONC', 'C-Section Capable'], division: 'Chittagong' },
+  { value: 'Upazila Health Complex – Ukhiya', label: 'Upazila Health Complex – Ukhiya', tier: 'Secondary', tags: ['Basic EmONC', 'Midwife-Led Delivery'], division: 'Chittagong' },
 
   // --- SYLHET DIVISION (Haor & Tea Garden Contexts) ---
-  { value: 'Sylhet MAG Osmani Medical College Hospital', label: 'Sylhet MAG Osmani Medical College Hospital', tier: 'Tertiary', tags: ['NICU', 'ICU', 'Specialized Maternal Unit'] },
-  { value: 'Moulvibazar District Hospital', label: 'Moulvibazar District Hospital', tier: 'Secondary', tags: ['Comprehensive EmONC', 'Blood Bank'] },
-  { value: 'Sreemangal Community Clinic', label: 'Sreemangal Community Clinic (Tea Garden Area)', tier: 'Primary', tags: ['Midwife-Led Normal Delivery', 'Antenatal Care'] },
+  { value: 'Sylhet MAG Osmani Medical College Hospital', label: 'Sylhet MAG Osmani Medical College Hospital', tier: 'Tertiary', tags: ['NICU', 'ICU', 'Specialized Maternal Unit'], division: 'Sylhet' },
+  { value: 'Moulvibazar District Hospital', label: 'Moulvibazar District Hospital', tier: 'Secondary', tags: ['Comprehensive EmONC', 'Blood Bank'], division: 'Sylhet' },
+  { value: 'Sreemangal Community Clinic', label: 'Sreemangal Community Clinic (Tea Garden Area)', tier: 'Primary', tags: ['Midwife-Led Normal Delivery', 'Antenatal Care'], division: 'Sylhet' },
 
   // --- RAJSHAHI & KHULNA DIVISIONS ---
-  { value: 'Rajshahi Medical College Hospital', label: 'Rajshahi Medical College Hospital (RMCH)', tier: 'Tertiary', tags: ['NICU', 'Complex OB Care', 'North-Bengal Hub'] },
-  { value: 'Khulna Medical College Hospital', label: 'Khulna Medical College Hospital (KMCH)', tier: 'Tertiary', tags: ['NICU', 'Emergency C-Section', '24/7 Availability'] },
-  { value: 'Bagerhat District Hospital', label: 'Bagerhat District Hospital', tier: 'Secondary', tags: ['Basic EmONC', 'Maternal Health Unit'] },
+  { value: 'Rajshahi Medical College Hospital', label: 'Rajshahi Medical College Hospital (RMCH)', tier: 'Tertiary', tags: ['NICU', 'Complex OB Care', 'North-Bengal Hub'], division: 'Rajshahi' },
+  { value: 'Khulna Medical College Hospital', label: 'Khulna Medical College Hospital (KMCH)', tier: 'Tertiary', tags: ['NICU', 'Emergency C-Section', '24/7 Availability'], division: 'Khulna' },
+  { value: 'Bagerhat District Hospital', label: 'Bagerhat District Hospital', tier: 'Secondary', tags: ['Basic EmONC', 'Maternal Health Unit'], division: 'Khulna' },
 
   // --- NGO & PRIVATE MATERNAL NETWORKS ---
-  { value: 'BRAC Maternity Center', label: 'BRAC Manoshi Maternity Center (Slum Network)', tier: 'NGO Primary', tags: ['Normal Delivery', 'Midwife-Led', 'Low-Risk'] },
-  { value: 'Marie Stopes Maternity Hospital', label: 'Marie Stopes Maternity Hospital', tier: 'NGO Secondary', tags: ['Emergency OB', 'Family Planning'] },
+  { value: 'BRAC Maternity Center', label: 'BRAC Manoshi Maternity Center (Slum Network)', tier: 'NGO Primary', tags: ['Normal Delivery', 'Midwife-Led', 'Low-Risk'], division: 'NGO & Private' },
+  { value: 'Marie Stopes Maternity Hospital', label: 'Marie Stopes Maternity Hospital', tier: 'NGO Secondary', tags: ['Emergency OB', 'Family Planning'], division: 'NGO & Private' },
 
   // --- HOME DELIVERY ALTERNATIVE ---
-  { value: 'Home Delivery with Trained Midwife', label: 'Home Delivery with Government-Certified Midwife', tier: 'Home', tags: ['Comfort Setting', 'Strictly Low-Risk Only', 'Requires Referral Backup'] },
+  { value: 'Home Delivery with Trained Midwife', label: 'Home Delivery with Government-Certified Midwife', tier: 'Home', tags: ['Comfort Setting', 'Strictly Low-Risk Only', 'Requires Referral Backup'], division: 'Home Delivery' },
 ];
 
 const COMPANIONS = [
@@ -194,7 +194,17 @@ const STRINGS = {
     },
     listen: "Listen",
     stop: "Stop",
-    preview_title: "Plan Summary Preview"
+    preview_title: "Plan Summary Preview",
+    divisions: {
+      all: "All Divisions / Sectors",
+      dhaka: "Dhaka Division",
+      chittagong: "Chittagong Division",
+      sylhet: "Sylhet Division",
+      rajshahi: "Rajshahi Division",
+      khulna: "Khulna Division",
+      ngo_private: "NGO & Private Networks",
+      home: "Home Delivery"
+    }
   },
   bn: {
     title: "ইন্টারেক্টিভ জন্ম পরিকল্পনা",
@@ -325,7 +335,17 @@ const STRINGS = {
     },
     listen: "শুনুন",
     stop: "থামুন",
-    preview_title: "পরিকল্পনার সংক্ষিপ্ত রূপ"
+    preview_title: "পরিকল্পনার সংক্ষিপ্ত রূপ",
+    divisions: {
+      all: "সকল বিভাগ / খাত",
+      dhaka: "ঢাকা বিভাগ",
+      chittagong: "চট্টগ্রাম বিভাগ",
+      sylhet: "সিলেট বিভাগ",
+      rajshahi: "রাজশাহী বিভাগ",
+      khulna: "খুলনা বিভাগ",
+      ngo_private: "এনজিও ও প্রাইভেট নেটওয়ার্ক",
+      home: "হোম ডেলিভারি"
+    }
   }
 };
 
@@ -462,6 +482,16 @@ const BirthPlan = () => {
 
   // Core Form states
   const [facility, setFacility] = useState('');
+  const [selectedDivision, setSelectedDivision] = useState(() => {
+    const userDiv = (user?.division || user?.location || '').toLowerCase();
+    if (userDiv.includes('dhaka')) return 'Dhaka';
+    if (userDiv.includes('chittagong')) return 'Chittagong';
+    if (userDiv.includes('sylhet')) return 'Sylhet';
+    if (userDiv.includes('rajshahi')) return 'Rajshahi';
+    if (userDiv.includes('khulna')) return 'Khulna';
+    return 'all';
+  });
+  const [searchQuery, setSearchQuery] = useState('');
   const [companion, setCompanion] = useState('');
   const [pain, setPain] = useState('');
   const [transport, setTransport] = useState('');
@@ -1263,6 +1293,32 @@ const BirthPlan = () => {
     );
   };
 
+  // Filter facilities based on division and search query
+  const filteredFacilities = FACILITIES.filter(f => {
+    // 1. Division filter
+    if (selectedDivision !== 'all' && f.division !== selectedDivision) {
+      return false;
+    }
+    // 2. Search query filter
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase();
+      const localizedLabel = getLocalizedFacilityLabel(f.value, lang).toLowerCase();
+      const value = f.value.toLowerCase();
+      const division = (f.division || '').toLowerCase();
+      const tags = (f.tags || []).map(t => t.toLowerCase());
+      
+      const matchesLabel = localizedLabel.includes(q);
+      const matchesValue = value.includes(q);
+      const matchesDivision = division.includes(q);
+      const matchesTags = tags.some(t => t.includes(q));
+      
+      if (!matchesLabel && !matchesValue && !matchesDivision && !matchesTags) {
+        return false;
+      }
+    }
+    return true;
+  });
+
   // ── TWO-COLUMN LAYOUT ──
   return (
     <div className="p-4 md:p-6 max-w-6xl mx-auto font-sans animate-[fadeIn_0.5s_ease-out]">
@@ -1350,10 +1406,58 @@ const BirthPlan = () => {
                   <p className="text-[10px] font-black text-text-muted uppercase tracking-wider mb-3 flex items-center gap-1.5">
                     <MapPin className="w-3.5 h-3.5 text-primary-mauve" /> {STRINGS[lang].steps_A[0]}
                   </p>
-                  <SelectCard options={FACILITIES} value={facility}
-                    onChange={val => { setFacility(val); setTrack(getTrack(val)); }}
-                    getLabel={o => getLocalizedFacilityLabel(o.value, lang)}
-                    getEmoji={() => '🏥'} getDesc={o => o.tier + ' facility'} getTags={o => o.tags} />
+
+                  {/* Division & Search Controls */}
+                  <div className="mb-4 space-y-3 bg-bg-rose-white/50 p-3 rounded-xl border border-primary-mauve/10">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div>
+                        <label className="text-[9px] font-black text-text-muted uppercase tracking-wider block mb-1">
+                          {lang === 'en' ? 'Division / Sector' : 'বিভাগ / খাত'}
+                        </label>
+                        <select
+                          value={selectedDivision}
+                          onChange={e => setSelectedDivision(e.target.value)}
+                          className="w-full px-3 py-2 border border-primary-mauve/15 rounded-lg text-xs font-bold text-text-dark focus:border-primary-mauve outline-none bg-white cursor-pointer"
+                        >
+                          <option value="all">{STRINGS[lang].divisions.all}</option>
+                          <option value="Dhaka">{STRINGS[lang].divisions.dhaka}</option>
+                          <option value="Chittagong">{STRINGS[lang].divisions.chittagong}</option>
+                          <option value="Sylhet">{STRINGS[lang].divisions.sylhet}</option>
+                          <option value="Rajshahi">{STRINGS[lang].divisions.rajshahi}</option>
+                          <option value="Khulna">{STRINGS[lang].divisions.khulna}</option>
+                          <option value="NGO & Private">{STRINGS[lang].divisions.ngo_private}</option>
+                          <option value="Home Delivery">{STRINGS[lang].divisions.home}</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="text-[9px] font-black text-text-muted uppercase tracking-wider block mb-1">
+                          {lang === 'en' ? 'Search Facilities' : 'হাসপাতাল খুঁজুন'}
+                        </label>
+                        <input
+                          type="text"
+                          placeholder={lang === 'en' ? 'Search name or tag...' : 'নাম বা ট্যাগ দিয়ে খুঁজুন...'}
+                          value={searchQuery}
+                          onChange={e => setSearchQuery(e.target.value)}
+                          className="w-full px-3 py-2 border border-primary-mauve/15 rounded-lg text-xs font-bold text-text-dark focus:border-primary-mauve outline-none bg-white"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {filteredFacilities.length > 0 ? (
+                    <SelectCard options={filteredFacilities} value={facility}
+                      onChange={val => { setFacility(val); setTrack(getTrack(val)); }}
+                      getLabel={o => getLocalizedFacilityLabel(o.value, lang)}
+                      getEmoji={() => '🏥'} getDesc={o => o.tier + ' facility'} getTags={o => o.tags} />
+                  ) : (
+                    <div className="text-center py-6 bg-bg-rose-white/20 border border-dashed border-primary-mauve/10 rounded-xl">
+                      <AlertCircle className="w-5 h-5 text-primary-mauve/50 mx-auto mb-2" />
+                      <p className="text-xs font-bold text-text-muted">
+                        {lang === 'en' ? 'No facilities found matching your criteria.' : 'আপনার অনুসন্ধানের সাথে মিলতি কোনো হাসপাতাল পাওয়া যায়নি।'}
+                      </p>
+                    </div>
+                  )}
+
                   {errors.facility && <p className="text-[10px] font-bold text-danger mt-1 flex items-center gap-1"><AlertCircle className="w-3 h-3" />{errors.facility}</p>}
                 </div>
               )}

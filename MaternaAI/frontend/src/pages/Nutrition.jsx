@@ -136,7 +136,7 @@ function DietaryComplianceTracker({ onMetricsUpdate, onNewAssistantMessage, user
         }
 
         if (data.response && typeof onNewAssistantMessage === "function") {
-          onNewAssistantMessage(data.response);
+          onNewAssistantMessage(mealInput, data.response);
         }
 
         setMealInput("");
@@ -246,6 +246,34 @@ const Nutrition = () => {
   const audioChunksRef = useRef([]);
   const clientTranscriptionRef = useRef('');
   const recognitionRef = useRef(null);
+
+  // Load nutrition history on mount
+  useEffect(() => {
+    const loadHistory = async () => {
+      if (!user?.id) return;
+      try {
+        const res = await fetch(`/api/chat/history/${user.id}`);
+        if (res.ok) {
+          const data = await res.json();
+          // Filter to 'nutrition' mode
+          const nutritionMsgs = data
+            .filter(msg => msg.intent === 'nutrition')
+            .map(msg => ({
+              role: msg.role === 'assistant' ? 'ai' : msg.role,
+              text: msg.content,
+              created_at: msg.created_at
+            }));
+          
+          if (nutritionMsgs.length > 0) {
+            setMessages(nutritionMsgs);
+          }
+        }
+      } catch (err) {
+        console.error("Failed to load nutrition chat history:", err);
+      }
+    };
+    loadHistory();
+  }, [user]);
 
   // Clean up audio on unmount
   useEffect(() => {
@@ -426,9 +454,18 @@ const Nutrition = () => {
     });
   };
 
-  const handleAppendAssistantChatBubble = (responseText) => {
+  const handleAppendAssistantChatBubble = (userMealInput, responseText) => {
     if (!responseText) return;
-    setMessages(prev => [...prev, { role: 'ai', text: responseText }]);
+    setMessages(prev => {
+      const newMessages = [];
+      // Append user's meal log as a user bubble if provided
+      if (userMealInput && userMealInput.trim()) {
+        newMessages.push({ role: 'user', text: userMealInput.trim() });
+      }
+      // Append the AI dietitian response
+      newMessages.push({ role: 'ai', text: responseText });
+      return [...prev, ...newMessages];
+    });
   };
 
   const parseRAGTextResponse = (rawText) => {
