@@ -12,8 +12,9 @@ CORS(app, resources={
 
 try:
     ensure_user_profile_image_column()
-    from db import ensure_clinician_verification_columns
+    from db import ensure_clinician_verification_columns, ensure_user_presence_column
     ensure_clinician_verification_columns()
+    ensure_user_presence_column()
 except Exception as e:
     print(f"[DB] Migration note: {e}")
 

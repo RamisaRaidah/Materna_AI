@@ -16,7 +16,8 @@ import {
   AlertTriangle,
   LayoutDashboard,
   ClipboardList,
-  UserRound
+  UserRound,
+  UserCheck
 } from 'lucide-react';
 import Logo from './assets/Logo.png'
 const Sidebar = ({
@@ -90,7 +91,8 @@ const Sidebar = ({
     {
       title: 'Admin Console',
       items: [
-        { name: 'Review Doctors', path: '/admin', icon: LayoutDashboard },
+        { name: 'Dashboard', path: '/admin', icon: LayoutDashboard },
+        { name: 'Review Doctors', path: '/admin/review-doctors', icon: UserCheck },
       ]
     }
   ];

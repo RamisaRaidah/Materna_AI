@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { adminAPI } from '../api';
 import { 
   ShieldAlert, UserCheck, UserX, FileText, AlertCircle, 
@@ -92,6 +93,13 @@ const AdminDashboard = () => {
             Logged in as <span className="text-primary-mauve font-black">{user?.name}</span> (Admin) · Review clinician applications carefully.
           </p>
         </div>
+        <div className="flex items-center gap-3 shrink-0">
+          <Link
+            to="/admin"
+            className="px-4 py-2.5 rounded-xl border border-primary-mauve/10 text-xs font-black text-primary-mauve hover:bg-primary-mauve/5 transition-all"
+          >
+            BACK TO DASHBOARD
+          </Link>
         <button
           onClick={fetchPending}
           disabled={loading}
@@ -100,6 +108,7 @@ const AdminDashboard = () => {
           <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
           <span>RELOAD QUEUE</span>
         </button>
+        </div>
       </div>
 
       {/* KPI Stats */}

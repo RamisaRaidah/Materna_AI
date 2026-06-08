@@ -100,6 +100,7 @@ def register():
         fetch="one"
     )
     token = create_token(user["id"], user["role"])
+    query("UPDATE users SET last_seen_at = NOW() WHERE id = %s", (user["id"],), fetch="none")
     safe = {k: v for k, v in user.items() if k != "password_hash"}
     return jsonify({"token": token, "user": safe}), 201
  
@@ -119,9 +120,17 @@ def login():
     if user.get("status") == "rejected":
         return jsonify({"error": "Your account has been rejected and you are banned from the system."}), 403
  
+    query("UPDATE users SET last_seen_at = NOW() WHERE id = %s", (user["id"],), fetch="none")
+
     token = create_token(user["id"], user["role"])
     safe = {k: v for k, v in user.items() if k != "password_hash"}
     return jsonify({"token": token, "user": safe})
+
+@auth_bp.route("/presence", methods=["POST"])
+@require_auth
+def update_presence():
+    query("UPDATE users SET last_seen_at = NOW() WHERE id = %s", (g.user["id"],), fetch="none")
+    return jsonify({"success": True})
 
 @auth_bp.route("/me", methods=["GET"])
 @require_auth
