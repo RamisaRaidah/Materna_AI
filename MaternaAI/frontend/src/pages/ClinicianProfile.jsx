@@ -6,7 +6,7 @@ import { clinicianAPI } from '../api';
 const STORAGE_KEY = 'clinicianProfile';
 
 const ClinicianProfile = () => {
-  const { user } = useAuth();
+  const { user, updateUserLocalContext } = useAuth();
   const [profileType, setProfileType] = useState('doctor');
   const [form, setForm] = useState({
     degree: '',
@@ -25,6 +25,14 @@ const ClinicianProfile = () => {
 
   useEffect(() => {
     const saved = localStorage.getItem(STORAGE_KEY);
+    const storedProfile = user?.clinician_profile;
+
+    if (storedProfile) {
+      setProfileType(storedProfile.profileType || 'doctor');
+      setForm((prev) => ({ ...prev, ...(storedProfile.form || {}) }));
+      return;
+    }
+
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
@@ -34,7 +42,7 @@ const ClinicianProfile = () => {
         setStatus('Saved profile data could not be read.');
       }
     }
-  }, []);
+  }, [user]);
 
   useEffect(() => {
     let isActive = true;
@@ -63,6 +71,14 @@ const ClinicianProfile = () => {
     event.preventDefault();
     const payload = { profileType, form, savedAt: new Date().toISOString() };
     localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
+    if (updateUserLocalContext) {
+      updateUserLocalContext((currentUser) => ({
+        ...currentUser,
+        profile_type: profileType,
+        clinician_profile: payload,
+        ...form,
+      }));
+    }
     setStatus('Profile saved locally.');
   };
 
@@ -82,8 +98,12 @@ const ClinicianProfile = () => {
 
       <div className="bg-white border border-primary-mauve/10 rounded-2xl p-6 shadow-premium">
         <div className="flex items-center gap-4">
-          <div className="w-14 h-14 rounded-full bg-secondary-blush/20 flex items-center justify-center text-xl">
-            🩺
+          <div className="w-14 h-14 rounded-full bg-secondary-blush/20 flex items-center justify-center text-xl overflow-hidden border border-primary-mauve/10 shrink-0">
+            {user?.profile_image ? (
+              <img src={user.profile_image} alt={user?.name || 'Clinician'} className="w-full h-full object-cover" />
+            ) : (
+              <span>🩺</span>
+            )}
           </div>
           <div>
             <h2 className="text-lg font-black text-text-dark">{user?.name || 'Clinician'}</h2>
@@ -130,7 +150,7 @@ const ClinicianProfile = () => {
         <div className="flex items-center justify-between gap-3">
           <div>
             <h3 className="text-sm font-black text-text-dark">Update Professional Profile</h3>
-            <p className="text-[11px] font-semibold text-text-muted">Saved locally in this browser.</p>
+            <p className="text-[11px] font-semibold text-text-muted">Saved locally and reused across the app.</p>
           </div>
           <div className="flex items-center gap-2">
             <button

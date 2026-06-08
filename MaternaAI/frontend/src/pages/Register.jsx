@@ -5,7 +5,7 @@ import { authAPI } from '../api';
 import {
   User, Phone, Lock, Calendar, MapPin, AlertCircle,
   Sparkles, Heart, Eye, EyeOff, ChevronUp, ChevronDown,
-  CheckCircle2, Info, X, MessageSquare
+  CheckCircle2, Info, X, MessageSquare, FileText
 } from 'lucide-react';
 import Logo from '../components/assets/Logo.png';
 
@@ -289,6 +289,11 @@ const Register = () => {
   const [submitError, setSubmitError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  // Clinician Verification States
+  const [licenseNumber, setLicenseNumber] = useState('');
+  const [uploadedFiles, setUploadedFiles] = useState([]);
+  const [fileError, setFileError] = useState('');
+
   const { register } = useAuth();
   const navigate = useNavigate();
 
@@ -306,7 +311,48 @@ const Register = () => {
     emergency: touched.emergency ? validateField('emergency', emergencyContact, { phone }) : '',
     division: touched.location && !division ? 'Division is required' : '',
     district: touched.location && division && !district ? 'District is required' : '',
-    subArea: touched.location && district && !subArea.trim() ? 'Specific neighborhood / area is required' : ''
+    subArea: touched.location && district && !subArea.trim() ? 'Specific neighborhood / area is required' : '',
+    licenseNumber: touched.licenseNumber && !licenseNumber.trim() ? 'License number is required' : ''
+  };
+
+  const handleFileChange = (e) => {
+    const files = Array.from(e.target.files);
+    setFileError('');
+    
+    // Check file size
+    const validFiles = files.filter(file => {
+      if (file.size > 5 * 1024 * 1024) {
+        setFileError('Each file must be under 5MB.');
+        return false;
+      }
+      return true;
+    });
+
+    if (validFiles.length === 0) return;
+
+    const readPromises = validFiles.map(file => {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.readAsDataURL(file);
+        reader.onload = () => resolve({
+          name: file.name,
+          type: file.type,
+          size: file.size,
+          data: reader.result
+        });
+        reader.onerror = error => reject(error);
+      });
+    });
+
+    Promise.all(readPromises).then(results => {
+      setUploadedFiles(prev => [...prev, ...results]);
+    }).catch(err => {
+      setFileError('Error reading files. Please try again.');
+    });
+  };
+
+  const removeUploadedFile = (indexToRemove) => {
+    setUploadedFiles(prev => prev.filter((_, idx) => idx !== indexToRemove));
   };
 
   const touch = (field) => setTouched(p => ({ ...p, [field]: true }));
@@ -340,6 +386,10 @@ const Register = () => {
     if (role === 'patient' && !isPostpartum) {
       fieldErrors.push(validateField('weeks', weeksPregnant, { isPostpartum }));
     }
+    if (role === 'clinician') {
+      if (!licenseNumber.trim()) return false;
+      if (uploadedFiles.length === 0) return false;
+    }
 
     const isLocationValid = division && district && subArea.trim();
     return fieldErrors.every(e => !e) && isLocationValid && otpVerified;
@@ -347,15 +397,29 @@ const Register = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setTouched({ name: true, phone: true, password: true, age: true, weeks: true, emergency: true, location: true });
+    setTouched({ name: true, phone: true, password: true, age: true, weeks: true, emergency: true, location: true, licenseNumber: true });
 
     if (!otpVerified) {
       setSubmitError('Please verify your phone number via OTP first.');
       return;
     }
 
+    if (role === 'clinician') {
+      if (!licenseNumber.trim()) {
+        setSubmitError('Medical license number is required.');
+        return;
+      }
+      if (uploadedFiles.length === 0) {
+        setSubmitError('Please upload at least one verification document.');
+        return;
+      }
+    }
+
     if (!allValid()) {
-      setSubmitError('Please complete all fields correctly, including your full location details.');
+      setSubmitError(role === 'clinician' 
+        ? 'Please complete all fields correctly and ensure at least one verification document is uploaded.' 
+        : 'Please complete all fields correctly, including your full location details.'
+      );
       return;
     }
     setSubmitError('');
@@ -381,9 +445,20 @@ const Register = () => {
       payload.due_date = dueDate ? dueDate.toISOString().split('T')[0] : null;
     }
 
+    if (role === 'clinician') {
+      payload.verification_documents = JSON.stringify({
+        licenseNumber: licenseNumber.trim(),
+        files: uploadedFiles
+      });
+    }
+
     try {
-      await register(payload);
-      navigate('/');
+      const userResult = await register(payload);
+      if (userResult?.role === 'clinician') {
+        navigate('/clinician/verification-pending');
+      } else {
+        navigate('/');
+      }
     } catch (err) {
       setSubmitError(typeof err === 'string' ? err : 'Registration failed. Please try again.');
     } finally {
@@ -725,6 +800,84 @@ const Register = () => {
                     </div>
                   )}
                 </>
+              )}
+            </div>
+          )}
+
+          {/* Clinician-specific section */}
+          {role === 'clinician' && (
+            <div className="p-4 rounded-xl bg-primary-mauve/4 border border-primary-mauve/10 space-y-4 mt-1">
+              <div className="flex items-center gap-2 text-primary-mauve font-black text-xs uppercase tracking-wider">
+                <Sparkles className="w-4 h-4" />
+                <span>Clinician Verification Details</span>
+              </div>
+
+              {/* License Number */}
+              <Field label="Medical License / Registration ID *" error={errors.licenseNumber} hint="Enter your official medical license number">
+                <div className="relative">
+                  <FileText className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-text-muted" />
+                  <input 
+                    type="text" 
+                    placeholder="e.g. BMDC-12345" 
+                    value={licenseNumber}
+                    onChange={e => setLicenseNumber(e.target.value)} 
+                    onBlur={() => touch('licenseNumber')}
+                    disabled={isSubmitting}
+                    className={`${inputCls(!!errors.licenseNumber)} pl-10`} 
+                  />
+                </div>
+              </Field>
+
+              {/* Document upload field */}
+              <Field label="Verification Documents *" error={fileError} hint="Upload copies of your medical license, degrees, or credentials (Max 5MB each)">
+                <div className="mt-1 flex justify-center px-6 pt-5 pb-6 border-2 border-primary-mauve/10 border-dashed rounded-xl bg-white/50 hover:bg-white/80 transition-all cursor-pointer relative">
+                  <div className="space-y-1 text-center">
+                    <svg className="mx-auto h-12 w-12 text-primary-mauve/40" stroke="currentColor" fill="none" viewBox="0 0 48 48" aria-hidden="true">
+                      <path d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28m0 0l4 4m4-24h8m-4-4v8m-12 4h.02" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                    <div className="flex text-xs text-text-muted justify-center">
+                      <label className="relative cursor-pointer bg-transparent rounded-md font-bold text-primary-mauve hover:text-bg-dark-mauve focus-within:outline-hidden">
+                        <span>Upload credentials</span>
+                        <input 
+                          type="file" 
+                          multiple 
+                          accept="image/*,application/pdf"
+                          onChange={handleFileChange} 
+                          disabled={isSubmitting}
+                          className="sr-only" 
+                        />
+                      </label>
+                      <p className="pl-1">or drag and drop</p>
+                    </div>
+                    <p className="text-[10px] text-text-muted">PNG, JPG, PDF up to 5MB</p>
+                  </div>
+                </div>
+              </Field>
+
+              {/* Uploaded files list */}
+              {uploadedFiles.length > 0 && (
+                <div className="space-y-2">
+                  <p className="text-[10px] font-black text-text-muted uppercase tracking-wider pl-0.5">Uploaded files ({uploadedFiles.length})</p>
+                  <div className="max-h-40 overflow-y-auto space-y-1.5 pr-1">
+                    {uploadedFiles.map((file, idx) => (
+                      <div key={idx} className="flex items-center justify-between p-2.5 rounded-lg border border-primary-mauve/10 bg-white/80 text-xs">
+                        <div className="flex items-center gap-2 overflow-hidden flex-1 mr-2 animate-fadeIn">
+                          <span className="text-base">📄</span>
+                          <span className="font-bold text-text-dark truncate max-w-[200px]">{file.name}</span>
+                          <span className="text-[10px] text-text-muted">({(file.size / 1024).toFixed(1)} KB)</span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => removeUploadedFile(idx)}
+                          disabled={isSubmitting}
+                          className="p-1 rounded-full text-text-muted hover:text-danger hover:bg-danger/10 transition-colors cursor-pointer"
+                        >
+                          <X className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
               )}
             </div>
           )}

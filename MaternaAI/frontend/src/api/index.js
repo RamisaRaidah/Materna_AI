@@ -238,6 +238,17 @@ export const clinicianAPI = {
   }
 };
 
+export const adminAPI = {
+  getPendingDoctors: async () => {
+    const response = await api.get('/api/admin/pending-doctors');
+    return response.data;
+  },
+  verifyDoctor: async (doctorId, action) => {
+    const response = await api.post(`/api/admin/doctors/${doctorId}/verify`, { action });
+    return response.data;
+  }
+};
+
 export const notificationsAPI = {
   getNotifications: async (limit = 10) => {
     const response = await api.get('/api/notifications', { params: { limit } });

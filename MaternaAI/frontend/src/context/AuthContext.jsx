@@ -4,10 +4,49 @@ import { getToken } from 'firebase/messaging';
 import { messaging } from '../api/firebase';
 
 const AuthContext = createContext(null);
+const CLINICIAN_PROFILE_STORAGE_KEY = 'clinicianProfile';
+
+const parseStoredClinicianProfile = () => {
+  try {
+    const stored = localStorage.getItem(CLINICIAN_PROFILE_STORAGE_KEY);
+    return stored ? JSON.parse(stored) : null;
+  } catch {
+    return null;
+  }
+};
+
+const mergeUserWithStoredProfile = (userData) => {
+  if (!userData) {
+    return null;
+  }
+
+  const mergedUser = { ...userData };
+
+  if (mergedUser.role === 'clinician') {
+    const storedProfile = parseStoredClinicianProfile();
+    if (storedProfile) {
+      const storedForm = storedProfile.form || {};
+      mergedUser.clinician_profile = storedProfile;
+      mergedUser.profile_type = storedProfile.profileType || mergedUser.profile_type || 'doctor';
+      Object.assign(mergedUser, storedForm);
+    }
+  }
+
+  return mergedUser;
+};
 
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
+
+  const syncUserState = (userData) => {
+    const mergedUser = mergeUserWithStoredProfile(userData);
+    setUser(mergedUser);
+    if (mergedUser) {
+      localStorage.setItem('user', JSON.stringify(mergedUser));
+    }
+    return mergedUser;
+  };
 
   useEffect(() => {
     const initializeAuth = async () => {
@@ -16,8 +55,7 @@ export const AuthProvider = ({ children }) => {
         try {
           // Fetch latest user data from server to sync state
           const userData = await authAPI.getMe();
-          setUser(userData);
-          localStorage.setItem('user', JSON.stringify(userData));
+          syncUserState(userData);
         } catch (error) {
           console.error("Session restoration failed:", error);
           // Session might have expired or token is invalid
@@ -59,9 +97,7 @@ export const AuthProvider = ({ children }) => {
     try {
       const data = await authAPI.login(phone, password);
       localStorage.setItem('token', data.token);
-      localStorage.setItem('user', JSON.stringify(data.user));
-      setUser(data.user);
-      return data.user;
+      return syncUserState(data.user);
     } catch (error) {
       throw error.response?.data?.error || "Login failed. Please check your credentials.";
     }
@@ -71,9 +107,7 @@ export const AuthProvider = ({ children }) => {
     try {
       const data = await authAPI.register(userData);
       localStorage.setItem('token', data.token);
-      localStorage.setItem('user', JSON.stringify(data.user));
-      setUser(data.user);
-      return data.user;
+      return syncUserState(data.user);
     } catch (error) {
       throw error.response?.data?.error || "Registration failed. Please try again.";
     }
@@ -90,11 +124,35 @@ export const AuthProvider = ({ children }) => {
       await authAPI.updateMe(updates);
       // Fetch fresh profile state to sync
       const freshUser = await authAPI.getMe();
-      localStorage.setItem('user', JSON.stringify(freshUser));
-      setUser(freshUser);
-      return freshUser;
+      return syncUserState(freshUser);
     } catch (error) {
       throw error.response?.data?.error || "Failed to update profile details.";
+    }
+  };
+  const refreshUser = async () => {
+    const freshUser = await authAPI.getMe();
+    localStorage.setItem('user', JSON.stringify(freshUser));
+    setUser(freshUser);
+    return freshUser;
+  };
+
+  const updateUserLocalContext = (userData) => {
+    if (typeof userData === 'function') {
+      setUser((currentUser) => {
+        const nextUser = userData(currentUser);
+        const mergedUser = mergeUserWithStoredProfile(nextUser);
+        if (mergedUser) {
+          localStorage.setItem('user', JSON.stringify(mergedUser));
+        }
+        return mergedUser;
+      });
+      return;
+    }
+
+    const mergedUser = mergeUserWithStoredProfile({ ...user, ...userData });
+    setUser(mergedUser);
+    if (mergedUser) {
+      localStorage.setItem('user', JSON.stringify(mergedUser));
     }
   };
 
@@ -105,7 +163,13 @@ export const AuthProvider = ({ children }) => {
     login,
     register,
     logout,
-    updateProfile
+    updateProfile,
+<<<<<<< HEAD
+    updateUserLocalContext,
+    refreshUser: syncUserState
+=======
+    refreshUser
+>>>>>>> 5b981d48335e11029bedb446050e6e84da8cc010
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

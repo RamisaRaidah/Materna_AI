@@ -183,11 +183,11 @@ const Chat = () => {
   // Compile user profile RAG context
   const getPatientProfile = () => {
     return {
-      name: user?.name || "Patient",
-      weeks_pregnant: user?.weeks_pregnant || 24,
-      water_logged: user?.water_logged || 1.6,
-      location: user?.location || "Unknown Location",
-      role: user?.role || "patient"
+      name: user?.name || 'Patient',
+      weeks_pregnant: user?.weeks_pregnant ?? null,
+      water_logged: user?.water_logged ?? null,
+      location: user?.location || user?.district || user?.division || null,
+      role: user?.role || 'patient'
     };
   };
 
@@ -547,7 +547,7 @@ const Chat = () => {
             <div className="grid grid-cols-2 gap-2 text-[10px] font-bold text-text-dark">
               <div className="flex items-center gap-1.5 p-2 rounded-lg bg-bg-rose-white border border-primary-mauve/5">
                 <Calendar className="w-3.5 h-3.5 text-primary-mauve" />
-                <span>Week {user?.weeks_pregnant || 24} Gestation</span>
+                <span>{user?.weeks_pregnant ? `Week ${user.weeks_pregnant} Gestation` : 'Pregnancy week not set'}</span>
               </div>
               <div className="flex items-center gap-1.5 p-2 rounded-lg bg-bg-rose-white border border-primary-mauve/5">
                 <Droplet className="w-3.5 h-3.5 text-info" />

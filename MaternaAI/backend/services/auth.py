@@ -71,6 +71,8 @@ def require_clinician(f):
         user = query("SELECT * FROM users WHERE id = %s", (payload["sub"],), fetch="one")
         if not user or user.get("role") not in ("clinician", "admin"):
             return jsonify({"error": "Clinician access required"}), 403
+        if user.get("role") == "clinician" and user.get("status") != "approved":
+            return jsonify({"error": "Clinician account is not approved"}), 403
         g.user = user
         return f(*args, **kwargs)
     return wrapper

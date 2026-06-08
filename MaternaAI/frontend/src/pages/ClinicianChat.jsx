@@ -263,6 +263,27 @@ const ClinicianChat = () => {
     });
   }, [contacts, search, inbox]);
 
+  const getContactAvatar = (contact) => {
+    if (contact?.profile_image) {
+      return (
+        <img
+          src={contact.profile_image}
+          alt={contact.name || 'Clinician'}
+          className="w-full h-full object-cover"
+        />
+      );
+    }
+
+    const initials = (contact?.name || 'Clinician')
+      .split(' ')
+      .filter(Boolean)
+      .slice(0, 2)
+      .map((part) => part[0]?.toUpperCase())
+      .join('');
+
+    return initials || '🩺';
+  };
+
   const handleSend = async (event) => {
     event.preventDefault();
     if (!message.trim() || !activeContact || !user?.id || !db) {
@@ -392,12 +413,17 @@ const ClinicianChat = () => {
                     : 'border-primary-mauve/10 bg-bg-rose-white hover:border-primary-mauve/30'
                     }`}
                 >
-                  <div className="flex justify-between items-start">
-                    <div>
+                  <div className="flex justify-between items-start gap-3">
+                    <div className="flex items-start gap-3 min-w-0">
+                      <div className="w-10 h-10 rounded-full overflow-hidden bg-primary-mauve/10 text-primary-mauve flex items-center justify-center shrink-0 border border-primary-mauve/10">
+                        {getContactAvatar(contact)}
+                      </div>
+                      <div className="min-w-0">
                       <p className="text-sm font-bold text-text-dark">{contact.name || 'Clinician'}</p>
                       <p className="text-[11px] font-semibold text-text-muted mt-0.5">
                         {contact.phone || 'No phone'} · {contact.location || 'Location unknown'}
                       </p>
+                      </div>
                     </div>
                     <div className="flex flex-col items-end gap-1">
                       {contact.last_sent_at && (
@@ -420,11 +446,16 @@ const ClinicianChat = () => {
 
         <div className="lg:col-span-8 bg-white border border-primary-mauve/10 rounded-2xl shadow-premium flex flex-col min-h-[520px] h-[calc(100vh-240px)] max-h-[760px] overflow-hidden">
           <div className="bg-bg-rose-white border-b border-primary-mauve/10 px-5 py-4 flex items-center justify-between">
-            <div>
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-full overflow-hidden bg-primary-mauve/10 text-primary-mauve flex items-center justify-center shrink-0 border border-primary-mauve/10">
+                {getContactAvatar(activeContact)}
+              </div>
+              <div>
               <h3 className="font-sans font-black text-sm uppercase tracking-wider text-text-dark">Conversation</h3>
               <p className="text-[11px] font-semibold text-text-muted">
                 {activeContact ? `Messaging ${activeContact.name || 'clinician'}` : 'Select a clinician to start'}
               </p>
+              </div>
             </div>
             <span className="text-[10px] font-extrabold text-text-muted bg-white border border-primary-mauve/10 px-2.5 py-1 rounded-lg">
               {combinedThread.length} Messages
@@ -451,9 +482,13 @@ const ClinicianChat = () => {
                 const isSelf = msg.sender_id === user?.id;
                 return (
                   <div key={msg.id} className={`flex items-start gap-3 ${isSelf ? 'flex-row-reverse' : 'flex-row'}`}>
-                    <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 text-sm font-bold shadow-xs ${isSelf ? 'bg-primary-mauve text-white' : 'bg-bg-rose-white text-text-dark border border-primary-mauve/10'
+                    <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 text-sm font-bold shadow-xs overflow-hidden ${isSelf ? 'bg-primary-mauve text-white' : 'bg-bg-rose-white text-text-dark border border-primary-mauve/10'
                       }`}>
-                      {isSelf ? '🤰' : '🩺'}
+                      {isSelf && user?.profile_image ? (
+                        <img src={user.profile_image} alt={user?.name || 'You'} className="w-full h-full object-cover" />
+                      ) : (
+                        <span>{isSelf ? '🤰' : '🩺'}</span>
+                      )}
                     </div>
                     <div className="flex flex-col max-w-[80%] space-y-1">
                       <div className={`p-4 rounded-2xl border text-sm font-medium leading-relaxed ${isSelf

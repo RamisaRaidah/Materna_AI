@@ -98,3 +98,9 @@ def init_db():
 def ensure_user_profile_image_column():
     """Add the profile_image column for older databases."""
     query("ALTER TABLE users ADD COLUMN IF NOT EXISTS profile_image TEXT", fetch="none")
+
+
+def ensure_clinician_verification_columns():
+    """Add status and verification_documents columns to users table."""
+    query("ALTER TABLE users ADD COLUMN IF NOT EXISTS status VARCHAR(20) DEFAULT 'approved'", fetch="none")
+    query("ALTER TABLE users ADD COLUMN IF NOT EXISTS verification_documents TEXT", fetch="none")
