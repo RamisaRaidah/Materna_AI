@@ -1,5 +1,6 @@
-import React, { useEffect, useMemo, useState } from 'react';
-import { Activity, AlertTriangle, CheckCircle2, ClipboardList, Sparkles, Users } from 'lucide-react';
+import React, { useEffect, useMemo, useState, useRef } from 'react';
+import { Activity, AlertTriangle, CheckCircle2, ClipboardList, Sparkles, Users, Camera } from 'lucide-react';
+import { useAuth } from '../context/AuthContext';
 import { clinicianAPI } from '../api';
 
 const STATS_CACHE_KEY = 'clinicianStatsCache';
@@ -11,6 +12,35 @@ const ClinicianDashboard = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [resolvingIds, setResolvingIds] = useState([]);
+  const { user, updateProfile } = useAuth();
+  const avatarInputRef = useRef(null);
+
+  const handleAvatarUpload = () => {
+    avatarInputRef.current?.click();
+  };
+
+  const handleAvatarChange = async (event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    if (!file.type.startsWith('image/')) {
+      alert('Please choose an image file.');
+      event.target.value = '';
+      return;
+    }
+    try {
+      const fileDataUrl = await new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result);
+        reader.onerror = () => reject(new Error('Could not read image file.'));
+        reader.readAsDataURL(file);
+      });
+      await updateProfile({ profile_image: fileDataUrl });
+    } catch (err) {
+      alert(err?.message || 'Avatar upload failed.');
+    } finally {
+      event.target.value = '';
+    }
+  };
 
   const recommendations = useMemo(() => ([
     'Prompt daily folate pills and track swelling metrics.',
@@ -110,6 +140,34 @@ const ClinicianDashboard = () => {
 
   return (
     <div className="p-4 md:p-8 max-w-7xl mx-auto space-y-6 font-sans">
+
+      {/* Top clinician profile strip */}
+      <div className="bg-white rounded-2xl p-4 border border-primary-mauve/10 shadow-premium flex items-center justify-between gap-4 sticky top-3 z-20">
+        <div className="flex items-center gap-4">
+          <button
+            type="button"
+            onClick={handleAvatarUpload}
+            className="relative w-14 h-14 rounded-full overflow-hidden bg-secondary-blush/20 flex items-center justify-center shrink-0"
+            aria-label="Upload profile photo"
+          >
+            {user?.profile_image ? (
+              <img src={user.profile_image} alt="Profile" className="w-full h-full object-cover" />
+            ) : (
+              <span className="text-2xl">🩺</span>
+            )}
+            <span className="absolute inset-0 bg-black/0 hover:bg-black/15 transition-colors flex items-center justify-center text-white">
+              <Camera className="w-4 h-4 opacity-0 hover:opacity-100 transition-opacity" />
+            </span>
+          </button>
+          <input ref={avatarInputRef} type="file" accept="image/*" className="hidden" onChange={handleAvatarChange} />
+          <div>
+            <h2 className="text-lg font-black text-text-dark">Hello, Dr. {user?.name}</h2>
+            <p className="text-xs font-semibold text-text-muted mt-1">Clinician Portal</p>
+          </div>
+        </div>
+        <div className="text-sm text-text-muted">{stats?.total_patients || 0} Active Patients</div>
+      </div>
+
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 space-y-6">
           <div className="bg-white rounded-2xl p-5 border border-primary-mauve/10 shadow-premium flex flex-col gap-3">

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { healthAPI, clinicianAPI, sosAPI, riskAPI, carePlanAPI } from '../api';
 import {
@@ -17,6 +17,7 @@ import {
   MapPin,
   CheckCircle2,
   Loader2,
+  Camera,
 } from 'lucide-react';
 
 // Sync Daily Plan with localStorage on mount
@@ -35,6 +36,7 @@ const DEFAULT_PLAN = {
 
 const Home = () => {
   const { user, updateProfile } = useAuth();
+  const avatarInputRef = useRef(null);
 
   // Dashboard Interactive States
   const [symptoms, setSymptoms] = useState({
@@ -66,6 +68,7 @@ const Home = () => {
   const [stats, setStats] = useState(null);
   const [isClinicianLoading, setIsClinicianLoading] = useState(false);
 
+<<<<<<< HEAD
   // Care Plan States
   const [carePlanItems, setCarePlanItems] = useState([]);
   const [planLoading, setPlanLoading] = useState(false);
@@ -74,6 +77,47 @@ const Home = () => {
   const [aiPlanError, setAiPlanError] = useState(null);
   const [carePlanLang, setCarePlanLang] = useState('bn');
   const [carePlanCache, setCarePlanCache] = useState({ en: [], bn: [] });
+=======
+const handleAvatarUpload = () => {
+  avatarInputRef.current?.click();
+};
+
+const handleAvatarChange = async (event) => {
+  const file = event.target.files?.[0];
+  if (!file) return;
+
+  if (!file.type.startsWith('image/')) {
+    alert('Please choose an image file.');
+    event.target.value = '';
+    return;
+  }
+
+  try {
+    const fileDataUrl = await new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result);
+      reader.onerror = () => reject(new Error('Could not read image file.'));
+      reader.readAsDataURL(file);
+    });
+
+    await updateProfile({ profile_image: fileDataUrl });
+  } catch (error) {
+    alert(error?.message || 'Avatar upload failed.');
+  } finally {
+    event.target.value = '';
+  }
+};
+
+// Sync Vitals, Stats, and Risk Profile on Load
+useEffect(() => {
+  if (user?.role === 'clinician') {
+    loadClinicianData();
+  } else {
+    loadPatientVitals();
+    loadPatientRisk('bn'); // Fetch bilingual profile (defaults to bn values on legacy fields)
+  }
+}, [user]);
+>>>>>>> 9ef33bd02deb64c31b87482cff8d1507d81c9b07
 
 
   // Sync Vitals, Stats, and Risk Profile on Load
@@ -458,9 +502,33 @@ const Home = () => {
 
             {/* Header */}
             <div className="bg-white rounded-2xl p-5 border border-primary-mauve/10 shadow-premium flex items-center justify-between">
-              <div>
-                <h1 className="text-xl font-black text-text-dark font-sans">Hello, {user?.name}!</h1>
-                <p className="text-xs font-semibold text-text-muted mt-1">We are here to support your safe birth journey. Every step matters.</p>
+              <div className="flex items-center gap-4">
+                <button
+                  type="button"
+                  onClick={handleAvatarUpload}
+                  className="relative w-14 h-14 rounded-full overflow-hidden bg-secondary-blush/20 flex items-center justify-center shrink-0"
+                  aria-label="Upload profile photo"
+                >
+                  {user?.profile_image ? (
+                    <img src={user.profile_image} alt="Profile" className="w-full h-full object-cover" />
+                  ) : (
+                    <span className="text-2xl">{user?.role === 'clinician' ? '🩺' : '🤰'}</span>
+                  )}
+                  <span className="absolute inset-0 bg-black/0 hover:bg-black/15 transition-colors flex items-center justify-center text-white">
+                    <Camera className="w-4 h-4 opacity-0 hover:opacity-100 transition-opacity" />
+                  </span>
+                </button>
+                <input
+                  ref={avatarInputRef}
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={handleAvatarChange}
+                />
+                <div>
+                  <h1 className="text-xl font-black text-text-dark font-sans">Hello, {user?.name}!</h1>
+                  <p className="text-xs font-semibold text-text-muted mt-1">Pregnancy Mode</p>
+                </div>
               </div>
               <div className="text-2xl animate-float">🌸</div>
             </div>
@@ -917,12 +985,36 @@ const Home = () => {
       ) : (
         /* CLINICIAN PORTAL */
         <div className="space-y-6">
-          <div className="bg-white rounded-2xl p-6 border border-primary-mauve/10 shadow-premium flex flex-col md:flex-row md:items-center justify-between gap-4 animate-fadeIn">
-            <div>
-              <h1 className="text-2xl font-black text-text-dark">Dhaka Medical &amp; Tea Garden Outreach Hub</h1>
-              <p className="text-sm font-semibold text-text-muted mt-1">Clinician Portal - Remote Patient Alert Dispatches</p>
+          <div className="bg-white rounded-2xl p-5 border border-primary-mauve/10 shadow-premium flex flex-col lg:flex-row lg:items-center justify-between gap-4 animate-fadeIn sticky top-3 z-10">
+            <div className="flex items-center gap-4">
+              <button
+                type="button"
+                onClick={handleAvatarUpload}
+                className="relative w-14 h-14 rounded-full overflow-hidden bg-secondary-blush/20 flex items-center justify-center shrink-0"
+                aria-label="Upload profile photo"
+              >
+                {user?.profile_image ? (
+                  <img src={user.profile_image} alt="Profile" className="w-full h-full object-cover" />
+                ) : (
+                  <span className="text-2xl">🩺</span>
+                )}
+                <span className="absolute inset-0 bg-black/0 hover:bg-black/15 transition-colors flex items-center justify-center text-white">
+                  <Camera className="w-4 h-4 opacity-0 hover:opacity-100 transition-opacity" />
+                </span>
+              </button>
+              <input
+                ref={avatarInputRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={handleAvatarChange}
+              />
+              <div>
+                <h1 className="text-xl font-black text-text-dark font-sans">Hello, Dr. {user?.name}!</h1>
+                <p className="text-xs font-semibold text-text-muted mt-1">Maternal Health Clinician Command Center</p>
+              </div>
             </div>
-            <div className="flex gap-4">
+            <div className="flex gap-4 flex-wrap">
               <div className="bg-bg-rose-white border border-primary-mauve/5 px-5 py-3 rounded-xl text-center shadow-xs">
                 <h4 className="text-xl font-black text-primary-mauve">{stats?.total_patients || 0}</h4>
                 <span className="text-[9px] font-black text-text-muted uppercase tracking-wider mt-1 block">Active Mothers</span>

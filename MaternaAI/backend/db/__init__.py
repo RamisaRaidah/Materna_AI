@@ -93,3 +93,8 @@ def init_db():
         if cur:
             cur.close()
         put_conn(conn)
+
+
+def ensure_user_profile_image_column():
+    """Add the profile_image column for older databases."""
+    query("ALTER TABLE users ADD COLUMN IF NOT EXISTS profile_image TEXT", fetch="none")
