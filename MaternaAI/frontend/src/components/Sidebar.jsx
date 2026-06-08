@@ -85,7 +85,7 @@ const Sidebar = ({
       ]
     }
   ];
-  
+
   const adminSections = [
     {
       title: 'Admin Console',
@@ -95,10 +95,10 @@ const Sidebar = ({
     }
   ];
 
-  const navSections = user?.role === 'admin' 
-    ? adminSections 
-    : user?.role === 'clinician' 
-      ? clinicianSections 
+  const navSections = user?.role === 'admin'
+    ? adminSections
+    : user?.role === 'clinician'
+      ? clinicianSections
       : patientSections;
 
   const handleLogout = () => {
@@ -248,10 +248,8 @@ const Sidebar = ({
               {user?.profile_image ? (
                 <img src={user.profile_image} alt={user?.name || 'Profile'} className="w-full h-full object-cover" />
               ) : (
-                <span>{user?.role === 'clinician' ? '🩺' : '🤰'}</span>
+                <span>{user?.role === 'admin' ? '🛡️' : user?.role === 'clinician' ? '🩺' : '🤰'}</span>
               )}
-            <div className="w-10 h-10 rounded-full bg-secondary-blush/20 flex items-center justify-center text-lg font-bold text-primary-mauve">
-              {user?.role === 'admin' ? '🛡️' : user?.role === 'clinician' ? '🩺' : '🤰'}
             </div>
             <div className="overflow-hidden">
               <h4 className="font-bold text-sm text-text-dark truncate">{user?.name || 'Guest User'}</h4>
@@ -260,7 +258,6 @@ const Sidebar = ({
               </span>
             </div>
           </div>
-
           {/* Nav Items */}
           <nav className="px-3 space-y-4 overflow-y-auto max-h-[50vh]">
             {navSections.map((section) => (
