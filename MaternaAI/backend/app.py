@@ -48,6 +48,9 @@ app.register_blueprint(notifications_bp, url_prefix="/api/notifications")
 from routes.sms_routes import sms_bp
 app.register_blueprint(sms_bp, url_prefix="/api/sms")
 
+from routes.care_plan import care_plan_bp
+app.register_blueprint(care_plan_bp, url_prefix="/api/care-plan")
+
 print("All blueprints have been registered.")
 
 @app.route("/")

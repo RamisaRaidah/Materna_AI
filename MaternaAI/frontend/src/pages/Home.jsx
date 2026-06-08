@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { healthAPI, clinicianAPI, sosAPI, riskAPI } from '../api';
+import { healthAPI, clinicianAPI, sosAPI, riskAPI, carePlanAPI } from '../api';
 import {
   Heart,
   Droplet,
@@ -20,17 +20,23 @@ import {
 } from 'lucide-react';
 
 // Sync Daily Plan with localStorage on mount
-const DEFAULT_PLAN = [
-  { id: 'default-1', title: 'Iron & Folate Supplementation', desc: 'Ensure you ingest your WHO recommended daily iron + folic acid pill with fresh lemon juice for maximum iron absorption.' },
-  { id: 'default-2', title: 'Local Nutrient Targets', desc: 'Include calcium-rich small mola fish, eggs, and leafy green spinach in your lunch box today to combat pregnancy-induced anemia.' },
-  { id: 'default-3', title: 'Pelvic Muscle Pre-stretches', desc: 'Engage in 10-15 minutes of gentle breathing and pelvic tilts. Avoid lifting heavy water pots or packages.' }
-];
+const DEFAULT_PLAN = {
+  en: [
+    { id: 'default-1', title: 'Iron & Folate Supplementation', desc: 'Ensure you ingest your WHO recommended daily iron + folic acid pill with fresh lemon juice for maximum iron absorption.' },
+    { id: 'default-2', title: 'Local Nutrient Targets', desc: 'Include calcium-rich small mola fish, eggs, and leafy green spinach in your lunch box today to combat pregnancy-induced anemia.' },
+    { id: 'default-3', title: 'Pelvic Muscle Pre-stretches', desc: 'Engage in 10-15 minutes of gentle breathing and pelvic tilts. Avoid lifting heavy water pots or packages.' }
+  ],
+  bn: [
+    { id: 'default-1', title: 'আয়রন ও ফোলেট সাপ্লিমেন্ট', desc: 'WHO-এর সুপারিশ অনুযায়ী প্রতিদিন একটি আয়রন ও ফলিক অ্যাসিড ট্যাবলেট তাজা লেবুর রসের সাথে খান — এতে আয়রন শোষণ সর্বোচ্চ হয়।' },
+    { id: 'default-2', title: 'স্থানীয় পুষ্টি লক্ষ্যমাত্রা', desc: 'আজকের টিফিনে ক্যালসিয়ামসমৃদ্ধ ছোট মলা মাছ, ডিম এবং পালং শাক যোগ করুন — গর্ভকালীন রক্তশূন্যতা দূর করতে সাহায্য করবে।' },
+    { id: 'default-3', title: 'পেলভিক মাসল স্ট্রেচিং', desc: '১০-১৫ মিনিট হালকা শ্বাস-প্রশ্বাস ও পেলভিক টিল্ট ব্যায়াম করুন। ভারী পানির পাত্র বা প্যাকেজ তোলা থেকে বিরত থাকুন।' }
+  ]
+};
 
 const Home = () => {
   const { user, updateProfile } = useAuth();
 
   // Dashboard Interactive States
-  const [waterLogged, setWaterLogged] = useState(user?.water_logged || 1.6);
   const [symptoms, setSymptoms] = useState({
     bleeding: false,
     headache: false,
@@ -38,33 +44,19 @@ const Home = () => {
     fever: false,
   });
 
-  const [dailyPlan, setDailyPlan] = useState(() => {
-    try {
-      const stored = localStorage.getItem('imported_medications');
-      const parsed = stored ? JSON.parse(stored) : [];
-      return Array.isArray(parsed) ? parsed : [];
-    } catch {
-      return [];
-    }
-  });
-
   // Risk Profile States
   const [riskProfile, setRiskProfile] = useState(null);
   const [riskLoading, setRiskLoading] = useState(false);
   const [riskLanguage, setRiskLanguage] = useState('bn');
-
-  const [aiPlanError, setAiPlanError] = useState(null);
 
   // Mood Journal AI State
   const [moodInput, setMoodInput] = useState('');
   const [moodScores, setMoodScores] = useState(null);
   const [moodAnalysis, setMoodAnalysis] = useState('');
 
-  const [isGeneratingPlan, setIsGeneratingPlan] = useState(false);
-  const [aiPlanGenerated, setAiPlanGenerated] = useState(false);
-
   // Vitals Log Modal States
   const [showLogModal, setShowLogModal] = useState(false);
+  const [waterLogged, setWaterLogged] = useState(user?.water_logged || 1.6);
   const [bpInput, setBpInput] = useState('120/80');
   const [glucoseInput, setGlucoseInput] = useState('5.4');
   const [weightInput, setWeightInput] = useState('6.2');
@@ -74,29 +66,26 @@ const Home = () => {
   const [stats, setStats] = useState(null);
   const [isClinicianLoading, setIsClinicianLoading] = useState(false);
 
-// Sync Vitals, Stats, and Risk Profile on Load
-useEffect(() => {
-  if (user?.role === 'clinician') {
-    loadClinicianData();
-  } else {
-    loadPatientVitals();
-    loadPatientRisk('bn'); // Fetch bilingual profile (defaults to bn values on legacy fields)
-  }
-}, [user]);
+  // Care Plan States
+  const [carePlanItems, setCarePlanItems] = useState([]);
+  const [planLoading, setPlanLoading] = useState(false);
+  const [isGeneratingPlan, setIsGeneratingPlan] = useState(false);
+  const [aiPlanGenerated, setAiPlanGenerated] = useState(false);
+  const [aiPlanError, setAiPlanError] = useState(null);
+  const [carePlanLang, setCarePlanLang] = useState('bn');
+  const [carePlanCache, setCarePlanCache] = useState({ en: [], bn: [] });
 
+
+  // Sync Vitals, Stats, and Risk Profile on Load
   useEffect(() => {
-    const handleStorageChange = () => {
-      try {
-        const stored = localStorage.getItem('imported_medications');
-        const parsed = stored ? JSON.parse(stored) : [];
-        setDailyPlan(Array.isArray(parsed) ? parsed : []);
-      } catch {
-        setDailyPlan([]);
-      }
-    };
-    window.addEventListener('imported_medications_updated', handleStorageChange);
-    return () => window.removeEventListener('imported_medications_updated', handleStorageChange);
-  }, []);
+    if (user?.role === 'clinician') {
+      loadClinicianData();
+    } else {
+      loadPatientVitals();
+      loadPatientRisk('bn'); // Fetch bilingual profile (defaults to bn values on legacy fields)
+      loadCarePlanItems();
+    }
+  }, [user]);
 
   // Load Patient Vitals on mount
   const loadPatientVitals = async () => {
@@ -155,6 +144,39 @@ useEffect(() => {
       setIsClinicianLoading(false);
     }
   };
+
+  // Fetch all active care plan items from the DB
+  const loadCarePlanItems = async () => {
+    setPlanLoading(true);
+    try {
+      const items = await carePlanAPI.getItems();
+      const normalised = (items || []).map(normaliseItem);
+      setCarePlanItems(normalised);
+
+      const aiItems = normalised.filter(i => i.isAI);
+      if (aiItems.length > 0) {
+        setAiPlanGenerated(true);
+        setCarePlanCache({
+          en: aiItems.map(i => ({ id: i.id, title: i.title, desc: i.desc })),
+          bn: aiItems.map(i => ({ id: i.id, title: i.title_bn || i.title, desc: i.desc_bn || i.desc })),
+        });
+      }
+    } catch (err) {
+      console.error('Failed to load care plan items:', err);
+    } finally {
+      setPlanLoading(false);
+    }
+  };
+
+  const normaliseItem = (item) => ({
+    ...item,
+    desc: item.description ?? item.desc ?? '',
+    title_bn: item.title_bn ?? item.title ?? '',
+    desc_bn: item.description_bn ?? item.description ?? item.desc ?? '',
+    isAI: item.source === 'ai',
+    isImported: item.source === 'imported',
+    id: item.item_key ?? item.id,
+  });
 
   // Dismiss Clinician alert log
   const handleDismissAlert = async (alertId) => {
@@ -228,9 +250,8 @@ useEffect(() => {
       39: { emoji: '🍉', name: 'Watermelon', desc: 'Baby is full term and continuing to gain weight and strength.' },
       40: { emoji: '🎉', name: 'Pumpkin', desc: 'Fully formed and ready to meet you any day now 💛' }
     };
-    if (w < 1) return weekData[1];
-    if (w > 40) return weekData[40];
-    return weekData[w];
+    const clamped = Math.min(40, Math.max(1, w));
+    return weekData[clamped] || weekData[24];
   };
 
   const babySize = getBabySizeInfo(weeks);
@@ -312,13 +333,14 @@ useEffect(() => {
   };
 
   // Toggle (complete/remove) a daily plan item and sync localStorage
-  const toggleDailyPlanItem = (id) => {
-    setDailyPlan(prev => {
-      const updated = prev.filter(i => i.id !== id);
-      const remainingImported = updated.filter(i => i.isImported);
-      localStorage.setItem('imported_medications', JSON.stringify(remainingImported));
-      return updated;
-    });
+  const toggleDailyPlanItem = async (itemId) => {
+    try {
+      await carePlanAPI.dismissItem(itemId);
+      setCarePlanItems(prev => prev.filter(i => i.id !== itemId));
+    } catch (err) {
+      console.error('Failed to dismiss care plan item:', err);
+      alert('Could not remove item. Please try again.');
+    }
   };
   // Local Mood Analysis (AI Simulation)
   const analyzeMood = () => {
@@ -366,23 +388,44 @@ useEffect(() => {
     setIsGeneratingPlan(true);
     setAiPlanError(null);
     try {
-      const parsed = await healthAPI.generateCarePlan({
-        weeks_pregnant: weeks,
+      const [parsedBn, parsedEn] = await Promise.all([
+        healthAPI.generateCarePlan({
+          weeks_pregnant: weeks, bp: bpInput,
+          glucose: parseFloat(glucoseInput),
+          weight: parseFloat(weightInput),
+          water: waterLogged, lang: 'bn'
+        }),
+        healthAPI.generateCarePlan({
+          weeks_pregnant: weeks, bp: bpInput,
+          glucose: parseFloat(glucoseInput),
+          weight: parseFloat(weightInput),
+          water: waterLogged, lang: 'en'
+        }),
+      ]);
+
+      if (!Array.isArray(parsedBn) || parsedBn.length === 0) throw new Error('Empty response from AI');
+
+      const enItems = Array.isArray(parsedEn) && parsedEn.length > 0 ? parsedEn : parsedBn;
+
+      const mergedItems = enItems.map((enItem, idx) => ({
+        id: enItem.id,
+        title: enItem.title,
+        desc: enItem.desc,
+        title_bn: parsedBn[idx]?.title || enItem.title,
+        desc_bn: parsedBn[idx]?.desc || enItem.desc,
+      }));
+
+      const context = {
+        weeks,
         bp: bpInput,
         glucose: parseFloat(glucoseInput),
         weight: parseFloat(weightInput),
-        water: waterLogged
-      });
-
-      if (Array.isArray(parsed) && parsed.length > 0) {
-        setDailyPlan(prev => {
-          const importedOnly = prev.filter(i => i.isImported);
-          return [...importedOnly, ...parsed.map(i => ({ ...i, isAI: true }))];
-        });
-        setAiPlanGenerated(true);
-      } else {
-        throw new Error('Empty response');
-      }
+        water: waterLogged,
+      };
+      await carePlanAPI.saveAIItems(mergedItems, context);
+      setCarePlanCache({ en: parsedEn || parsedBn, bn: parsedBn });
+      await loadCarePlanItems();
+      setAiPlanGenerated(true);
     } catch (err) {
       console.error('AI care plan generation failed:', err);
       setAiPlanError('Could not generate AI plan. Default care guidelines are shown below.');
@@ -645,21 +688,37 @@ useEffect(() => {
 
             {/* AI Pregnancy Care Advisor */}
             <div className="bg-white border border-primary-mauve/10 rounded-2xl p-6 shadow-premium space-y-4">
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between gap-3 flex-wrap">
                 <div className="flex items-center gap-2 text-primary-mauve">
                   <Sparkles className="w-5 h-5 animate-pulse" />
                   <h3 className="font-sans font-black text-sm uppercase tracking-wider">AI Pregnancy Care Advisor</h3>
                 </div>
-                <button
-                  onClick={generateAICarePlan}
-                  disabled={isGeneratingPlan}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary-mauve text-white text-[10px] font-black uppercase tracking-wider hover:bg-bg-dark-mauve transition-all cursor-pointer disabled:opacity-50"
-                >
-                  {isGeneratingPlan
-                    ? <><Loader2 className="w-3 h-3 animate-spin" /> Generating...</>
-                    : <><Sparkles className="w-3 h-3" /> {aiPlanGenerated ? 'Regenerate' : 'Generate Plan'}</>
-                  }
-                </button>
+                <div className="flex items-center gap-2">
+                  <div className="inline-flex rounded-lg border border-primary-mauve/20 p-0.5 bg-bg-rose-white">
+                    <button
+                      onClick={() => setCarePlanLang('bn')}
+                      className={`px-2.5 py-1 rounded-md text-[10px] font-black uppercase transition-all cursor-pointer ${carePlanLang === 'bn' ? 'bg-primary-mauve text-white shadow-xs' : 'text-text-muted hover:text-text-dark bg-transparent'}`}
+                    >
+                      বাংলা
+                    </button>
+                    <button
+                      onClick={() => setCarePlanLang('en')}
+                      className={`px-2.5 py-1 rounded-md text-[10px] font-black uppercase transition-all cursor-pointer ${carePlanLang === 'en' ? 'bg-primary-mauve text-white shadow-xs' : 'text-text-muted hover:text-text-dark bg-transparent'}`}
+                    >
+                      EN
+                    </button>
+                  </div>
+                  <button
+                    onClick={generateAICarePlan}
+                    disabled={isGeneratingPlan}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary-mauve text-white text-[10px] font-black uppercase tracking-wider hover:bg-bg-dark-mauve transition-all cursor-pointer disabled:opacity-50"
+                  >
+                    {isGeneratingPlan
+                      ? <><Loader2 className="w-3 h-3 animate-spin" /> Generating...</>
+                      : <><Sparkles className="w-3 h-3" /> {aiPlanGenerated ? 'Regenerate' : 'Generate Plan'}</>
+                    }
+                  </button>
+                </div>
               </div>
 
               {aiPlanGenerated && (
@@ -671,6 +730,19 @@ useEffect(() => {
               <div className="space-y-3">
 
                 {/* Loading skeleton */}
+                {planLoading && (
+                  <div className="space-y-3">
+                    {[1, 2, 3].map(i => (
+                      <div key={i} className="p-3 rounded-lg bg-primary-mauve/5 border border-primary-mauve/10 animate-pulse space-y-2">
+                        <div className="h-3 bg-primary-mauve/20 rounded w-2/3" />
+                        <div className="h-2 bg-primary-mauve/10 rounded w-full" />
+                        <div className="h-2 bg-primary-mauve/10 rounded w-4/5" />
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Generating skeleton */}
                 {isGeneratingPlan && (
                   <div className="space-y-3">
                     {[1, 2, 3, 4].map(i => (
@@ -683,44 +755,81 @@ useEffect(() => {
                   </div>
                 )}
 
-                {/* Imported prescription + AI items — removable */}
-                {dailyPlan.map(item => (
-                  <div key={item.id} className={`flex items-start gap-3 p-3 rounded-lg border hover:bg-white transition-all animate-fadeIn ${item.isImported ? 'bg-warning/5 border-warning/15' : 'bg-primary-mauve/5 border-primary-mauve/10'
-                    }`}>
-                    <button
-                      type="button"
-                      onClick={() => toggleDailyPlanItem(item.id)}
-                      className="w-5 h-5 rounded-full border-2 border-danger/30 hover:border-danger hover:bg-danger/10 flex items-center justify-center text-[9px] text-danger transition-all cursor-pointer mt-0.5 shrink-0"
-                      title="Remove item"
-                    >
-                      ✕
-                    </button>
-                    <div className="flex-1">
-                      <h4 className="font-bold text-xs text-text-dark flex items-center gap-2">
-                        {item.title}
-                        {item.isImported && (
-                          <span className="text-[8px] font-black bg-warning/15 text-warning px-1.5 py-0.5 rounded-full uppercase tracking-wider">Prescribed</span>
-                        )}
-                        {item.isAI && (
-                          <span className="text-[8px] font-black bg-primary-mauve/15 text-primary-mauve px-1.5 py-0.5 rounded-full uppercase tracking-wider">✨ AI</span>
-                        )}
-                      </h4>
-                      <p className="text-[11px] font-medium text-text-muted mt-0.5 leading-relaxed">{item.desc}</p>
-                    </div>
-                  </div>
-                ))}
+                {/* AI items — language switched via cache */}
+                {!planLoading && carePlanItems
+                  .filter(i => i.isAI)
+                  .map((item, idx) => {
+                    const langItem = carePlanCache[carePlanLang]?.[idx];
+                    const displayTitle = langItem?.title || item.title;
+                    const displayDesc = langItem?.desc || item.desc;
+                    return (
+                      <div
+                        key={item.id}
+                        className="flex items-start gap-3 p-3 rounded-lg border bg-primary-mauve/5 border-primary-mauve/10 hover:bg-white transition-all animate-fadeIn"
+                      >
+                        <button
+                          type="button"
+                          onClick={() => toggleDailyPlanItem(item.id)}
+                          className="w-5 h-5 rounded-full border-2 border-danger/30 hover:border-danger hover:bg-danger/10 flex items-center justify-center text-[9px] text-danger transition-all cursor-pointer mt-0.5 shrink-0"
+                          title="Dismiss item"
+                        >✕</button>
+                        <div className="flex-1">
+                          <h4 className="font-bold text-xs text-text-dark flex items-center gap-2">
+                            {displayTitle}
+                            <span className="text-[8px] font-black bg-primary-mauve/15 text-primary-mauve px-1.5 py-0.5 rounded-full uppercase tracking-wider">✨ AI</span>
+                          </h4>
+                          <p className="text-[11px] font-medium text-text-muted mt-0.5 leading-relaxed">{displayDesc}</p>
+                        </div>
+                      </div>
+                    );
+                  })
+                }
 
-                {/* AI error */}
+                {/* Imported items — language switched via DB-stored title_bn / desc_bn */}
+                {!planLoading && carePlanItems
+                  .filter(i => i.isImported)
+                  .map(item => {
+                    const displayTitle = carePlanLang === 'bn' ? (item.title_bn || item.title) : item.title;
+                    const displayDesc = carePlanLang === 'bn' ? (item.desc_bn || item.desc) : item.desc;
+                    return (
+                      <div
+                        key={item.id}
+                        className="flex items-start gap-3 p-3 rounded-lg border bg-warning/5 border-warning/15 hover:bg-white transition-all animate-fadeIn"
+                      >
+                        <button
+                          type="button"
+                          onClick={() => toggleDailyPlanItem(item.id)}
+                          className="w-5 h-5 rounded-full border-2 border-danger/30 hover:border-danger hover:bg-danger/10 flex items-center justify-center text-[9px] text-danger transition-all cursor-pointer mt-0.5 shrink-0"
+                          title="Dismiss item"
+                        >✕</button>
+                        <div className="flex-1">
+                          <h4 className="font-bold text-xs text-text-dark flex items-center gap-2">
+                            {displayTitle}
+                            <span className="text-[8px] font-black bg-warning/15 text-warning px-1.5 py-0.5 rounded-full uppercase tracking-wider">Prescribed</span>
+                          </h4>
+                          <p className="text-[11px] font-medium text-text-muted mt-0.5 leading-relaxed">{displayDesc}</p>
+                        </div>
+                      </div>
+                    );
+                  })
+                }
+
+                {/* AI error notice */}
                 {aiPlanError && (
                   <div className="px-3 py-2 rounded-lg bg-warning/10 border border-warning/20 text-[11px] font-bold text-warning">
                     ⚠️ {aiPlanError}
                   </div>
                 )}
 
-                {/* DEFAULT_PLAN — always present, never removable, true fallback */}
-                {DEFAULT_PLAN.map(item => (
-                  <div key={item.id} className="flex items-start gap-3 p-3 rounded-lg bg-bg-rose-white border border-primary-mauve/5 hover:bg-white transition-all">
-                    <div className="w-5 h-5 rounded-full border-2 border-success/30 flex items-center justify-center text-[9px] text-success/50 mt-0.5 shrink-0">✓</div>
+                {/* Static DEFAULT_PLAN — always visible, language switched client-side */}
+                {DEFAULT_PLAN[carePlanLang].map(item => (
+                  <div
+                    key={item.id}
+                    className="flex items-start gap-3 p-3 rounded-lg bg-bg-rose-white border border-primary-mauve/5 hover:bg-white transition-all"
+                  >
+                    <div className="w-5 h-5 rounded-full border-2 border-success/30 flex items-center justify-center text-[9px] text-success/50 mt-0.5 shrink-0">
+                      ✓
+                    </div>
                     <div className="flex-1">
                       <h4 className="font-bold text-xs text-text-dark">{item.title}</h4>
                       <p className="text-[11px] font-medium text-text-muted mt-0.5 leading-relaxed">{item.desc}</p>
@@ -728,9 +837,9 @@ useEffect(() => {
                   </div>
                 ))}
 
-                {/* Empty state — only shown before any generation, defaults still visible above */}
-                {dailyPlan.length === 0 && !isGeneratingPlan && !aiPlanGenerated && (
-                  <div className="text-center py-3 space-y-1">
+                {/* Empty state */}
+                {!planLoading && !isGeneratingPlan && carePlanItems.length === 0 && (
+                  <div className="text-center py-3">
                     <p className="text-[11px] font-semibold text-text-muted">
                       Click "Generate Plan" for AI-personalized advice based on your vitals.
                     </p>

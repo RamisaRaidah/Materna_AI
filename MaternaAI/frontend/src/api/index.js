@@ -275,4 +275,27 @@ export const riskAPI = {
   },
 };
 
+export const carePlanAPI = {
+  getItems: async (source = null) => {
+    const response = await api.get('/api/care-plan/items', { params: source ? { source } : {} });
+    return response.data;
+  },
+  saveAIItems: async (items, context) => {
+    const response = await api.post('/api/care-plan/items', { source: 'ai', items, context });
+    return response.data;
+  },
+  saveImportedItems: async (items) => {
+    const response = await api.post('/api/care-plan/items', { source: 'imported', items });
+    return response.data;
+  },
+  dismissItem: async (itemKey) => {
+    const response = await api.delete(`/api/care-plan/items/${encodeURIComponent(itemKey)}`);
+    return response.data;
+  },
+  dismissAllBySource: async (source) => {
+    const response = await api.delete('/api/care-plan/items', { data: { source } });
+    return response.data;
+  },
+};
+
 export default api;

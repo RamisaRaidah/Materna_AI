@@ -264,6 +264,7 @@ def analyze_report():
 @require_auth
 def generate_care_plan():
     data = request.get_json() or {}
+    lang = data.get("lang", "bn")
     
     weeks = data.get("weeks_pregnant", 24)
     bp = data.get("bp", "120/80")
@@ -271,10 +272,11 @@ def generate_care_plan():
     weight = data.get("weight", 6.2)
     water = data.get("water", 1.5)
     name = g.user.get("name", "Patient")
+    bp_val = int(str(data.get("bp", "120/80")).split("/")[0])
 
     prompt = f"""You are a maternal health AI advisor for pregnant women in rural Bangladesh.
 
-Generate a personalized daily pregnancy care plan for this patient:
+Generate a personalized daily pregnancy care plan in {"Bengali" if lang == "bn" else "English"} for this patient:
 - Name: {name}
 - Weeks pregnant: {weeks} (Trimester {"1" if weeks < 13 else "2" if weeks < 28 else "3"})
 - Latest BP: {bp} mmHg
@@ -297,7 +299,8 @@ Rules:
 - If glucose >= 7.8, include GDM dietary guidance
 - Always include one nutrition tip using locally available Bangladeshi foods (e.g. mola fish, lentils, guava)
 - Always include one movement/rest tip appropriate for her trimester
-- Keep language simple and warm, suitable for a rural Bangladeshi patient"""
+- Keep language simple and warm, suitable for a rural Bangladeshi patient
+- If language is 'bn', use natural, empathetic, and culturally appropriate Bengali."""
 
     import json
 
@@ -321,26 +324,50 @@ Rules:
             print("Gemini care plan failed:", e)
 
     # Fallback — static contextual plan based on vitals
-    fallback = [
-        {
-            "id": "fallback-1",
-            "title": "Blood Pressure Monitoring" if int(str(bp).split("/")[0]) >= 130 else "Daily Iron Supplementation",
-            "desc": "Monitor your BP twice daily and report any headache or vision changes to your midwife immediately." if int(str(bp).split("/")[0]) >= 130 else "Take your iron tablet at 2 PM with a glass of guava juice for best absorption."
-        },
-        {
-            "id": "fallback-2",
-            "title": "Hydration Goal",
-            "desc": f"You've logged {water}L today. Aim for 2.5L of filtered water daily to support amniotic fluid levels."
-        },
-        {
-            "id": "fallback-3",
-            "title": "Nutrition — Local Foods",
-            "desc": "Include small mola fish, lentil soup, and leafy greens in today's meals for iron, protein and folate."
-        },
-        {
-            "id": "fallback-4",
-            "title": "Gentle Movement",
-            "desc": f"At week {weeks}, try 10 minutes of slow walking or pelvic tilts. Avoid heavy lifting or sudden exertion."
-        }
-    ]
+    if lang == "bn":
+        fallback = [
+            {
+                "id": "fallback-1",
+                "title": "রক্তচাপ পর্যবেক্ষণ" if bp_val >= 130 else "প্রতিদিনের আয়রন ট্যাবলেট",
+                "desc": "প্রতিদিন দুবার রক্তচাপ মাপুন এবং মাথাব্যথা বা ঝাপসা দৃষ্টি দেখলে ধাত্রীকে জানান।" if bp_val >= 130 else "আয়রনের অভাব দূর করতে প্রতিদিন দুপুর ২টায় একটি আয়রন ট্যাবলেট খান।"
+            },
+            {
+                "id": "fallback-2",
+                "title": "পানি পানের লক্ষ্য",
+                "desc": f"আপনি আজ {water} লিটার পানি পান করেছেন। গর্ভের তরল ঠিক রাখতে প্রতিদিন অন্তত ২.৫ লিটার বিশুদ্ধ পানি পান করুন।"
+            },
+            {
+                "id": "fallback-3",
+                "title": "পুষ্টি — স্থানীয় খাবার",
+                "desc": "আয়রন, প্রোটিন এবং ফোলেটের জন্য আজকের খাবারে ছোট মলা মাছ, ডাল এবং শাকসবজি অন্তর্ভুক্ত করুন।"
+            },
+            {
+                "id": "fallback-4",
+                "title": "হালকা ব্যায়াম",
+                "desc": f"{weeks} সপ্তাহে, ১০ মিনিট ধীরে হাঁটুন বা হালকা ব্যায়াম করুন। ভারী কাজ বা হঠাৎ ঝোঁক নেওয়া থেকে বিরত থাকুন।"
+            }
+        ]
+    else:
+        fallback = [
+            {
+                "id": "fallback-1",
+                "title": "Blood Pressure Monitoring" if bp_val >= 130 else "Daily Iron Supplementation",
+                "desc": "Monitor your BP twice daily and report any headache or vision changes to your midwife immediately." if bp_val >= 130 else "Take your iron tablet at 2 PM with a glass of guava juice for best absorption."
+            },
+            {
+                "id": "fallback-2",
+                "title": "Hydration Goal",
+                "desc": f"You've logged {water}L today. Aim for 2.5L of filtered water daily to support amniotic fluid levels."
+            },
+            {
+                "id": "fallback-3",
+                "title": "Nutrition — Local Foods",
+                "desc": "Include small mola fish, lentil soup, and leafy greens in today's meals for iron, protein and folate."
+            },
+            {
+                "id": "fallback-4",
+                "title": "Gentle Movement",
+                "desc": f"At week {weeks}, try 10 minutes of slow walking or pelvic tilts. Avoid heavy lifting or sudden exertion."
+            }
+        ]
     return jsonify(fallback), 200
