@@ -325,7 +325,8 @@ def evaluate_rules(user_id: int) -> dict:
                     generation_config={
                         "response_mime_type": "application/json",
                         "temperature": 0.1
-                    }
+                    },
+                    request_options={"timeout": 25}
                 )
                 if response and response.text:
                     dynamic_res = json.loads(response.text.strip())
@@ -339,7 +340,7 @@ def evaluate_rules(user_id: int) -> dict:
                     messages=[{"role": "user", "content": dynamic_prompt}],
                     response_format={"type": "json_object"},
                     temperature=0.1,
-                    max_tokens=500
+                    max_tokens=800
                 )
                 raw_text = response.choices[0].message.content
                 if raw_text:
@@ -461,7 +462,7 @@ def enrich_with_llm(user_profile: dict, rule_results: dict, lang: str = "bn") ->
                 messages=[{"role": "user", "content": prompt}],
                 response_format={"type": "json_object"},
                 temperature=0.2,
-                max_tokens=1000
+                max_tokens=2000
             )
             raw_text = response.choices[0].message.content
             if raw_text:
@@ -703,7 +704,8 @@ def extract_symptoms_from_text_and_update_risk(user_id: int, message_text: str, 
                 generation_config={
                     "response_mime_type": "application/json",
                     "temperature": 0.1
-                }
+                },
+                request_options={"timeout": 25}
             )
             if response and response.text:
                 cleaned_res = response.text.strip().replace("```json", "").replace("```", "").strip()
