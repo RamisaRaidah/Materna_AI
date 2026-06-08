@@ -309,7 +309,8 @@ def generate_birth_plan():
             ref_facility = referral_pathway.get("facility", "None identified")
 
             user_message = (
-                f"Please generate a detailed birth plan for a community or home birth (Track B). "
+                f"Please generate a birth plan for a community or home birth (Track B). "
+                f"IMPORTANT: Your entire response must be under 1200 characters. Be concise and prioritise the most critical information only. "
                 f"SBA (Skilled Birth Attendant) status: {sba_present}. "
                 f"Birth preparedness checklist gaps: {gaps_str}. "
                 f"Emergency referral pathway facility: {ref_facility}. "
@@ -330,7 +331,8 @@ def generate_birth_plan():
             conditions_str = ", ".join(medical_conditions) if medical_conditions else "None"
 
             user_message = (
-                f"Please generate a detailed facility birth plan (Track A). "
+                f"Please generate a birth plan (Track A). "
+                f"IMPORTANT: Your entire response must be under 1200 characters. Be concise and prioritise the most critical information only. "
                 f"Hospital: {hospital}. "
                 f"Blood Group: {blood_group if blood_group else 'Unknown'}. "
                 f"Rh-negative flag: {rh_negative}. "
@@ -365,6 +367,21 @@ def generate_birth_plan():
 
         # Generate plan using RAG
         plan = rag_query(user_message, user_profile, mode="general", detected_lang=language)
+
+        # Hard safety cap: truncate to 1200 chars at a sentence boundary if exceeded
+        MAX_PLAN_CHARS = 1200
+        if plan and len(plan) > MAX_PLAN_CHARS:
+            truncated = plan[:MAX_PLAN_CHARS]
+            # Try to end at the last complete sentence
+            last_sentence_end = max(
+                truncated.rfind(". "),
+                truncated.rfind("। "),  # Bengali sentence terminator
+                truncated.rfind(".\n")
+            )
+            if last_sentence_end > MAX_PLAN_CHARS * 0.6:
+                plan = truncated[:last_sentence_end + 1].strip()
+            else:
+                plan = truncated.rstrip() + "…"
 
         # Compute readiness score
         score_data = {

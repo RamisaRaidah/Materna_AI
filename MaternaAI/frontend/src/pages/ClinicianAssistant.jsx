@@ -134,6 +134,9 @@ const ClinicianAssistant = () => {
 
   const activeModeDetails = modes[mode];
 
+  // Only show messages whose intent matches the currently selected mode
+  const filteredMessages = messages.filter(msg => msg.intent === mode);
+
   const stopTTS = () => {
     if (activeAudioRef.current) {
       activeAudioRef.current.pause();
@@ -142,8 +145,10 @@ const ClinicianAssistant = () => {
     setCurrentPlaybackMessageId(null);
   };
 
-  const playTTS = (text, messageIndex) => {
-    if (currentPlaybackMessageId === messageIndex) {
+  // Use a stable key (created_at + role) instead of array index to avoid
+  // playback toggle conflicts when switching modes and the index shifts.
+  const playTTS = (text, messageKey) => {
+    if (currentPlaybackMessageId === messageKey) {
       stopTTS();
       return;
     }
@@ -154,7 +159,7 @@ const ClinicianAssistant = () => {
       const audioUrl = `/api/chat/tts?text=${encodeURIComponent(text)}`;
       const audio = new Audio(audioUrl);
       activeAudioRef.current = audio;
-      setCurrentPlaybackMessageId(messageIndex);
+      setCurrentPlaybackMessageId(messageKey);
 
       audio.onended = () => {
         setCurrentPlaybackMessageId(null);
@@ -293,8 +298,7 @@ const ClinicianAssistant = () => {
       setMessages((prev) => [...prev, userMsg, assistantMsg]);
 
       if (autoplayTTS) {
-        const newMsgIndex = messages.length + 1;
-        playTTS(data.response, newMsgIndex);
+        playTTS(data.response, assistantMsg.created_at + '-' + assistantMsg.role);
       }
     } catch (err) {
       console.error('Failed to process speech API:', err);
@@ -342,8 +346,7 @@ const ClinicianAssistant = () => {
       setMessages((prev) => [...prev, assistantMsg]);
 
       if (autoplayTTS) {
-        const newMsgIndex = messages.length + 1;
-        playTTS(data.response, newMsgIndex);
+        playTTS(data.response, assistantMsg.created_at + '-' + assistantMsg.role);
       }
     } catch (err) {
       console.error('Text submission failed:', err);
@@ -535,32 +538,37 @@ const ClinicianAssistant = () => {
             <h3 className="font-sans font-black text-sm uppercase tracking-wider text-text-dark flex items-center gap-2">
               <History className="w-4.5 h-4.5 text-primary-mauve" />
               <span>Clinician Transcript</span>
+              <span className={`text-[9px] font-extrabold px-2 py-0.5 rounded-full uppercase tracking-wider ${activeModeDetails.bgClass} ${activeModeDetails.textClass} border ${activeModeDetails.borderClass}`}>
+                {activeModeDetails.name}
+              </span>
             </h3>
             <span className="text-[10px] font-extrabold text-text-muted bg-white border border-primary-mauve/10 px-2.5 py-1 rounded-lg">
-              {messages.length} Messages
+              {filteredMessages.length} Messages
             </span>
           </div>
 
           <div className="flex-1 overflow-y-auto p-4 md:p-6 space-y-4">
-            {messages.length === 0 ? (
+            {filteredMessages.length === 0 ? (
               <div className="flex flex-col items-center justify-center text-center h-full max-w-sm mx-auto space-y-4">
-                <div className="w-14 h-14 rounded-full bg-primary-mauve/10 flex items-center justify-center text-primary-mauve">
+                <div className={`w-14 h-14 rounded-full ${activeModeDetails.bgClass} flex items-center justify-center ${activeModeDetails.textClass}`}>
                   <MessageSquare className="w-7 h-7" />
                 </div>
-                <h4 className="font-extrabold text-sm text-text-dark">No Transcript Yet</h4>
+                <h4 className="font-extrabold text-sm text-text-dark">No {activeModeDetails.name} Messages Yet</h4>
                 <p className="text-[11px] font-medium text-text-muted leading-relaxed">
-                  Tap the microphone or type a message to begin documenting triage guidance.
+                  Switch to <span className={`font-black ${activeModeDetails.textClass}`}>{activeModeDetails.name}</span> mode and send a message to start this transcript.
                 </p>
               </div>
             ) : (
-              messages.map((msg, index) => {
+              filteredMessages.map((msg) => {
                 const isUser = msg.role === 'user';
                 const isBangla = msg.language === 'bn' || /[\u0980-\u09FF]/.test(msg.content);
                 const msgIntentDetails = modes[msg.intent] || modes.vitals;
+                // Use a stable key so playback state doesn't break when mode changes
+                const msgKey = (msg.created_at || '') + '-' + msg.role;
 
                 return (
                   <div
-                    key={index}
+                    key={msgKey}
                     className={`flex items-start gap-3.5 ${isUser ? 'flex-row-reverse' : 'flex-row'} animate-fadeIn`}
                   >
                     <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 text-sm font-bold shadow-xs ${
@@ -584,14 +592,14 @@ const ClinicianAssistant = () => {
                         {!isUser && (
                           <div className="flex justify-end mt-2 pt-2 border-t border-primary-mauve/5">
                             <button
-                              onClick={() => playTTS(removeMarkdown(msg.content), index)}
+                              onClick={() => playTTS(removeMarkdown(msg.content), msgKey)}
                               className={`flex items-center gap-1 px-2.5 py-1 rounded-md text-[10px] font-black uppercase tracking-wider transition-all cursor-pointer ${
-                                currentPlaybackMessageId === index
+                                currentPlaybackMessageId === msgKey
                                   ? 'bg-danger text-white border border-danger/10'
                                   : `bg-${msgIntentDetails.colorClass}/10 hover:bg-${msgIntentDetails.colorClass}/20 border border-${msgIntentDetails.colorClass}/15 ${msgIntentDetails.textClass}`
                               }`}
                             >
-                              {currentPlaybackMessageId === index ? (
+                              {currentPlaybackMessageId === msgKey ? (
                                 <>
                                   <Square className="w-3 h-3 fill-current" />
                                   <span>Stop</span>
@@ -609,11 +617,6 @@ const ClinicianAssistant = () => {
 
                       <span className={`text-[9px] font-bold text-text-muted px-1.5 flex items-center gap-1.5 ${isUser ? 'self-end' : 'self-start'}`}>
                         <span>{new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
-                        {!isUser && (
-                          <span className={`inline-block px-1.5 py-0.5 rounded-full text-[8px] font-extrabold uppercase bg-${msgIntentDetails.colorClass}/10 border border-${msgIntentDetails.colorClass}/15 ${msgIntentDetails.textClass}`}>
-                            Focus: {msgIntentDetails.name}
-                          </span>
-                        )}
                       </span>
                     </div>
                   </div>

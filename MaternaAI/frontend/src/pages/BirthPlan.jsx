@@ -20,10 +20,55 @@ const FACILITIES = [
   { value: 'Moulvibazar District Hospital', label: 'Moulvibazar District Hospital', tier: 'Secondary', tags: ['Comprehensive EmONC', 'Blood Bank'], division: 'Sylhet' },
   { value: 'Sreemangal Community Clinic', label: 'Sreemangal Community Clinic (Tea Garden Area)', tier: 'Primary', tags: ['Midwife-Led Normal Delivery', 'Antenatal Care'], division: 'Sylhet' },
 
-  // --- RAJSHAHI & KHULNA DIVISIONS ---
+  // --- RAJSHAHI DIVISION ---
   { value: 'Rajshahi Medical College Hospital', label: 'Rajshahi Medical College Hospital (RMCH)', tier: 'Tertiary', tags: ['NICU', 'Complex OB Care', 'North-Bengal Hub'], division: 'Rajshahi' },
+
+  // --- KHULNA DIVISION ---
   { value: 'Khulna Medical College Hospital', label: 'Khulna Medical College Hospital (KMCH)', tier: 'Tertiary', tags: ['NICU', 'Emergency C-Section', '24/7 Availability'], division: 'Khulna' },
   { value: 'Bagerhat District Hospital', label: 'Bagerhat District Hospital', tier: 'Secondary', tags: ['Basic EmONC', 'Maternal Health Unit'], division: 'Khulna' },
+
+  // --- DHAKA DIVISION (Additional) ---
+  { value: 'Bangabandhu Sheikh Mujib Medical University', label: 'Bangabandhu Sheikh Mujib Medical University (BSMMU)', tier: 'Tertiary', tags: ['Maternal-Fetal Medicine', 'NICU', 'High-Risk Pregnancy'], division: 'Dhaka' },
+  { value: 'Institute of Child and Mother Health', label: 'Institute of Child and Mother Health (ICMH)', tier: 'Specialized', tags: ['Maternal Care', 'Neonatal Care', 'NICU'], division: 'Dhaka' },
+  { value: 'Mugda Medical College Hospital', label: 'Mugda Medical College Hospital', tier: 'Tertiary', tags: ['Emergency OB', 'NICU', '24/7 Service'], division: 'Dhaka' },
+  { value: 'Shaheed Suhrawardy Medical College Hospital', label: 'Shaheed Suhrawardy Medical College Hospital', tier: 'Tertiary', tags: ['Emergency C-Section', 'NICU', 'Obstetrics'], division: 'Dhaka' },
+  { value: 'Evercare Hospital Dhaka', label: 'Evercare Hospital Dhaka', tier: 'Private Tertiary', tags: ['Advanced NICU', 'Maternal-Fetal Medicine', 'ICU'], division: 'Dhaka' },
+  { value: 'Labaid Specialized Hospital', label: 'Labaid Specialized Hospital', tier: 'Private Tertiary', tags: ['NICU', 'High-Risk Pregnancy', '24/7 Emergency'], division: 'Dhaka' },
+
+  // --- CHITTAGONG DIVISION (Additional) ---
+  { value: 'Chattogram Maa-O-Shishu Hospital', label: 'Chattogram Maa-O-Shishu Hospital Medical College', tier: 'Specialized', tags: ['NICU', 'Pediatric ICU', 'High-Risk OB'], division: 'Chittagong' },
+  { value: 'Cumilla Medical College Hospital', label: 'Cumilla Medical College Hospital', tier: 'Tertiary', tags: ['NICU', '24/7 Emergency', 'Comprehensive EmONC'], division: 'Chittagong' },
+  { value: 'Feni General Hospital', label: 'Feni General Hospital', tier: 'Secondary', tags: ['Emergency Obstetric Care', 'Maternal Health Unit'], division: 'Chittagong' },
+  { value: 'Noakhali General Hospital', label: 'Noakhali General Hospital', tier: 'Secondary', tags: ['Basic EmONC', 'Emergency Referral'], division: 'Chittagong' },
+
+  // --- SYLHET DIVISION (Additional) ---
+  { value: 'Habiganj District Hospital', label: 'Habiganj District Hospital', tier: 'Secondary', tags: ['Comprehensive EmONC', 'Maternal Health Unit'], division: 'Sylhet' },
+  { value: 'Sunamganj District Hospital', label: 'Sunamganj District Hospital', tier: 'Secondary', tags: ['Emergency Obstetric Care', 'Referral Center'], division: 'Sylhet' },
+
+  // --- RAJSHAHI DIVISION (Additional) ---
+  { value: 'Pabna Medical College Hospital', label: 'Pabna Medical College Hospital', tier: 'Tertiary', tags: ['NICU', 'Emergency OB', '24/7 Service'], division: 'Rajshahi' },
+  { value: 'Naogaon District Hospital', label: 'Naogaon District Hospital', tier: 'Secondary', tags: ['Basic EmONC', 'Maternal Care'], division: 'Rajshahi' },
+  { value: 'Natore District Hospital', label: 'Natore District Hospital', tier: 'Secondary', tags: ['Emergency Referral', 'Maternal Health Unit'], division: 'Rajshahi' },
+
+  // --- KHULNA DIVISION (Additional) ---
+  { value: 'Satkhira Medical College Hospital', label: 'Satkhira Medical College Hospital', tier: 'Secondary', tags: ['Emergency Obstetric Care', 'Maternity Unit'], division: 'Khulna' },
+  { value: 'Jessore General Hospital', label: 'Jessore General Hospital', tier: 'Secondary', tags: ['Basic EmONC', 'Emergency Referral'], division: 'Khulna' },
+
+  // --- BARISHAL DIVISION ---
+  { value: 'Sher-e-Bangla Medical College Hospital', label: 'Sher-e-Bangla Medical College Hospital', tier: 'Tertiary', tags: ['NICU', 'Maternal Care', '24/7 Emergency'], division: 'Barishal' },
+  { value: 'Patuakhali Medical College Hospital', label: 'Patuakhali Medical College Hospital', tier: 'Secondary', tags: ['Emergency OB', 'Referral Center'], division: 'Barishal' },
+  { value: 'Bhola District Hospital', label: 'Bhola District Hospital', tier: 'Secondary', tags: ['Basic EmONC', 'Maternal Health Unit'], division: 'Barishal' },
+
+  // --- RANGPUR DIVISION ---
+  { value: 'Rangpur Medical College Hospital', label: 'Rangpur Medical College Hospital', tier: 'Tertiary', tags: ['NICU', 'Emergency Obstetric Care', '24/7 Service'], division: 'Rangpur' },
+  { value: 'Dinajpur Medical College Hospital', label: 'Dinajpur Medical College Hospital', tier: 'Tertiary', tags: ['NICU', 'Emergency C-Section', 'North Bengal'], division: 'Rangpur' },
+  { value: 'Kurigram General Hospital', label: 'Kurigram General Hospital', tier: 'Secondary', tags: ['Basic EmONC', 'Emergency Referral'], division: 'Rangpur' },
+
+  // --- MYMENSINGH DIVISION ---
+  { value: 'Mymensingh Medical College Hospital', label: 'Mymensingh Medical College Hospital', tier: 'Tertiary', tags: ['NICU', 'High-Risk Pregnancy', '24/7 OB'], division: 'Mymensingh' },
+  { value: 'Jamalpur General Hospital', label: 'Jamalpur General Hospital', tier: 'Secondary', tags: ['Emergency Obstetric Care', 'Maternal Health Unit'], division: 'Mymensingh' },
+  { value: 'Sherpur District Hospital', label: 'Sherpur District Hospital', tier: 'Secondary', tags: ['Basic EmONC', 'Referral Center'], division: 'Mymensingh' },
+  { value: 'Netrokona District Hospital', label: 'Netrokona District Hospital', tier: 'Secondary', tags: ['Maternal Care', 'Emergency Referral'], division: 'Mymensingh' },
 
   // --- NGO & PRIVATE MATERNAL NETWORKS ---
   { value: 'BRAC Maternity Center', label: 'BRAC Manoshi Maternity Center (Slum Network)', tier: 'NGO Primary', tags: ['Normal Delivery', 'Midwife-Led', 'Low-Risk'], division: 'NGO & Private' },
@@ -146,7 +191,42 @@ const STRINGS = {
       bagerhat: "Bagerhat District Hospital",
       brac: "BRAC Manoshi Maternity Center (Slum)",
       mariestopes: "Marie Stopes Maternity Hospital",
-      homedelivery: "Home Delivery with Government-Certified Midwife"
+      homedelivery: "Home Delivery with Government-Certified Midwife",
+      // Dhaka (additional)
+      bsmmu: "Bangabandhu Sheikh Mujib Medical University (BSMMU)",
+      icmh: "Institute of Child and Mother Health (ICMH)",
+      mugda: "Mugda Medical College Hospital",
+      suhrawardy: "Shaheed Suhrawardy Medical College Hospital",
+      evercare: "Evercare Hospital Dhaka",
+      labaid: "Labaid Specialized Hospital",
+      // Chittagong (additional)
+      chattogram_maa: "Chattogram Maa-O-Shishu Hospital Medical College",
+      cumilla: "Cumilla Medical College Hospital",
+      feni: "Feni General Hospital",
+      noakhali: "Noakhali General Hospital",
+      // Sylhet (additional)
+      habiganj: "Habiganj District Hospital",
+      sunamganj: "Sunamganj District Hospital",
+      // Rajshahi (additional)
+      pabna: "Pabna Medical College Hospital",
+      naogaon: "Naogaon District Hospital",
+      natore: "Natore District Hospital",
+      // Khulna (additional)
+      satkhira: "Satkhira Medical College Hospital",
+      jessore: "Jessore General Hospital",
+      // Barishal
+      sher_e_bangla: "Sher-e-Bangla Medical College Hospital",
+      patuakhali: "Patuakhali Medical College Hospital",
+      bhola: "Bhola District Hospital",
+      // Rangpur
+      rangpur_medical: "Rangpur Medical College Hospital",
+      dinajpur: "Dinajpur Medical College Hospital",
+      kurigram: "Kurigram General Hospital",
+      // Mymensingh
+      mymensingh_medical: "Mymensingh Medical College Hospital",
+      jamalpur: "Jamalpur General Hospital",
+      sherpur: "Sherpur District Hospital",
+      netrokona: "Netrokona District Hospital",
     },
     companions: {
       midwife: "Certified Midwife / Nurse",
@@ -202,6 +282,9 @@ const STRINGS = {
       sylhet: "Sylhet Division",
       rajshahi: "Rajshahi Division",
       khulna: "Khulna Division",
+      barishal: "Barishal Division",
+      rangpur: "Rangpur Division",
+      mymensingh: "Mymensingh Division",
       ngo_private: "NGO & Private Networks",
       home: "Home Delivery"
     }
@@ -287,7 +370,34 @@ const STRINGS = {
       bagerhat: "বাগেরহাট জেলা সদর হাসপাতাল",
       brac: "ব্র্যাক মনোষী মাতৃ কেন্দ্র (শহুরে বস্তি নেটওয়ার্ক)",
       mariestopes: "মেরি স্টোপস মেটারনিটি হাসপাতাল",
-      homedelivery: "সরকারি সনদপ্রাপ্ত দাইয়ের মাধ্যমে হোম ডেলিভারি"
+      homedelivery: "সরকারি সনদপ্রাপ্ত দাইয়ের মাধ্যমে হোম ডেলিভারি",
+      bsmmu: "বঙ্গবন্ধু শেখ মুজিব মেডিকেল বিশ্ববিদ্যালয় (BSMMU)",
+      icmh: "শিশু ও মাতৃস্বাস্থ্য প্রতিষ্ঠান (ICMH)",
+      mugda: "মুগদা মেডিকেল কলেজ হাসপাতাল",
+      suhrawardy: "শহীদ সোহরাওয়ার্দী মেডিকেল কলেজ হাসপাতাল",
+      evercare: "এভারকেয়ার হাসপাতাল ঢাকা",
+      labaid: "ল্যাবএইড স্পেশালাইজড হাসপাতাল",
+      chattogram_maa: "চট্টগ্রাম মা-ও-শিশু হাসপাতাল মেডিকেল কলেজ",
+      cumilla: "কুমিল্লা মেডিকেল কলেজ হাসপাতাল",
+      feni: "ফেনী জেনারেল হাসপাতাল",
+      noakhali: "নোয়াখালী জেনারেল হাসপাতাল",
+      habiganj: "হবিগঞ্জ জেলা সদর হাসপাতাল",
+      sunamganj: "সুনামগঞ্জ জেলা সদর হাসপাতাল",
+      pabna: "পাবনা মেডিকেল কলেজ হাসপাতাল",
+      naogaon: "নওগাঁ জেলা সদর হাসপাতাল",
+      natore: "নাটোর জেলা সদর হাসপাতাল",
+      satkhira: "সাতক্ষীরা মেডিকেল কলেজ হাসপাতাল",
+      jessore: "যশোর জেনারেল হাসপাতাল",
+      sher_e_bangla: "শের-ই-বাংলা মেডিকেল কলেজ হাসপাতাল",
+      patuakhali: "পটুয়াখালী মেডিকেল কলেজ হাসপাতাল",
+      bhola: "ভোলা জেলা সদর হাসপাতাল",
+      rangpur_medical: "রংপুর মেডিকেল কলেজ হাসপাতাল",
+      dinajpur: "দিনাজপুর মেডিকেল কলেজ হাসপাতাল",
+      kurigram: "কুড়িগ্রাম জেনারেল হাসপাতাল",
+      mymensingh_medical: "ময়মনসিংহ মেডিকেল কলেজ হাসপাতাল",
+      jamalpur: "জামালপুর জেনারেল হাসপাতাল",
+      sherpur: "শেরপুর জেলা সদর হাসপাতাল",
+      netrokona: "নেত্রকোনা জেলা সদর হাসপাতাল",
     },
     companions: {
       midwife: "প্রশিক্ষিত দাই / নার্স",
@@ -343,6 +453,9 @@ const STRINGS = {
       sylhet: "সিলেট বিভাগ",
       rajshahi: "রাজশাহী বিভাগ",
       khulna: "খুলনা বিভাগ",
+      barishal: "বরিশাল বিভাগ",
+      rangpur: "রংপুর বিভাগ",
+      mymensingh: "ময়মনসিংহ বিভাগ",
       ngo_private: "এনজিও ও প্রাইভেট নেটওয়ার্ক",
       home: "হোম ডেলিভারি"
     }
@@ -366,7 +479,34 @@ const getLocalizedFacilityLabel = (facilityValue, lang) => {
     'Bagerhat District Hospital': 'bagerhat',
     'BRAC Maternity Center': 'brac',
     'Marie Stopes Maternity Hospital': 'mariestopes',
-    'Home Delivery with Trained Midwife': 'homedelivery'
+    'Home Delivery with Trained Midwife': 'homedelivery',
+    'Bangabandhu Sheikh Mujib Medical University': 'bsmmu',
+    'Institute of Child and Mother Health': 'icmh',
+    'Mugda Medical College Hospital': 'mugda',
+    'Shaheed Suhrawardy Medical College Hospital': 'suhrawardy',
+    'Evercare Hospital Dhaka': 'evercare',
+    'Labaid Specialized Hospital': 'labaid',
+    'Chattogram Maa-O-Shishu Hospital': 'chattogram_maa',
+    'Cumilla Medical College Hospital': 'cumilla',
+    'Feni General Hospital': 'feni',
+    'Noakhali General Hospital': 'noakhali',
+    'Habiganj District Hospital': 'habiganj',
+    'Sunamganj District Hospital': 'sunamganj',
+    'Pabna Medical College Hospital': 'pabna',
+    'Naogaon District Hospital': 'naogaon',
+    'Natore District Hospital': 'natore',
+    'Satkhira Medical College Hospital': 'satkhira',
+    'Jessore General Hospital': 'jessore',
+    'Sher-e-Bangla Medical College Hospital': 'sher_e_bangla',
+    'Patuakhali Medical College Hospital': 'patuakhali',
+    'Bhola District Hospital': 'bhola',
+    'Rangpur Medical College Hospital': 'rangpur_medical',
+    'Dinajpur Medical College Hospital': 'dinajpur',
+    'Kurigram General Hospital': 'kurigram',
+    'Mymensingh Medical College Hospital': 'mymensingh_medical',
+    'Jamalpur General Hospital': 'jamalpur',
+    'Sherpur District Hospital': 'sherpur',
+    'Netrokona District Hospital': 'netrokona',
   };
   const key = facilityKeys[facilityValue];
   return key ? STRINGS[lang].facilities_list[key] : facilityValue;
@@ -489,6 +629,9 @@ const BirthPlan = () => {
     if (userDiv.includes('sylhet')) return 'Sylhet';
     if (userDiv.includes('rajshahi')) return 'Rajshahi';
     if (userDiv.includes('khulna')) return 'Khulna';
+    if (userDiv.includes('barishal') || userDiv.includes('barisal')) return 'Barishal';
+    if (userDiv.includes('rangpur')) return 'Rangpur';
+    if (userDiv.includes('mymensingh')) return 'Mymensingh';
     return 'all';
   });
   const [searchQuery, setSearchQuery] = useState('');
@@ -1425,6 +1568,9 @@ const BirthPlan = () => {
                           <option value="Sylhet">{STRINGS[lang].divisions.sylhet}</option>
                           <option value="Rajshahi">{STRINGS[lang].divisions.rajshahi}</option>
                           <option value="Khulna">{STRINGS[lang].divisions.khulna}</option>
+                          <option value="Barishal">{STRINGS[lang].divisions.barishal}</option>
+                          <option value="Rangpur">{STRINGS[lang].divisions.rangpur}</option>
+                          <option value="Mymensingh">{STRINGS[lang].divisions.mymensingh}</option>
                           <option value="NGO & Private">{STRINGS[lang].divisions.ngo_private}</option>
                           <option value="Home Delivery">{STRINGS[lang].divisions.home}</option>
                         </select>
@@ -1853,7 +1999,9 @@ const BirthPlan = () => {
               </div>
             )}
 
-            <p className="text-xs font-medium text-text-dark whitespace-pre-wrap leading-relaxed">{planText}</p>
+            <div className="max-h-72 overflow-y-auto overscroll-contain rounded-xl bg-bg-rose-white px-3 py-2 -mx-1">
+              <p className="text-xs font-medium text-text-dark whitespace-pre-wrap leading-relaxed">{planText}</p>
+            </div>
 
             <div className="flex items-center justify-between pt-2 border-t border-primary-mauve/8">
               <div className="flex items-center gap-1.5 text-[9px] font-black text-success">
@@ -1905,9 +2053,11 @@ const BirthPlan = () => {
                   </button>
                   {expandedPlanId === plan.id && (
                     <div className="px-3 pb-3 border-t border-primary-mauve/8 pt-3 bg-bg-rose-white">
-                      <p className="text-xs text-text-dark whitespace-pre-wrap leading-relaxed">
-                        {plan.generated_plan || 'Plan content not available for this version.'}
-                      </p>
+                      <div className="max-h-48 overflow-y-auto overscroll-contain rounded-lg">
+                        <p className="text-xs text-text-dark whitespace-pre-wrap leading-relaxed">
+                          {plan.generated_plan || 'Plan content not available for this version.'}
+                        </p>
+                      </div>
                       {plan.readiness_gaps?.length > 0 && (
                         <div className="mt-2 space-y-1">
                           {plan.readiness_gaps.map((gap, i) => (
