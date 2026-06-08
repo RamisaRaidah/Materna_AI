@@ -164,12 +164,9 @@ export const AuthProvider = ({ children }) => {
     register,
     logout,
     updateProfile,
-<<<<<<< HEAD
     updateUserLocalContext,
-    refreshUser: syncUserState
-=======
+    refreshUser: syncUserState,
     refreshUser
->>>>>>> 5b981d48335e11029bedb446050e6e84da8cc010
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
