@@ -97,6 +97,12 @@ export const AuthProvider = ({ children }) => {
       throw error.response?.data?.error || "Failed to update profile details.";
     }
   };
+  const refreshUser = async () => {
+    const freshUser = await authAPI.getMe();
+    localStorage.setItem('user', JSON.stringify(freshUser));
+    setUser(freshUser);
+    return freshUser;
+  };
 
   const value = {
     user,
@@ -105,7 +111,8 @@ export const AuthProvider = ({ children }) => {
     login,
     register,
     logout,
-    updateProfile
+    updateProfile,
+    refreshUser
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
