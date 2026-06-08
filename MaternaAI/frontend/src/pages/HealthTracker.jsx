@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { healthAPI } from '../api';
+import { healthAPI, carePlanAPI } from '../api';
 import {
   Activity,
   Heart,
@@ -77,6 +77,7 @@ const HealthTracker = () => {
   const [isVitalsSyncing, setIsVitalsSyncing] = useState(false);
   const [isKicksSubmitting, setIsKicksSubmitting] = useState(false);
   const [isDangerSubmitting, setIsDangerSubmitting] = useState(false);
+  const [isAddingToPlan, setIsAddingToPlan] = useState(false);
 
   const [vitalsMessage, setVitalsMessage] = useState(null);
   const [dangerMessage, setDangerMessage] = useState(null);
@@ -677,27 +678,35 @@ const HealthTracker = () => {
 
                 {/* Add to Care Plan button */}
                 <button
-                  onClick={() => {
+                  onClick={async () => {
                     if (!reportResult?.meds?.length) return;
-                    const importedItems = reportResult.meds.map((med, i) => ({
-                      id: `imported-${Date.now()}-${i}`,
-                      title: med.name,
-                      desc: `${med.purpose} — ${med.timing} | ⚠️ ${med.warning}`,
-                      isImported: true,
-                    }));
-                    localStorage.setItem('imported_medications', JSON.stringify(importedItems));
-                    window.dispatchEvent(new Event('imported_medications_updated'));
-                    setReportAddedToPlan(true);
+                    setIsAddingToPlan(true);
+                    try {
+                      const importedItems = reportResult.meds.map((med, i) => ({
+                        id: `imported-${Date.now()}-${i}`,
+                        title: med.name,
+                        desc: `${med.purpose} — ${med.timing} | ⚠️ ${med.warning}`,
+                      }));
+                      await carePlanAPI.saveImportedItems(importedItems);
+                      setReportAddedToPlan(true);
+                    } catch (err) {
+                      console.error('Failed to save imported medications:', err);
+                      setReportError('Could not add to care plan. Please try again.');
+                    } finally {
+                      setIsAddingToPlan(false);
+                    }
                   }}
-                  disabled={reportAddedToPlan}
+                  disabled={reportAddedToPlan || isAddingToPlan}
                   className={`w-full py-2.5 rounded-xl text-xs font-black uppercase tracking-wider transition-all flex items-center justify-center gap-2 ${reportAddedToPlan
-                    ? 'bg-success/10 border border-success/25 text-success cursor-default'
-                    : 'bg-primary-mauve text-white hover:bg-bg-dark-mauve cursor-pointer shadow-glow'
+                      ? 'bg-success/10 border border-success/25 text-success cursor-default'
+                      : 'bg-primary-mauve text-white hover:bg-bg-dark-mauve cursor-pointer shadow-glow'
                     }`}
                 >
-                  {reportAddedToPlan
-                    ? '✅ Added to AI Pregnancy Care Advisor'
-                    : '+ Add Instructions to Care Plan'
+                  {isAddingToPlan
+                    ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Saving...</>
+                    : reportAddedToPlan
+                      ? '✅ Added to AI Pregnancy Care Advisor'
+                      : '+ Add Instructions to Care Plan'
                   }
                 </button>
               </div>

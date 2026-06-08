@@ -284,3 +284,46 @@ CREATE TABLE risk_profiles (
     recommendation_en TEXT DEFAULT '',
     recommendation_bn TEXT DEFAULT ''
 );
+
+-- AI generated and imported care plan
+CREATE TABLE care_plan_items (
+    id SERIAL PRIMARY KEY,
+    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    item_key VARCHAR(50) NOT NULL,
+    source VARCHAR(20) NOT NULL CHECK (source IN ('ai', 'imported')),
+    title VARCHAR(255) NOT NULL,
+    description TEXT NOT NULL,
+    title_bn TEXT,
+    description_bn TEXT,
+
+    weeks_at_generation INTEGER,
+    bp_at_generation VARCHAR(20),
+    glucose_at_generation NUMERIC(5,2),
+    weight_at_generation NUMERIC(5,2),
+    water_at_generation NUMERIC(4,2),
+
+    is_dismissed BOOLEAN NOT NULL DEFAULT FALSE,
+    dismissed_at TIMESTAMPTZ,
+
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE UNIQUE INDEX uq_care_plan_active_item
+    ON care_plan_items (user_id, item_key)
+    WHERE is_dismissed = FALSE;
+
+CREATE INDEX idx_care_plan_user_active
+    ON care_plan_items (user_id, is_dismissed, created_at DESC);
+
+CREATE OR REPLACE FUNCTION set_updated_at()
+RETURNS TRIGGER LANGUAGE plpgsql AS $$
+BEGIN
+    NEW.updated_at = NOW();
+    RETURN NEW;
+END;
+$$;
+
+CREATE TRIGGER trg_care_plan_updated_at
+BEFORE UPDATE ON care_plan_items
+FOR EACH ROW EXECUTE FUNCTION set_updated_at();
