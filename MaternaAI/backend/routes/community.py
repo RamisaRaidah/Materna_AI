@@ -73,7 +73,7 @@ def list_contacts():
 
     contacts = query(
         """
-        SELECT id, name, phone, role, location, created_at
+        SELECT id, name, phone, role, location, profile_image, created_at
         FROM users
         WHERE role = %s AND id != %s
         ORDER BY created_at DESC

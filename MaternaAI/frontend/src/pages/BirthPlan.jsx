@@ -994,7 +994,7 @@ const BirthPlan = () => {
       pain_preference: resolvedTrack === 'A' ? pain : '',
       special_notes: `Transport strategy: ${transport}. Notes: ${specialNotes}`,
       emergency_contacts: formattedContacts,
-      profile: { weeks_pregnant: user?.weeks_pregnant || 24, location: user?.location || 'Unknown' },
+      profile: { weeks_pregnant: user?.weeks_pregnant || 24, location: user?.location || user?.district || user?.area || user?.division || 'Location not set' },
       track: resolvedTrack,
       blood_group: bloodGroup || null,
       rh_negative: bloodGroup?.includes('-') || false,
@@ -1150,7 +1150,7 @@ const BirthPlan = () => {
       emergency_contacts: formattedContacts,
       profile: {
         weeks_pregnant: user?.weeks_pregnant || 24,
-        location: user?.location || "Unknown"
+        location: user?.location || user?.district || user?.area || user?.division || 'Location not set'
       },
       track: resolvedTrack,
       blood_group: bloodGroup,

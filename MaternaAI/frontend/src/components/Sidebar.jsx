@@ -108,7 +108,7 @@ const Sidebar = ({
         },
         body: JSON.stringify({
           user_id: user?.id,
-          location: user?.location || "Unknown Location",
+          location: user?.location || user?.district || user?.area || user?.division || 'Location not set',
           symptoms: ["Emergency Triggered by User"]
         })
       });
@@ -231,8 +231,12 @@ const Sidebar = ({
 
           {/* User Persona Capsule */}
           <div className="mx-4 my-5 p-4 rounded-xl bg-bg-rose-white border border-primary-mauve/5 flex items-center gap-3">
-            <div className="w-10 h-10 rounded-full bg-secondary-blush/20 flex items-center justify-center text-lg font-bold text-primary-mauve">
-              {user?.role === 'clinician' ? '🩺' : '🤰'}
+            <div className="w-10 h-10 rounded-full bg-secondary-blush/20 flex items-center justify-center text-lg font-bold text-primary-mauve overflow-hidden shrink-0 border border-primary-mauve/10">
+              {user?.profile_image ? (
+                <img src={user.profile_image} alt={user?.name || 'Profile'} className="w-full h-full object-cover" />
+              ) : (
+                <span>{user?.role === 'clinician' ? '🩺' : '🤰'}</span>
+              )}
             </div>
             <div className="overflow-hidden">
               <h4 className="font-bold text-sm text-text-dark truncate">{user?.name || 'Guest User'}</h4>

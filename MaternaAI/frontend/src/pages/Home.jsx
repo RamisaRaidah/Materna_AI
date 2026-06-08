@@ -202,7 +202,11 @@ useEffect(() => {
   const getCalculatedWeeks = () => {
     const anchorDate = user?.weeks_updated_at ? new Date(user.weeks_updated_at) : new Date(user?.created_at || Date.now());
     const today = new Date();
-    const startWeek = user?.weeks_pregnant || 24;
+    const startWeek = user?.weeks_pregnant ?? null;
+
+    if (startWeek === null) {
+      return null;
+    }
 
     const diffInMs = today - anchorDate;
     const weeksPassed = Math.floor(diffInMs / (1000 * 60 * 60 * 24 * 7));
@@ -212,7 +216,7 @@ useEffect(() => {
     return Math.min(40, Math.max(1, currWeek));
   };
 
-  const weeks = getCalculatedWeeks();
+  const weeks = getCalculatedWeeks() ?? user?.weeks_pregnant ?? 24;
   const daysToBirth = Math.max(0, (40 - weeks) * 7);
   const progressPercent = Math.min(100, Math.round((weeks / 40) * 100));
 
@@ -327,7 +331,7 @@ useEffect(() => {
     try {
       const res = await sosAPI.triggerSOS({
         user_id: user?.id,
-        location: user?.location || 'Unknown Location',
+        location: user?.location || user?.district || user?.area || user?.division || 'Location not set',
         symptoms: activeSymptoms,
         reason: 'Danger Symptoms flagged on patient home dashboard'
       });

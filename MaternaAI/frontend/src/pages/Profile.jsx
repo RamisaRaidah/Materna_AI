@@ -32,7 +32,7 @@ const classes = {
 };
 
 const Profile = () => {
-  const { user, updateUserLocalContext, logout } = useAuth();
+  const { user, updateProfile, logout } = useAuth();
   const navigate = useNavigate();
   
   // UI Panel Controls
@@ -164,24 +164,13 @@ const Profile = () => {
 
     setIsSubmitting(true);
     try {
-      const response = await fetch('/auth/me', {
-        method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        },
-        body: JSON.stringify(updatedPayload)
-      });
-      const data = await response.json();
-      if (response.ok) {
-        if (updateUserLocalContext) updateUserLocalContext(data.user); 
+      const freshUser = await updateProfile(updatedPayload);
+      if (freshUser) {
         setMsg({ text: 'Profile metrics updated successfully!', type: 'success' });
         setIsEditing(false);
-      } else {
-        setMsg({ text: data.error || 'Server refused processing parameters.', type: 'danger' });
       }
     } catch (err) {
-      setMsg({ text: 'Network dispatch failure.', type: 'danger' });
+      setMsg({ text: typeof err === 'string' ? err : err?.message || 'Network dispatch failure.', type: 'danger' });
     } finally {
       setIsSubmitting(false);
     }
@@ -254,8 +243,12 @@ const Profile = () => {
       {/* Upper Profile Header Card */}
       <div className="bg-gradient-to-r from-primary-mauve to-bg-dark-mauve rounded-2xl p-6 text-white shadow-premium flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
         <div className="flex items-center gap-4">
-          <div className="w-14 h-14 rounded-full bg-white/20 backdrop-blur-md flex items-center justify-center text-2xl">
-            {user?.role === 'clinician' ? '🩺' : '🤰'}
+          <div className="w-14 h-14 rounded-full bg-white/20 backdrop-blur-md flex items-center justify-center text-2xl overflow-hidden border border-white/20 shrink-0">
+            {user?.profile_image ? (
+              <img src={user.profile_image} alt={user?.name || 'Profile'} className="w-full h-full object-cover" />
+            ) : (
+              <span>{user?.role === 'clinician' ? '🩺' : '🤰'}</span>
+            )}
           </div>
           <div>
             <h2 className="text-xl font-black tracking-tight">{user?.name || 'User Profile'}</h2>
