@@ -5,6 +5,7 @@ import cohere
 import google.generativeai as genai
 from config import DATABASE_URL, OPENROUTER_API_KEY, COHERE_API_KEY, GEMINI_API_KEY
 import json
+import re
 
 if GEMINI_API_KEY:
     genai.configure(api_key=GEMINI_API_KEY)
@@ -476,6 +477,23 @@ def extract_nutrition_metrics(user_input: str, assistant_response: str) -> dict:
     """
     default_metrics = {"iron": 0.0, "folate": 0.0, "calcium": 0.0, "protein": 0.0}
     
+    def safe_float(value):
+        try:
+            if value is None:
+                return 0.0
+            
+            if isinstance(value, (int, float)):
+                return float(value)
+            
+            match = re.search(r"[-+]?\d*\.?\d+", str(value))
+            if match:
+                return float(match.group())
+            
+            return 0.0
+        except Exception:
+            return 0.0
+        
+
     # Precise engineering to force the model to calculate values dynamically
     extraction_prompt = f"""
     You are a strict data extraction engine. Your job is to convert food logs into structured nutritional data.
@@ -497,49 +515,82 @@ def extract_nutrition_metrics(user_input: str, assistant_response: str) -> dict:
     {{"iron": 0.0, "folate": 0.0, "calcium": 0.0, "protein": 0.0}}
     """
     
-    try:
-        if GEMINI_API_KEY:
-            model = genai.GenerativeModel("gemini-2.5-flash")
-            extraction_res = model.generate_content(
-                extraction_prompt,
-                generation_config={
-                    "response_mime_type": "application/json",
-                    "temperature": 0.1
-                }
-            ).text
-            raw_text = extraction_res
-        else:
-            response = or_client.chat.completions.create(
-                model="google/gemini-2.5-flash",
-                messages=[{"role": "user", "content": extraction_prompt}],
-                response_format={"type": "json_object"},
-                temperature=0.1
+    model_queue = [
+        "google/gemini-2.5-flash",
+        "qwen/qwen-2.5-72b-instruct",
+        "meta-llama/llama-3.3-70b-instruct",
+        "meta-llama/llama-3.1-8b-instruct:free"
+    ]
+
+    parsed_data = None
+
+    for model_name in model_queue:
+        try:
+            print(f"Trying nutrition extraction with: {model_name}")
+
+            if model_name == "google/gemini-2.5-flash" and GEMINI_API_KEY:
+                model = genai.GenerativeModel("gemini-2.5-flash")
+                extraction_res = model.generate_content(
+                    extraction_prompt,
+                    generation_config={
+                        "response_mime_type": "application/json",
+                        "temperature": 0.1
+                    }
+                )
+                raw_text = extraction_res.text
+            else:
+                response = or_client.chat.completions.create(
+                    model=model_name,
+                    messages=[{"role": "user", "content": extraction_prompt}],
+                    response_format={"type": "json_object"},
+                    temperature=0.1
+                )
+                raw_text = response.choices[0].message.content
+            
+            if not raw_text:
+                print(f"{model_name} returned empty response")
+                continue
+
+            raw_text = raw_text.strip()
+
+            # Remove accidental markdown fences
+            if raw_text.startswith("```"):
+                raw_text = re.sub(
+                    r"^```(?:json)?|```$",
+                    "",
+                    raw_text,
+                    flags=re.MULTILINE
+                ).strip()
+
+            parsed_data = json.loads(raw_text)
+
+            print(f"Nutrition extraction succeeded with {model_name}")
+
+            break
+
+        except json.JSONDecodeError as e:
+            print(
+                f"{model_name} returned invalid JSON. "
+                f"Trying next model. Error: {e}"
             )
-            raw_text = response.choices[0].message.content
+            continue
 
-        if not raw_text:
-            return default_metrics
-            
-        raw_text = raw_text.strip()
-        if raw_text.startswith("```"):
-            # Splits off backticks if an LLM wrapper slips past the response_format
-            lines = raw_text.splitlines()
-            cleaned_lines = [line for line in lines if not line.strip().startswith("```")]
-            raw_text = "".join(cleaned_lines)
+        except Exception as e:
+            print(f"Nutrition extraction failed for {model_name}: {e}")
+            continue
 
-        parsed_data = json.loads(raw_text.strip())
-        
-        # Ensure values are safely cast to floats and fall back to 0.0 if missing
-        return {
-            "iron": float(parsed_data.get("iron", 0.0)),
-            "folate": float(parsed_data.get("folate", 0.0)),
-            "calcium": float(parsed_data.get("calcium", 0.0)),
-            "protein": float(parsed_data.get("protein", 0.0))
-        }
-            
-    except Exception as e:
-        print("Dynamic nutrition extraction parser encountered an error:", e)
+    if not parsed_data:
+        print("All nutrition extraction models failed.")
         return default_metrics
+    
+    # Ensure values are safely cast to floats and fall back to 0.0 if missing
+    return {
+        "iron": safe_float(parsed_data.get("iron", 0.0)),
+        "folate": safe_float(parsed_data.get("folate", 0.0)),
+        "calcium": safe_float(parsed_data.get("calcium", 0.0)),
+        "protein": safe_float(parsed_data.get("protein", 0.0))
+    }
+                
 
 def rag_query(user_input: str, user_profile: dict, mode: str = "danger", detected_lang: str = "bn", user_id: int = 1) -> str:
     try:

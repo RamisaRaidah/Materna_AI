@@ -68,7 +68,6 @@ const Home = () => {
   const [stats, setStats] = useState(null);
   const [isClinicianLoading, setIsClinicianLoading] = useState(false);
 
-<<<<<<< HEAD
   // Care Plan States
   const [carePlanItems, setCarePlanItems] = useState([]);
   const [planLoading, setPlanLoading] = useState(false);
@@ -77,7 +76,6 @@ const Home = () => {
   const [aiPlanError, setAiPlanError] = useState(null);
   const [carePlanLang, setCarePlanLang] = useState('bn');
   const [carePlanCache, setCarePlanCache] = useState({ en: [], bn: [] });
-=======
 const handleAvatarUpload = () => {
   avatarInputRef.current?.click();
 };
@@ -117,7 +115,6 @@ useEffect(() => {
     loadPatientRisk('bn'); // Fetch bilingual profile (defaults to bn values on legacy fields)
   }
 }, [user]);
->>>>>>> 9ef33bd02deb64c31b87482cff8d1507d81c9b07
 
 
   // Sync Vitals, Stats, and Risk Profile on Load
