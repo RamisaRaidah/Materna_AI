@@ -60,6 +60,10 @@ export const authAPI = {
     const response = await api.patch('/auth/me', userData);
     return response.data;
   },
+  pingPresence: async () => {
+    const response = await api.post('/auth/presence');
+    return response.data;
+  },
   registerFCM: async (fcmToken) => {
     const response = await api.post('/auth/me/fcm', { fcmToken });
     return response.data;
@@ -239,6 +243,10 @@ export const clinicianAPI = {
 };
 
 export const adminAPI = {
+  getDashboard: async () => {
+    const response = await api.get('/api/admin/dashboard');
+    return response.data;
+  },
   getPendingDoctors: async () => {
     const response = await api.get('/api/admin/pending-doctors');
     return response.data;

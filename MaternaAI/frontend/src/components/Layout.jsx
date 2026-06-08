@@ -1,14 +1,18 @@
 import React, { useEffect, useState } from 'react';
-import { Outlet } from 'react-router-dom';
+import { Outlet, useLocation } from 'react-router-dom';
 import Sidebar from './Sidebar';
 import { Menu } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
-import { notificationsAPI } from '../api';
+import { notificationsAPI, authAPI } from '../api';
 import Logo from './assets/Logo.png';
 import { collection, query as fsQuery, orderBy, limit as fsLimit, onSnapshot, doc, updateDoc, where } from 'firebase/firestore';
 import { db } from '../api/firebase';
 
+const CHAT_ROUTES = ['/clinician-chat', '/clinician/community'];
+
 const Layout = () => {
+  const location = useLocation();
+  const isChatRoute = CHAT_ROUTES.includes(location.pathname);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const { user } = useAuth();
   const [notifications, setNotifications] = useState([]);
@@ -17,6 +21,18 @@ const Layout = () => {
   const [acknowledgingIds, setAcknowledgingIds] = useState([]);
 
   const [unreadDMs, setUnreadDMs] = useState(0);
+
+  useEffect(() => {
+    if (!user) return;
+
+    const pingPresence = () => {
+      authAPI.pingPresence().catch(() => {});
+    };
+
+    pingPresence();
+    const presenceId = setInterval(pingPresence, 60000);
+    return () => clearInterval(presenceId);
+  }, [user?.id]);
 
   // Firestore Notifications Subscription
   useEffect(() => {
@@ -162,7 +178,7 @@ const Layout = () => {
         </header>
 
         {/* Dynamic Page Canvas */}
-        <main className="flex-1 overflow-y-auto focus:outline-hidden relative">
+        <main className={`flex-1 min-h-0 focus:outline-hidden relative ${isChatRoute ? 'overflow-hidden' : 'overflow-y-auto'}`}>
           <Outlet />
         </main>
 

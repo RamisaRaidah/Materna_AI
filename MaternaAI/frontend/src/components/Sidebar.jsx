@@ -16,7 +16,8 @@ import {
   AlertTriangle,
   LayoutDashboard,
   ClipboardList,
-  UserRound
+  UserRound,
+  UserCheck
 } from 'lucide-react';
 import Logo from './assets/Logo.png'
 const Sidebar = ({
@@ -65,7 +66,7 @@ const Sidebar = ({
     {
       title: 'Clinician Console',
       items: [
-        { name: 'Home / Dashboard', path: '/clinician', icon: LayoutDashboard },
+        { name: 'Home', path: '/clinician', icon: LayoutDashboard },
         { name: 'AI Clinical Assistant', path: '/clinician/assistant', icon: MessageSquare },
         { name: 'Vitals & Summary', path: '/clinician/vitals', icon: Activity },
         { name: 'PPD Screening', path: '/clinician/ppd', icon: Smile },
@@ -90,7 +91,8 @@ const Sidebar = ({
     {
       title: 'Admin Console',
       items: [
-        { name: 'Review Doctors', path: '/admin', icon: LayoutDashboard },
+        { name: 'Home', path: '/admin', icon: LayoutDashboard },
+        { name: 'Review Doctors', path: '/admin/review-doctors', icon: UserCheck },
       ]
     }
   ];

@@ -103,4 +103,9 @@ def ensure_user_profile_image_column():
 def ensure_clinician_verification_columns():
     """Add status and verification_documents columns to users table."""
     query("ALTER TABLE users ADD COLUMN IF NOT EXISTS status VARCHAR(20) DEFAULT 'approved'", fetch="none")
-    query("ALTER TABLE users ADD COLUMN IF NOT EXISTS verification_documents TEXT", fetch="none")
+    query("ALTER TABLE users ADD COLUMN IF NOT EXISTS verification_documents TEXT", fetch="none")
+
+
+def ensure_user_presence_column():
+    """Add last_seen_at for online presence tracking."""
+    query("ALTER TABLE users ADD COLUMN IF NOT EXISTS last_seen_at TIMESTAMPTZ", fetch="none")

@@ -3,6 +3,9 @@ import { MessageSquare, Search } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { communityAPI } from '../api';
 import { db } from '../api/firebase';
+import { useSmartChatScroll } from '../hooks/useSmartChatScroll';
+import AutoResizeTextarea from '../components/chat/AutoResizeTextarea';
+import NewMessagesIndicator from '../components/chat/NewMessagesIndicator';
 import {
   collection,
   doc,
@@ -28,12 +31,11 @@ const ClinicianChat = () => {
   const [loading, setLoading] = useState(true);
   const [loadingThread, setLoadingThread] = useState(false);
   const [error, setError] = useState('');
-  const [isSubmitting, setIsSubmitting] = useState(false);
   const [inbox, setInbox] = useState([]);
 
   const threadUnsubscribeRef = useRef(null);
   const inboxUnsubscribeRef = useRef(null);
-  const threadEndRef = useRef(null);
+  const messageInputRef = useRef(null);
 
   useEffect(() => {
     return () => {
@@ -218,10 +220,14 @@ const ClinicianChat = () => {
     );
   }, [mysqlThread, thread]);
 
-  // Auto-scroll to bottom when messages change
-  useEffect(() => {
-    threadEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [combinedThread]);
+  const {
+    scrollRef,
+    bottomRef,
+    handleScroll,
+    scrollToBottom,
+    showNewMessages,
+    newMessageCount,
+  } = useSmartChatScroll(combinedThread, activeContact?.id);
 
   const filteredContacts = useMemo(() => {
     const needle = search.trim().toLowerCase();
@@ -284,25 +290,41 @@ const ClinicianChat = () => {
     return initials || '🩺';
   };
 
-  const handleSend = async (event) => {
-    event.preventDefault();
-    if (!message.trim() || !activeContact || !user?.id || !db) {
+  const refocusComposer = () => {
+    requestAnimationFrame(() => {
+      messageInputRef.current?.focus();
+    });
+  };
+
+  const canSend = Boolean(message.trim() && activeContact);
+
+  const handleInputKeyDown = (event, { submit }) => {
+    if (submit && canSend) {
+      handleSend(event);
+    }
+  };
+
+  const handleSend = (event) => {
+    event?.preventDefault();
+    const text = message.trim();
+    if (!text || !activeContact || !user?.id || !db) {
       return;
     }
 
-    const text = message.trim();
+    const contact = activeContact;
     setMessage('');
-    setIsSubmitting(true);
+    refocusComposer();
 
-    const roomId = getRoomId(user.id, activeContact.id);
+    const roomId = getRoomId(user.id, contact.id);
 
+    void (async () => {
     try {
       const timestamp = new Date().toISOString();
       const messagesRef = collection(db, 'rooms', roomId, 'messages');
 
       await addDoc(messagesRef, {
         senderId: user.id,
-        receiverId: activeContact.id,
+        receiverId: contact.id,
         content: text,
         createdAt: timestamp,
         status: 'sent'
@@ -314,39 +336,37 @@ const ClinicianChat = () => {
       const roomSnapData = await getDoc(roomRef);
       if (roomSnapData.exists()) {
         const roomData = roomSnapData.data();
-        partnerUnread = roomData.unreadCount?.[String(activeContact.id)] || 0;
+        partnerUnread = roomData.unreadCount?.[String(contact.id)] || 0;
       }
 
       await setDoc(roomRef, {
-        participants: [user.id, activeContact.id],
+        participants: [user.id, contact.id],
         lastMessage: text,
         lastSentAt: timestamp,
         partnerNames: {
           [String(user.id)]: user.name,
-          [String(activeContact.id)]: activeContact.name || 'Clinician'
+          [String(contact.id)]: contact.name || 'Clinician'
         },
         unreadCount: {
-          [String(activeContact.id)]: partnerUnread + 1,
+          [String(contact.id)]: partnerUnread + 1,
           [String(user.id)]: 0
         }
       }, { merge: true });
 
-      // Sync to MySQL
       try {
-        await communityAPI.sendDM(activeContact.id, { sender_id: user.id, content: text });
+        await communityAPI.sendDM(contact.id, { sender_id: user.id, content: text });
       } catch (sqlErr) {
         console.warn("Failed to sync message to MySQL:", sqlErr);
       }
 
-      // Trigger simulated offline SMS notification if online
-      if (navigator.onLine && activeContact.phone) {
+      if (navigator.onLine && contact.phone) {
         try {
           await fetch('/api/sms/send_offline_notify', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
               sender_name: user.name,
-              recipient_phone: activeContact.phone,
+              recipient_phone: contact.phone,
               message_content: text
             })
           });
@@ -357,34 +377,33 @@ const ClinicianChat = () => {
     } catch (err) {
       console.error("DM Firestore dispatch failed:", err);
       setError('Unable to send message. Please retry.');
-    } finally {
-      setIsSubmitting(false);
     }
+    })();
   };
 
   return (
-    <div className="p-4 md:p-8 max-w-7xl mx-auto space-y-6 font-sans">
-      <div className="bg-white border border-primary-mauve/10 rounded-2xl p-6 shadow-premium flex items-center justify-between gap-4">
+    <div className="h-full flex flex-col overflow-hidden p-4 md:p-6 max-w-7xl mx-auto w-full font-sans">
+      <div className="shrink-0 mb-4 bg-white border border-primary-mauve/10 rounded-2xl px-5 py-4 shadow-premium flex items-center justify-between gap-4">
         <div>
-          <h1 className="text-xl font-black text-text-dark">Chat with Clinician</h1>
-          <p className="text-xs font-semibold text-text-muted mt-1">
+          <h1 className="text-lg font-black text-text-dark">Chat with Clinician</h1>
+          <p className="text-[11px] font-semibold text-text-muted mt-0.5">
             Secure one-to-one messaging with verified clinicians.
           </p>
         </div>
-        <div className="w-12 h-12 rounded-xl bg-primary-mauve/10 text-primary-mauve flex items-center justify-center">
-          <MessageSquare className="w-6 h-6" />
+        <div className="w-10 h-10 rounded-xl bg-primary-mauve/10 text-primary-mauve flex items-center justify-center shrink-0">
+          <MessageSquare className="w-5 h-5" />
         </div>
       </div>
 
       {error && (
-        <div className="text-[11px] font-semibold text-danger bg-danger/10 border border-danger/20 rounded-lg px-3 py-2">
+        <div className="shrink-0 mb-3 text-[11px] font-semibold text-danger bg-danger/10 border border-danger/20 rounded-lg px-3 py-2">
           {error}
         </div>
       )}
 
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch">
-        <div className="lg:col-span-4 bg-white border border-primary-mauve/10 rounded-2xl p-5 shadow-premium flex flex-col min-h-[520px]">
-          <div className="flex items-center justify-between gap-3">
+      <div className="flex-1 min-h-0 grid grid-cols-1 lg:grid-cols-12 grid-rows-[minmax(0,38%)_minmax(0,62%)] lg:grid-rows-1 gap-4">
+        <div className="lg:col-span-4 bg-white border border-primary-mauve/10 rounded-2xl shadow-premium flex flex-col min-h-0 overflow-hidden">
+          <div className="shrink-0 p-4 border-b border-primary-mauve/10 flex items-center justify-between gap-3">
             <h3 className="text-xs font-black uppercase tracking-wider text-text-dark">Clinician List</h3>
             <div className="relative">
               <Search className="w-4 h-4 text-text-muted absolute left-3 top-1/2 -translate-y-1/2" />
@@ -397,7 +416,7 @@ const ClinicianChat = () => {
             </div>
           </div>
 
-          <div className="mt-4 space-y-2 flex-1 min-h-[220px] overflow-y-auto">
+          <div className="flex-1 min-h-0 overflow-y-auto p-4 space-y-2">
             {loading ? (
               <div className="text-xs font-semibold text-text-muted">Loading clinicians...</div>
             ) : filteredContacts.length === 0 ? (
@@ -444,8 +463,8 @@ const ClinicianChat = () => {
           </div>
         </div>
 
-        <div className="lg:col-span-8 bg-white border border-primary-mauve/10 rounded-2xl shadow-premium flex flex-col min-h-[520px] h-[calc(100vh-240px)] max-h-[760px] overflow-hidden">
-          <div className="bg-bg-rose-white border-b border-primary-mauve/10 px-5 py-4 flex items-center justify-between">
+        <div className="lg:col-span-8 bg-white border border-primary-mauve/10 rounded-2xl shadow-premium flex flex-col min-h-0 overflow-hidden">
+          <div className="shrink-0 bg-bg-rose-white border-b border-primary-mauve/10 px-5 py-4 flex items-center justify-between">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-full overflow-hidden bg-primary-mauve/10 text-primary-mauve flex items-center justify-center shrink-0 border border-primary-mauve/10">
                 {getContactAvatar(activeContact)}
@@ -462,7 +481,11 @@ const ClinicianChat = () => {
             </span>
           </div>
 
-          <div className="flex-1 overflow-y-auto p-4 md:p-6 space-y-4">
+          <div
+            ref={scrollRef}
+            onScroll={handleScroll}
+            className="flex-1 min-h-0 overflow-y-auto p-4 md:p-6 space-y-4 relative"
+          >
             {!activeContact ? (
               <div className="flex flex-col items-center justify-center text-center h-full max-w-sm mx-auto space-y-3">
                 <div className="w-14 h-14 rounded-full bg-primary-mauve/10 flex items-center justify-center text-primary-mauve">
@@ -518,25 +541,29 @@ const ClinicianChat = () => {
                 );
               })
             )}
-            <div ref={threadEndRef} />
+            <div ref={bottomRef} />
+            <NewMessagesIndicator
+              count={showNewMessages ? newMessageCount : 0}
+              onClick={() => scrollToBottom('smooth')}
+            />
           </div>
 
           {!navigator.onLine && (
-            <p className="mx-4 my-2 text-[10px] font-bold text-[#d93d59] text-center bg-danger/10 py-1.5 rounded-lg animate-pulse">
+            <p className="shrink-0 mx-4 my-2 text-[10px] font-bold text-[#d93d59] text-center bg-danger/10 py-1.5 rounded-lg animate-pulse">
               ⚠️ You are offline. Click "SMS" to send via carrier.
             </p>
           )}
           <form
             onSubmit={handleSend}
-            className="p-4 border-t border-primary-mauve/10 bg-bg-rose-white/30 flex items-center gap-2.5"
+            className="shrink-0 p-4 border-t border-primary-mauve/10 bg-bg-rose-white/30 flex items-end gap-2.5"
           >
-            <input
-              type="text"
+            <AutoResizeTextarea
+              ref={messageInputRef}
               value={message}
               onChange={(event) => setMessage(event.target.value)}
+              onKeyDown={handleInputKeyDown}
               placeholder="Write a secure message..."
-              disabled={!activeContact || isSubmitting}
-              className="flex-1 px-4 py-3 bg-white border border-primary-mauve/15 focus:border-primary-mauve outline-hidden text-xs font-semibold text-text-dark rounded-xl"
+              disabled={!activeContact}
             />
             {!navigator.onLine && (
               <button
@@ -556,7 +583,7 @@ const ClinicianChat = () => {
             )}
             <button
               type="submit"
-              disabled={!message.trim() || !activeContact || isSubmitting}
+              disabled={!canSend}
               className="p-3 bg-primary-mauve text-white rounded-xl hover:bg-bg-dark-mauve transition-all shadow-glow cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <MessageSquare className="w-4.5 h-4.5" />
