@@ -11,6 +11,8 @@ def _require_clinician():
     role = g.user.get("role", "patient")
     if role not in ("clinician", "admin"):
         return jsonify({"error": "Clinician access required"}), 403
+    if role == "clinician" and g.user.get("status") != "approved":
+        return jsonify({"error": "Clinician account is not approved"}), 403
     return None
 
 from services.firebase_service import sync_notification_to_firestore
@@ -36,6 +38,8 @@ def get_alerts():
     """Get all undismissed alerts (any authenticated user can see their own; clinicians see all)."""
     role = g.user.get("role", "patient")
     if role in ("clinician", "admin"):
+        if role == "clinician" and g.user.get("status") != "approved":
+            return jsonify({"error": "Clinician account is not approved"}), 403
         clinician_district = (g.user.get("district") or "").strip()
         alerts = query(
             """
@@ -85,6 +89,8 @@ def dismiss_alert(alert_id):
         return jsonify({"error": "Alert not found"}), 404
 
     if role in ("clinician", "admin"):
+        if role == "clinician" and g.user.get("status") != "approved":
+            return jsonify({"error": "Clinician account is not approved"}), 403
         query(
             "UPDATE clinician_alerts SET is_dismissed=TRUE, status='resolved' WHERE id=%s",
             (alert_id,),

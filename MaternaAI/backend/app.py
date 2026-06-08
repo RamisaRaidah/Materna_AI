@@ -12,8 +12,10 @@ CORS(app, resources={
 
 try:
     ensure_user_profile_image_column()
+    from db import ensure_clinician_verification_columns
+    ensure_clinician_verification_columns()
 except Exception as e:
-    print(f"[DB] Profile image migration note: {e}")
+    print(f"[DB] Migration note: {e}")
 
 # ─────────────────────────────────────────────
 # Register Blueprints
@@ -51,8 +53,14 @@ app.register_blueprint(sos_bp, url_prefix="/api/sos")
 from routes.notifications import notifications_bp
 app.register_blueprint(notifications_bp, url_prefix="/api/notifications")
 
+from routes.admin import admin_bp
+app.register_blueprint(admin_bp, url_prefix="/api/admin")
+
 from routes.sms_routes import sms_bp
 app.register_blueprint(sms_bp, url_prefix="/api/sms")
+
+from routes.care_plan import care_plan_bp
+app.register_blueprint(care_plan_bp, url_prefix="/api/care-plan")
 
 print("All blueprints have been registered.")
 

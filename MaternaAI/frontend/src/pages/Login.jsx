@@ -24,7 +24,7 @@ const Login = () => {
 
     try {
       const user = await login(phone, password);
-      const nextPath = user?.role === 'clinician' ? '/clinician' : '/';
+      const nextPath = user?.role === 'admin' ? '/admin' : user?.role === 'clinician' ? '/clinician' : '/';
       navigate(nextPath);
     } catch (err) {
       setError(err);
@@ -152,6 +152,36 @@ const Login = () => {
           <Link to="/register" className="text-primary-mauve font-bold hover:underline">
             Register your profile
           </Link>
+        </div>
+
+        {/* Demo Credentials Box */}
+        <div className="mt-6 p-4 rounded-xl bg-bg-rose-white border border-primary-mauve/10 text-xs text-text-dark font-sans relative">
+          <div className="flex items-center justify-between mb-2">
+            <div className="flex items-center gap-1.5 text-primary-mauve font-bold uppercase tracking-wider">
+              <span>🛡️</span>
+              <span>Admin Demo Credentials</span>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                setPhone('01900000000');
+                setPassword('adminpassword123');
+              }}
+              className="text-[9px] font-black uppercase text-primary-mauve hover:underline cursor-pointer"
+            >
+              Autofill
+            </button>
+          </div>
+          <div className="space-y-1 text-text-muted font-medium">
+            <div className="flex justify-between">
+              <span>Phone:</span>
+              <span className="font-bold text-text-dark">01900000000</span>
+            </div>
+            <div className="flex justify-between">
+              <span>Password:</span>
+              <span className="font-bold text-text-dark">adminpassword123</span>
+            </div>
+          </div>
         </div>
       </div>
     </div>

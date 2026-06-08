@@ -85,8 +85,21 @@ const Sidebar = ({
       ]
     }
   ];
+  
+  const adminSections = [
+    {
+      title: 'Admin Console',
+      items: [
+        { name: 'Review Doctors', path: '/admin', icon: LayoutDashboard },
+      ]
+    }
+  ];
 
-  const navSections = user?.role === 'clinician' ? clinicianSections : patientSections;
+  const navSections = user?.role === 'admin' 
+    ? adminSections 
+    : user?.role === 'clinician' 
+      ? clinicianSections 
+      : patientSections;
 
   const handleLogout = () => {
     logout();
@@ -237,11 +250,13 @@ const Sidebar = ({
               ) : (
                 <span>{user?.role === 'clinician' ? '🩺' : '🤰'}</span>
               )}
+            <div className="w-10 h-10 rounded-full bg-secondary-blush/20 flex items-center justify-center text-lg font-bold text-primary-mauve">
+              {user?.role === 'admin' ? '🛡️' : user?.role === 'clinician' ? '🩺' : '🤰'}
             </div>
             <div className="overflow-hidden">
               <h4 className="font-bold text-sm text-text-dark truncate">{user?.name || 'Guest User'}</h4>
               <span className="inline-block mt-0.5 px-2 py-0.5 rounded-full text-[10px] font-extrabold tracking-wider bg-primary-mauve text-white uppercase">
-                {user?.role === 'clinician' ? 'Clinician Portal' : 'Pregnancy Mode'}
+                {user?.role === 'admin' ? 'Admin Portal' : user?.role === 'clinician' ? 'Clinician Portal' : 'Pregnancy Mode'}
               </span>
             </div>
           </div>

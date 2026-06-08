@@ -83,16 +83,20 @@ def register():
 
  
     pw_hash = hash_password(password)
+    status = "pending" if role == "clinician" else "approved"
+    verification_docs = data.get("verification_documents", "")
+
     user = query(
         """INSERT INTO users (name, phone, password_hash, role, age, weeks_pregnant,
-           is_postpartum, persona, division, district, area, emergency_contact)
-           VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+           is_postpartum, persona, division, district, area, emergency_contact, status, verification_documents)
+           VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
            RETURNING *""",
         (name, phone, pw_hash, role,
          data.get("age"), data.get("weeks_pregnant"),
          data.get("is_postpartum", False),
          data.get("persona", "pregnant"),
-         division, district, area, data.get("emergency_contact", "")),
+         division, district, area, data.get("emergency_contact", ""),
+         status, verification_docs),
         fetch="one"
     )
     token = create_token(user["id"], user["role"])
@@ -111,6 +115,9 @@ def login():
     user = query("SELECT * FROM users WHERE phone = %s", (phone,), fetch="one")
     if not user or not check_password(password, user["password_hash"]):
         return jsonify({"error": "Invalid credentials"}), 401
+
+    if user.get("status") == "rejected":
+        return jsonify({"error": "Your account has been rejected and you are banned from the system."}), 403
  
     token = create_token(user["id"], user["role"])
     safe = {k: v for k, v in user.items() if k != "password_hash"}

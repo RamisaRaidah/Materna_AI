@@ -238,6 +238,17 @@ export const clinicianAPI = {
   }
 };
 
+export const adminAPI = {
+  getPendingDoctors: async () => {
+    const response = await api.get('/api/admin/pending-doctors');
+    return response.data;
+  },
+  verifyDoctor: async (doctorId, action) => {
+    const response = await api.post(`/api/admin/doctors/${doctorId}/verify`, { action });
+    return response.data;
+  }
+};
+
 export const notificationsAPI = {
   getNotifications: async (limit = 10) => {
     const response = await api.get('/api/notifications', { params: { limit } });
@@ -271,6 +282,29 @@ export const riskAPI = {
   },
   recomputeRisk: async (lang = 'bn') => {
     const response = await api.post('/api/risk/recompute', { lang });
+    return response.data;
+  },
+};
+
+export const carePlanAPI = {
+  getItems: async (source = null) => {
+    const response = await api.get('/api/care-plan/items', { params: source ? { source } : {} });
+    return response.data;
+  },
+  saveAIItems: async (items, context) => {
+    const response = await api.post('/api/care-plan/items', { source: 'ai', items, context });
+    return response.data;
+  },
+  saveImportedItems: async (items) => {
+    const response = await api.post('/api/care-plan/items', { source: 'imported', items });
+    return response.data;
+  },
+  dismissItem: async (itemKey) => {
+    const response = await api.delete(`/api/care-plan/items/${encodeURIComponent(itemKey)}`);
+    return response.data;
+  },
+  dismissAllBySource: async (source) => {
+    const response = await api.delete('/api/care-plan/items', { data: { source } });
     return response.data;
   },
 };

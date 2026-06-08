@@ -32,6 +32,8 @@ import LearnMore from './pages/LearnMore';
 import DiscoverMore from './pages/DiscoverMore';
 import BengaliSupport from './pages/BengaliSupport';
 import SmsService from './pages/SmsService';
+import AdminDashboard from './pages/AdminDashboard';
+import ClinicianVerificationPending from './pages/ClinicianVerificationPending';
 
 const PrivateRoute = ({ children }) => {
   const constAuth = useAuth();
@@ -49,6 +51,60 @@ const PrivateRoute = ({ children }) => {
   }
 
   return isAuthenticated ? children : <Navigate to="/landing" replace />;
+};
+
+const ClinicianRoute = ({ children }) => {
+  const { user, isAuthenticated, loading } = useAuth();
+
+  if (loading) {
+    return (
+      <div className="flex h-screen items-center justify-center bg-bg-rose-white">
+        <div className="flex flex-col items-center gap-3">
+          <img  className="block -mr-2" src={Logo}  style={{width:"50px", height:"40px",paddingRight:"0px",margin:"-12px"}}/>
+          <span className="font-sans font-bold text-sm text-text-muted animate-pulse">Verifying Clinician Status...</span>
+        </div>
+      </div>
+    );
+  }
+
+  if (!isAuthenticated) {
+    return <Navigate to="/landing" replace />;
+  }
+
+  if (user?.role !== 'clinician' && user?.role !== 'admin') {
+    return <Navigate to="/" replace />;
+  }
+
+  if (user?.role === 'clinician' && user?.status !== 'approved') {
+    return <Navigate to="/clinician/verification-pending" replace />;
+  }
+
+  return children;
+};
+
+const AdminRoute = ({ children }) => {
+  const { user, isAuthenticated, loading } = useAuth();
+
+  if (loading) {
+    return (
+      <div className="flex h-screen items-center justify-center bg-bg-rose-white">
+        <div className="flex flex-col items-center gap-3">
+          <img  className="block -mr-2" src={Logo}  style={{width:"50px", height:"40px",paddingRight:"0px",margin:"-12px"}}/>
+          <span className="font-sans font-bold text-sm text-text-muted animate-pulse">Verifying Admin Access...</span>
+        </div>
+      </div>
+    );
+  }
+
+  if (!isAuthenticated) {
+    return <Navigate to="/landing" replace />;
+  }
+
+  if (user?.role !== 'admin') {
+    return <Navigate to="/" replace />;
+  }
+
+  return children;
 };
 
 function App() {
@@ -83,14 +139,52 @@ function App() {
         <Route path="birth-plan" element={<BirthPlan />} />
         <Route path="saved-birthplan" element={<SavedBirthPlans />} />
         <Route path="profile" element={<Profile />} />
-        <Route path="clinician" element={<ClinicianDashboard />} />
-        <Route path="clinician/assistant" element={<ClinicianAssistant />} />
-        <Route path="clinician/vitals" element={<ClinicianVitals />} />
-        <Route path="clinician/ppd" element={<ClinicianPPD />} />
-        <Route path="clinician/community" element={<ClinicianCommunity />} />
-        <Route path="clinician/sos" element={<ClinicianSOS />} />
-        <Route path="clinician/follow-ups" element={<ClinicianFollowUps />} />
-        <Route path="clinician/profile" element={<ClinicianProfile />} />
+        <Route path="clinician/verification-pending" element={<ClinicianVerificationPending />} />
+        <Route path="clinician" element={
+          <ClinicianRoute>
+            <ClinicianDashboard />
+          </ClinicianRoute>
+        } />
+        <Route path="clinician/assistant" element={
+          <ClinicianRoute>
+            <ClinicianAssistant />
+          </ClinicianRoute>
+        } />
+        <Route path="clinician/vitals" element={
+          <ClinicianRoute>
+            <ClinicianVitals />
+          </ClinicianRoute>
+        } />
+        <Route path="clinician/ppd" element={
+          <ClinicianRoute>
+            <ClinicianPPD />
+          </ClinicianRoute>
+        } />
+        <Route path="clinician/community" element={
+          <ClinicianRoute>
+            <ClinicianCommunity />
+          </ClinicianRoute>
+        } />
+        <Route path="clinician/sos" element={
+          <ClinicianRoute>
+            <ClinicianSOS />
+          </ClinicianRoute>
+        } />
+        <Route path="clinician/follow-ups" element={
+          <ClinicianRoute>
+            <ClinicianFollowUps />
+          </ClinicianRoute>
+        } />
+        <Route path="clinician/profile" element={
+          <ClinicianRoute>
+            <ClinicianProfile />
+          </ClinicianRoute>
+        } />
+        <Route path="admin" element={
+          <AdminRoute>
+            <AdminDashboard />
+          </AdminRoute>
+        } />
       </Route>
 
       {/* Catch-all Redirect */}

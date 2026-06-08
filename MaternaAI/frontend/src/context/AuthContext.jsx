@@ -129,6 +129,12 @@ export const AuthProvider = ({ children }) => {
       throw error.response?.data?.error || "Failed to update profile details.";
     }
   };
+  const refreshUser = async () => {
+    const freshUser = await authAPI.getMe();
+    localStorage.setItem('user', JSON.stringify(freshUser));
+    setUser(freshUser);
+    return freshUser;
+  };
 
   const updateUserLocalContext = (userData) => {
     if (typeof userData === 'function') {
@@ -158,8 +164,12 @@ export const AuthProvider = ({ children }) => {
     register,
     logout,
     updateProfile,
+<<<<<<< HEAD
     updateUserLocalContext,
     refreshUser: syncUserState
+=======
+    refreshUser
+>>>>>>> 5b981d48335e11029bedb446050e6e84da8cc010
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
