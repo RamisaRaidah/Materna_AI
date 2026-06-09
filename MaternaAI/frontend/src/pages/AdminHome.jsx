@@ -46,6 +46,7 @@ const EMPTY_DASHBOARD = {
     doctors: { total: 0, pending: 0, approved: 0, rejected: 0 },
     ai_chat_sessions_today: 0,
     high_critical_risk_patients: 0,
+    pending_community_posts: 0,
   },
   platform_health: {
     risk_assessments_today: 0,
@@ -177,12 +178,23 @@ const AdminHome = () => {
             Logged in as <span className="text-primary-mauve font-black">{user?.name}</span> · Live overview of MaternaAI activity.
           </p>
         </div>
-        <div className="flex items-center gap-3 shrink-0">
+        <div className="flex items-center flex-wrap gap-3 shrink-0">
           <Link
             to="/admin/review-doctors"
             className="px-4 py-2.5 rounded-xl border border-primary-mauve/10 text-xs font-black text-primary-mauve hover:bg-primary-mauve/5 transition-all"
           >
             REVIEW DOCTORS
+          </Link>
+          <Link
+            to="/admin/community-moderation"
+            className="px-4 py-2.5 rounded-xl border border-primary-mauve/10 text-xs font-black text-primary-mauve hover:bg-primary-mauve/5 transition-all flex items-center gap-2"
+          >
+            MODERATE POSTS
+            {stats.pending_community_posts > 0 && (
+              <span className="bg-danger text-white text-[10px] font-black px-2 py-0.5 rounded-full">
+                {stats.pending_community_posts}
+              </span>
+            )}
           </Link>
           <button
             onClick={() => loadDashboard()}

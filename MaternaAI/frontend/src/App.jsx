@@ -35,6 +35,7 @@ import SmsService from './pages/SmsService';
 import ReviewClinicians from './pages/ReviewClinicians';
 import AdminHome from './pages/AdminHome';
 import ClinicianVerificationPending from './pages/ClinicianVerificationPending';
+import AdminCommunityModeration from './pages/AdminCommunityModeration';
 
 const PrivateRoute = ({ children }) => {
   const constAuth = useAuth();
@@ -189,6 +190,11 @@ function App() {
         <Route path="admin/review-doctors" element={
           <AdminRoute>
             <ReviewClinicians/>
+          </AdminRoute>
+        } />
+        <Route path="admin/community-moderation" element={
+          <AdminRoute>
+            <AdminCommunityModeration />
           </AdminRoute>
         } />
       </Route>

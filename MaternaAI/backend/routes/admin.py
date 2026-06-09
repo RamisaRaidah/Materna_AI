@@ -289,6 +289,11 @@ def admin_dashboard():
         """
     )
 
+    pending_posts_count = query(
+        "SELECT COUNT(*) AS n FROM posts WHERE COALESCE(moderation_status, 'approved') = 'pending'",
+        fetch="one"
+    )
+
     def _serialize_chart_rows(rows):
         result = []
         for row in rows or []:
@@ -303,12 +308,12 @@ def admin_dashboard():
             "total_patients": (total_patients or {}).get("n", 0),
             "doctors": {
                 "total": (doctor_counts or {}).get("total", 0),
-                "pending": (doctor_counts or {}).get("pending", 0),
-                "approved": (doctor_counts or {}).get("approved", 0),
+                "pending": (doctor_counts or {}).get("pending", 0),                "approved": (doctor_counts or {}).get("approved", 0),
                 "rejected": (doctor_counts or {}).get("rejected", 0),
             },
             "ai_chat_sessions_today": (ai_sessions_today or {}).get("n", 0),
             "high_critical_risk_patients": (high_critical_risk or {}).get("n", 0),
+            "pending_community_posts": (pending_posts_count or {}).get("n", 0),
         },
         "platform_health": {
             "risk_assessments_today": (risk_assessments_today or {}).get("n", 0),
@@ -336,3 +341,90 @@ def admin_dashboard():
             "sos_daily_week": _serialize_chart_rows(sos_daily_week),
         },
     })
+
+
+
+# ─────────────────────────────────────────────
+# COMMUNITY MODERATION
+# ─────────────────────────────────────────────
+
+@admin_bp.route("/community/pending-posts", methods=["GET"])
+@require_auth
+def get_pending_community_posts():
+    """List all community posts with moderation_status = 'pending', newest first."""
+    auth_error = _require_admin()
+    if auth_error:
+        return auth_error
+
+    posts = query(
+        """
+        SELECT p.id, p.group_id, p.user_id, p.content,
+               p.is_anonymous, p.moderation_status, p.moderation_reason,
+               p.created_at,
+               CASE WHEN p.is_anonymous THEN 'Anonymous' ELSE u.name END AS author_name,
+               g.name AS group_name
+        FROM posts p
+        LEFT JOIN users u ON u.id = p.user_id
+        LEFT JOIN groups g ON g.id = p.group_id
+        WHERE COALESCE(p.moderation_status, 'approved') = 'pending'
+        ORDER BY p.created_at DESC
+        """
+    )
+
+    result = []
+    for row in (posts or []):
+        result.append({
+            "id":                row["id"],
+            "group_id":          row["group_id"],
+            "group_name":        row["group_name"],
+            "user_id":           row["user_id"],
+            "author_name":       row["author_name"],
+            "content":           row["content"],
+            "is_anonymous":      row["is_anonymous"],
+            "moderation_status": row["moderation_status"],
+            "moderation_reason": row["moderation_reason"],
+            "created_at":        row["created_at"].isoformat() if row.get("created_at") else None,
+        })
+
+    return jsonify(result)
+
+
+@admin_bp.route("/community/posts/<int:post_id>/moderate", methods=["POST"])
+@require_auth
+def moderate_community_post(post_id):
+    """
+    Approve or decline a pending community post.
+    Body: { "action": "approve" | "decline" }
+    """
+    auth_error = _require_admin()
+    if auth_error:
+        return auth_error
+
+    data = request.get_json() or {}
+    action = data.get("action")
+    if action not in ("approve", "decline"):
+        return jsonify({"error": "action must be 'approve' or 'decline'"}), 400
+
+    new_status = "approved" if action == "approve" else "rejected"
+
+    updated = query(
+        """
+        UPDATE posts
+        SET moderation_status = %s
+        WHERE id = %s AND COALESCE(moderation_status, 'approved') = 'pending'
+        RETURNING id, moderation_status
+        """,
+        (new_status, post_id),
+        fetch="one"
+    )
+
+    if not updated:
+        return jsonify({"error": "Post not found or is not pending review"}), 404
+
+    return jsonify({
+        "success": True,
+        "post_id": post_id,
+        "moderation_status": new_status,
+        "message": f"Post has been {new_status}."
+    })
+

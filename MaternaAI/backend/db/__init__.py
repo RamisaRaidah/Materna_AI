@@ -108,4 +108,16 @@ def ensure_clinician_verification_columns():
 
 def ensure_user_presence_column():
     """Add last_seen_at for online presence tracking."""
-    query("ALTER TABLE users ADD COLUMN IF NOT EXISTS last_seen_at TIMESTAMPTZ", fetch="none")
+    query("ALTER TABLE users ADD COLUMN IF NOT EXISTS last_seen_at TIMESTAMPTZ", fetch="none")
+
+
+def ensure_post_moderation_columns():
+    """Add moderation_status and moderation_reason columns for LLM misinfo checking."""
+    query(
+        "ALTER TABLE posts ADD COLUMN IF NOT EXISTS moderation_status VARCHAR(20) DEFAULT 'approved'",
+        fetch="none"
+    )
+    query(
+        "ALTER TABLE posts ADD COLUMN IF NOT EXISTS moderation_reason TEXT",
+        fetch="none"
+    )
