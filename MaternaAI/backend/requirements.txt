@@ -9,7 +9,6 @@ gunicorn
 cohere
 bcrypt
 edge-tts
-openai==1.56.0
-httpx==0.28.1
+openai
 PyJWT
 firebase-admin
