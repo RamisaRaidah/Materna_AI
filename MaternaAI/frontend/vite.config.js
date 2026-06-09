@@ -10,11 +10,11 @@ export default defineConfig({
   server: {
     proxy: {
       '/api': {
-        target: 'http://localhost:5000',
+        target: 'https://materna-ai-backend-final.onrender.com',
         changeOrigin: true,
       },
       '/auth': {
-        target: 'http://localhost:5000',
+        target: 'https://materna-ai-backend-final.onrender.com',
         changeOrigin: true,
       }
     }
