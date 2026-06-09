@@ -2,6 +2,7 @@ from flask import Blueprint, request, jsonify, g
 from db import query
 from services.auth import require_auth
 from services.rag import get_db
+from services.misinfo_checker import check_for_misinfo
 
 community_bp = Blueprint("community", __name__)
 
@@ -25,15 +26,17 @@ def _row_to_group(row):
 
 def _row_to_post(row):
     return {
-        "id":           row[0],
-        "group_id":     row[1],
-        "user_id":      row[2],
-        "content":      row[3],
-        "is_anonymous": row[4],
-        "is_flagged":   row[5],
-        "likes":        row[6],
-        "created_at":   row[7].isoformat() if row[7] else None,
-        "author_name":  row[8] if len(row) > 8 else None,
+        "id":                 row[0],
+        "group_id":           row[1],
+        "user_id":            row[2],
+        "content":            row[3],
+        "is_anonymous":       row[4],
+        "is_flagged":         row[5],
+        "likes":              row[6],
+        "created_at":         row[7].isoformat() if row[7] else None,
+        "author_name":        row[8] if len(row) > 8 else None,
+        "moderation_status":  row[9] if len(row) > 9 else "approved",
+        "moderation_reason":  row[10] if len(row) > 10 else None,
     }
 
 def _row_to_comment(row):
@@ -295,7 +298,14 @@ def group_members(group_id):
 
 @community_bp.route("/groups/<int:group_id>/posts", methods=["GET"])
 def list_posts(group_id):
-    """Get all posts in a group, newest first."""
+    """Get all posts in a group, newest first.
+    
+    Visibility rules:
+    - 'approved' posts are visible to everyone.
+    - 'pending' and 'rejected' posts are only visible to their author.
+      The viewer's user_id is passed as an optional query param (?viewer_id=...).
+    """
+    viewer_id = request.args.get("viewer_id", type=int)
     conn = None
     try:
         conn = get_db()
@@ -303,12 +313,18 @@ def list_posts(group_id):
         cur.execute("""
             SELECT p.id, p.group_id, p.user_id, p.content,
                    p.is_anonymous, p.is_flagged, p.likes, p.created_at,
-                   CASE WHEN p.is_anonymous THEN 'Anonymous' ELSE u.name END as author_name
+                   CASE WHEN p.is_anonymous THEN 'Anonymous' ELSE u.name END as author_name,
+                   COALESCE(p.moderation_status, 'approved') as moderation_status,
+                   p.moderation_reason
             FROM posts p
             LEFT JOIN users u ON u.id = p.user_id
             WHERE p.group_id = %s
+              AND (
+                COALESCE(p.moderation_status, 'approved') = 'approved'
+                OR p.user_id = %s
+              )
             ORDER BY p.created_at DESC
-        """, (group_id,))
+        """, (group_id, viewer_id))
         rows = cur.fetchall()
         cur.close()
         return jsonify([_row_to_post(r) for r in rows])
@@ -324,6 +340,10 @@ def create_post(group_id):
     """
     Create a post in a group.
     Body: { user_id, content, is_anonymous }
+    
+    The post content is checked by an LLM for misinformation before being saved.
+    - Clean content  → moderation_status = 'approved'  (published immediately)
+    - Suspicious     → moderation_status = 'pending'   (held for admin review)
     """
     data = request.json or {}
     user_id = data.get("user_id")
@@ -332,16 +352,31 @@ def create_post(group_id):
     if not user_id or not content:
         return jsonify({"error": "user_id and content are required"}), 400
 
+    # ── LLM Misinformation Check ──────────────────────────────
+    misinfo_result = check_for_misinfo(content)
+    if misinfo_result["is_misinfo"]:
+        moderation_status = "pending"
+        moderation_reason = misinfo_result.get("reason", "")
+    else:
+        moderation_status = "approved"
+        moderation_reason = None
+    # ─────────────────────────────────────────────────────────
+
     conn = None
     try:
         conn = get_db()
         cur = conn.cursor()
         cur.execute("""
-            INSERT INTO posts (group_id, user_id, content, is_anonymous)
-            VALUES (%s, %s, %s, %s)
+            INSERT INTO posts (group_id, user_id, content, is_anonymous,
+                               moderation_status, moderation_reason)
+            VALUES (%s, %s, %s, %s, %s, %s)
             RETURNING id, group_id, user_id, content,
-                      is_anonymous, is_flagged, likes, created_at
-        """, (group_id, user_id, content, data.get("is_anonymous", False)))
+                      is_anonymous, is_flagged, likes, created_at,
+                      NULL as author_name,
+                      COALESCE(moderation_status, 'approved'),
+                      moderation_reason
+        """, (group_id, user_id, content, data.get("is_anonymous", False),
+               moderation_status, moderation_reason))
         row = cur.fetchone()
         conn.commit()
         cur.close()

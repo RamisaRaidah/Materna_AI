@@ -22,21 +22,53 @@ import {
 
 // Sync Daily Plan with localStorage on mount
 const DEFAULT_PLAN = {
-  en: [
+  pregnant: {
+    en: [
     { id: 'default-1', title: 'Iron & Folate Supplementation', desc: 'Ensure you ingest your WHO recommended daily iron + folic acid pill with fresh lemon juice for maximum iron absorption.' },
     { id: 'default-2', title: 'Local Nutrient Targets', desc: 'Include calcium-rich small mola fish, eggs, and leafy green spinach in your lunch box today to combat pregnancy-induced anemia.' },
-    { id: 'default-3', title: 'Pelvic Muscle Pre-stretches', desc: 'Engage in 10-15 minutes of gentle breathing and pelvic tilts. Avoid lifting heavy water pots or packages.' }
-  ],
-  bn: [
-    { id: 'default-1', title: 'আয়রন ও ফোলেট সাপ্লিমেন্ট', desc: 'WHO-এর সুপারিশ অনুযায়ী প্রতিদিন একটি আয়রন ও ফলিক অ্যাসিড ট্যাবলেট তাজা লেবুর রসের সাথে খান — এতে আয়রন শোষণ সর্বোচ্চ হয়।' },
-    { id: 'default-2', title: 'স্থানীয় পুষ্টি লক্ষ্যমাত্রা', desc: 'আজকের টিফিনে ক্যালসিয়ামসমৃদ্ধ ছোট মলা মাছ, ডিম এবং পালং শাক যোগ করুন — গর্ভকালীন রক্তশূন্যতা দূর করতে সাহায্য করবে।' },
-    { id: 'default-3', title: 'পেলভিক মাসল স্ট্রেচিং', desc: '১০-১৫ মিনিট হালকা শ্বাস-প্রশ্বাস ও পেলভিক টিল্ট ব্যায়াম করুন। ভারী পানির পাত্র বা প্যাকেজ তোলা থেকে বিরত থাকুন।' }
-  ]
+      { id: 'default-3', title: 'Pelvic Muscle Pre-stretches', desc: 'Engage in 10-15 minutes of gentle breathing and pelvic tilts. Avoid lifting heavy water pots or packages.' }
+    ],
+    bn: [
+      { id: 'default-1', title: 'আয়রন ও ফোলেট সাপ্লিমেন্ট', desc: 'WHO-এর সুপারিশ অনুযায়ী প্রতিদিন একটি আয়রন ও ফলিক অ্যাসিড ট্যাবলেট তাজা লেবুর রসের সাথে খান — এতে আয়রন শোষণ সর্বোচ্চ হয়।' },
+      { id: 'default-2', title: 'স্থানীয় পুষ্টি লক্ষ্যমাত্রা', desc: 'আজকের টিফিনে ক্যালসিয়ামসমৃদ্ধ ছোট মলা মাছ, ডিম এবং পালং শাক যোগ করুন — গর্ভকালীন রক্তশূন্যতা দূর করতে সাহায্য করবে।' },
+      { id: 'default-3', title: 'পেলভিক মাসল স্ট্রেচিং', desc: '১০-১৫ মিনিট হালকা শ্বাস-প্রশ্বাস ও পেলভিক টিল্ট ব্যায়াম করুন। ভারী পানির পাত্র বা প্যাকেজ তোলা থেকে বিরত থাকুন।' }
+    ]
+  },
+  postpartum: {
+    en: [
+      { id: 'pp-1', title: 'Lochia & Wound Check', desc: 'Monitor postpartum bleeding — lochia should lighten from red to pink to yellow within 2–6 weeks. Report any foul smell or sudden heavy flow to your midwife.' },
+      { id: 'pp-2', title: 'Postnatal Nutrition', desc: 'Include iron-rich lentils, hilsa fish, and calcium from small mola fish in today\'s meals to support postnatal recovery and breastfeeding.' },
+      { id: 'pp-3', title: 'Pelvic Floor Recovery', desc: 'Start gentle Kegel exercises today — 10 repetitions, 3 times. Avoid lifting anything heavier than your baby for the first 6 weeks.' }
+    ],
+    bn: [
+      {
+        id: 'pp-1',
+        title: 'লোশিয়া ও ক্ষত পর্যবেক্ষণ',
+        desc: 'প্রসব-পরবর্তী রক্তস্রাব (লোশিয়া) পর্যবেক্ষণ করুন — এটি সাধারণত ২–৬ সপ্তাহের মধ্যে লাল থেকে গোলাপি এবং পরে হলুদাভ রঙে পরিবর্তিত হয়। দুর্গন্ধযুক্ত স্রাব বা হঠাৎ অতিরিক্ত রক্তপাত হলে দ্রুত আপনার ধাত্রী বা চিকিৎসকের সঙ্গে যোগাযোগ করুন।'
+      },
+      {
+        id: 'pp-2',
+        title: 'প্রসব-পরবর্তী পুষ্টি',
+        desc: 'আজকের খাবারে আয়রনসমৃদ্ধ ডাল, ইলিশ মাছ এবং ক্যালসিয়ামের জন্য ছোট মলা মাছ অন্তর্ভুক্ত করুন। এগুলো প্রসব-পরবর্তী সুস্থতা ও স্তন্যদানকে সহায়তা করে।'
+      },
+      {
+        id: 'pp-3',
+        title: 'পেলভিক ফ্লোর পুনরুদ্ধার',
+        desc: 'আজ থেকেই হালকা কেগেল ব্যায়াম শুরু করুন — ১০ বার করে দিনে ৩ বার। প্রথম ৬ সপ্তাহ আপনার শিশুর চেয়ে ভারী কোনো জিনিস তোলা এড়িয়ে চলুন।'
+      } 
+    ]
+  }
 };
 
 const Home = () => {
   const { user, updateProfile } = useAuth();
   const avatarInputRef = useRef(null);
+
+  console.log("user: ",user)
+
+  const daysTillToday=Math.round((new Date()-new Date(user.weeks_updated_at))/(1000*60*60*24))
+  console.log("Days left:",daysTillToday)
+  const daysRemaining=user.weeks_pregnant*7+daysTillToday
 
   // Dashboard Interactive States
   const [symptoms, setSymptoms] = useState({
@@ -251,7 +283,7 @@ useEffect(() => {
   };
 
   const weeks = getCalculatedWeeks() ?? user?.weeks_pregnant ?? 24;
-  const daysToBirth = Math.max(0, (40 - weeks) * 7);
+  const daysToBirth = (40*7)-(daysRemaining); //gotta change this
   const progressPercent = Math.min(100, Math.round((weeks / 40) * 100));
 
   // Determine baby size information dynamically
@@ -416,6 +448,51 @@ useEffect(() => {
       setMoodAnalysis(cta);
     }, 450);
   };
+  //postpartum helper functions
+    const getPostpartumInfo = (days) => {
+    if (days <= 7)
+      return {
+        emoji: '👶',
+        title: 'First Week Recovery',
+        desc: 'Focus on rest, hydration, breastfeeding support, and monitoring postpartum bleeding.'
+      };
+
+    if (days <= 14)
+      return {
+        emoji: '🌷',
+        title: 'Early Healing',
+        desc: 'Your body continues recovering and lochia should gradually become lighter.'
+      };
+
+    if (days <= 28)
+      return {
+        emoji: '💖',
+        title: 'Recovery & Bonding',
+        desc: 'Continue nutritious meals, pelvic floor exercises, and bonding with your baby.'
+      };
+
+    return {
+      emoji: '✨',
+      title: '6-Week Recovery Milestone',
+      desc: 'You are approaching completion of the WHO recommended 42-day postnatal recovery period.'
+    };
+  };
+  const daysSinceBirth = user?.is_postpartum
+  ? Math.max(
+      0,
+      Math.round(
+        (new Date() - new Date(user.due_date)) /
+        (1000 * 60 * 60 * 24)
+      )
+    )
+  : 0;
+
+const postpartumProgress = Math.min(
+  100,
+  Math.round((daysSinceBirth / 42) * 100)
+);
+
+const postpartumInfo = getPostpartumInfo(daysSinceBirth);
 
   // Helper formatting for dynamic vitals badges
   const getBPCategory = () => {
@@ -438,13 +515,15 @@ useEffect(() => {
     try {
       const [parsedBn, parsedEn] = await Promise.all([
         healthAPI.generateCarePlan({
-          weeks_pregnant: weeks, bp: bpInput,
+          weeks_pregnant: weeks,
+          is_postpartum: user?.is_postpartum, bp: bpInput,
           glucose: parseFloat(glucoseInput),
           weight: parseFloat(weightInput),
           water: waterLogged, lang: 'bn'
         }),
         healthAPI.generateCarePlan({
-          weeks_pregnant: weeks, bp: bpInput,
+          weeks_pregnant: weeks, 
+          is_postpartum: user?.is_postpartum,bp: bpInput,
           glucose: parseFloat(glucoseInput),
           weight: parseFloat(weightInput),
           water: waterLogged, lang: 'en'
@@ -516,7 +595,7 @@ useEffect(() => {
                   {user?.profile_image ? (
                     <img src={user.profile_image} alt="Profile" className="w-full h-full object-cover" />
                   ) : (
-                    <span className="text-2xl">{user?.role === 'clinician' ? '🩺' : '🤰'}</span>
+                    <span className="text-2xl">{user?.role === 'clinician' ? '🩺' : user?.is_postpartum ? '🤱' : '🤰'}</span>
                   )}
                   <span className="absolute inset-0 bg-black/0 hover:bg-black/15 transition-colors flex items-center justify-center text-white">
                     <Camera className="w-4 h-4 opacity-0 hover:opacity-100 transition-opacity" />
@@ -531,7 +610,7 @@ useEffect(() => {
                 />
                 <div>
                   <h1 className="text-xl font-black text-text-dark font-sans">Hello, {user?.name}!</h1>
-                  <p className="text-xs font-semibold text-text-muted mt-1">Pregnancy Mode</p>
+                  <p className="text-xs font-semibold text-text-muted mt-1">{user?.is_postpartum ? 'Postpartum Recovery Mode' : 'Pregnancy Mode'}</p>
                 </div>
               </div>
               <div className="text-2xl animate-float">🌸</div>
@@ -554,28 +633,68 @@ useEffect(() => {
             )}
 
             {/* Gestation Milestone */}
-            <div className="bg-gradient-to-br from-bg-dark-mauve to-primary-mauve text-white rounded-2xl p-6 shadow-premium relative overflow-hidden">
-              <div className="absolute top-0 right-0 w-32 h-32 bg-white/5 rounded-full filter blur-xl transform translate-x-10 -translate-y-10" />
-              <div className="flex justify-between items-center mb-4">
-                <span className="text-[10px] font-black tracking-widest uppercase bg-white/15 px-3 py-1 rounded-full">Pregnancy Milestone</span>
-                <span className="text-[10px] font-bold bg-secondary-blush text-text-dark px-3 py-1 rounded-full">{daysToBirth} Days to Birth</span>
-              </div>
-              <div className="flex items-center gap-5 mt-2">
-                <div className="w-14 h-14 rounded-full bg-white/10 flex items-center justify-center text-2xl shadow-inner animate-float select-none">{babySize.emoji}</div>
-                <div>
-                  <h3 className="text-base font-black tracking-wide">Baby is the size of a <span className="text-secondary-blush">{babySize.name}</span></h3>
-                  <p className="text-[11px] font-semibold text-white/80 mt-1 max-w-md">{weeks} Weeks Gestation (Trimester {weeks < 13 ? '1' : weeks < 28 ? '2' : '3'}). {babySize.desc}</p>
+              { user?.is_postpartum ? (
+                  <div className="bg-gradient-to-br from-bg-dark-mauve to-primary-mauve text-white rounded-2xl p-6 shadow-premium relative overflow-hidden">
+                    <div className="absolute top-0 right-0 w-32 h-32 bg-white/5 rounded-full filter blur-xl transform translate-x-10 -translate-y-10" />
+
+                    <div className="flex justify-between items-center mb-4">
+                      <span className="text-[10px] font-black tracking-widest uppercase bg-white/15 px-3 py-1 rounded-full">
+                        Postpartum Recovery
+                      </span>
+
+                      <span className="text-[10px] font-bold bg-secondary-blush text-text-dark px-3 py-1 rounded-full">
+                        Recovery Phase
+                      </span>
+                    </div>
+
+                    <div className="flex items-center gap-5 mt-2">
+                      <div className="w-14 h-14 rounded-full bg-white/10 flex items-center justify-center text-2xl shadow-inner animate-float select-none">
+                        👶
+                      </div>
+
+                      <div>
+                        <h3 className="text-base font-black tracking-wide">
+                          Postnatal Care Journey
+                        </h3>
+
+                        <p className="text-[11px] font-semibold text-white/80 mt-1 max-w-md">
+                          Focus on rest, nutrition, breastfeeding support, pelvic floor recovery,
+                          and monitoring for postpartum warning signs.
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="mt-6 p-3 rounded-xl bg-white/10 border border-white/10">
+                      <p className="text-[11px] font-semibold text-white/90">
+                        Complete your daily recovery plan below and contact your clinician if you
+                        experience heavy bleeding, fever, severe pain, or signs of infection.
+                      </p>
+                    </div>
+                  </div>
+                ) :
+                (<div className="bg-gradient-to-br from-bg-dark-mauve to-primary-mauve text-white rounded-2xl p-6 shadow-premium relative overflow-hidden">
+                <div className="absolute top-0 right-0 w-32 h-32 bg-white/5 rounded-full filter blur-xl transform translate-x-10 -translate-y-10" />
+                <div className="flex justify-between items-center mb-4">
+                  <span className="text-[10px] font-black tracking-widest uppercase bg-white/15 px-3 py-1 rounded-full">Pregnancy Milestone</span>
+                  <span className="text-[10px] font-bold bg-secondary-blush text-text-dark px-3 py-1 rounded-full">{daysToBirth} Days to Birth</span>
+                </div>
+                <div className="flex items-center gap-5 mt-2">
+                  <div className="w-14 h-14 rounded-full bg-white/10 flex items-center justify-center text-2xl shadow-inner animate-float select-none">{babySize.emoji}</div>
+                  <div>
+                    <h3 className="text-base font-black tracking-wide">Baby is the size of a <span className="text-secondary-blush">{babySize.name}</span></h3>
+                    <p className="text-[11px] font-semibold text-white/80 mt-1 max-w-md">{weeks} Weeks Gestation (Trimester {weeks < 13 ? '1' : weeks < 28 ? '2' : '3'}). {babySize.desc}</p>
+                  </div>
+                </div>
+                <div className="mt-6 space-y-2">
+                  <div className="flex justify-between text-[10px] font-black tracking-wider uppercase text-white/70">
+                    <span>Week 0</span><span>Week {weeks} ({progressPercent}%)</span><span>Week 40</span>
+                  </div>
+                  <div className="w-full h-3 rounded-full bg-white/15 overflow-hidden p-0.5 border border-white/10">
+                    <div className="h-full rounded-full bg-gradient-to-r from-secondary-blush to-white shadow-glow transition-all duration-500" style={{ width: `${progressPercent}%` }} />
+                  </div>
                 </div>
               </div>
-              <div className="mt-6 space-y-2">
-                <div className="flex justify-between text-[10px] font-black tracking-wider uppercase text-white/70">
-                  <span>Week 0</span><span>Week {weeks} ({progressPercent}%)</span><span>Week 40</span>
-                </div>
-                <div className="w-full h-3 rounded-full bg-white/15 overflow-hidden p-0.5 border border-white/10">
-                  <div className="h-full rounded-full bg-gradient-to-r from-secondary-blush to-white shadow-glow transition-all duration-500" style={{ width: `${progressPercent}%` }} />
-                </div>
-              </div>
-            </div>
+            )}
 
             {/* Live Risk Profile Widget */}
             {user?.role === 'patient' && (
@@ -894,7 +1013,7 @@ useEffect(() => {
                 )}
 
                 {/* Static DEFAULT_PLAN — always visible, language switched client-side */}
-                {DEFAULT_PLAN[carePlanLang].map(item => (
+                {DEFAULT_PLAN[user?.is_postpartum ? 'postpartum' : 'pregnant'][carePlanLang].map(item => (
                   <div
                     key={item.id}
                     className="flex items-start gap-3 p-3 rounded-lg bg-bg-rose-white border border-primary-mauve/5 hover:bg-white transition-all"
@@ -929,19 +1048,72 @@ useEffect(() => {
             <div className="bg-white border border-primary-mauve/10 rounded-2xl p-5 shadow-premium space-y-4">
               <div className="flex items-center gap-2 text-danger">
                 <AlertTriangle className="w-5 h-5" />
-                <h3 className="font-black text-xs uppercase tracking-wider">Danger Symptoms Monitor</h3>
+                <h3 className="font-black text-xs uppercase tracking-wider">
+                  {user?.is_postpartum
+                    ? 'Postpartum Warning Signs'
+                    : 'Danger Symptoms Monitor'}
+                </h3>
               </div>
-              <p className="text-[11px] font-medium text-text-muted leading-relaxed">Check any symptoms you currently feel to trigger immediate clinical support dispatches.</p>
+
+              <p className="text-[11px] font-medium text-text-muted leading-relaxed">
+                {user?.is_postpartum
+                  ? 'Check any symptoms you currently feel to trigger urgent postpartum clinical review.'
+                  : 'Check any symptoms you currently feel to trigger immediate clinical support dispatches.'}
+              </p>
+
               <div className="space-y-2.5">
-                {[
-                  { key: 'bleeding', label: 'Severe Vaginal Bleeding' },
-                  { key: 'headache', label: 'Severe Headache / Blurred Vision' },
-                  { key: 'swelling', label: 'Extreme Swelling (Hands/Face)' },
-                  { key: 'fever', label: 'High Fever & Chills' },
-                ].map((symptom) => (
-                  <label key={symptom.key} className="flex items-center gap-3 p-2.5 rounded-lg border border-primary-mauve/5 hover:bg-bg-rose-white transition-all cursor-pointer select-none">
-                    <input type="checkbox" checked={symptoms[symptom.key]} onChange={() => handleSymptomChange(symptom.key)} className="w-4 h-4 accent-danger cursor-pointer" />
-                    <span className="text-xs font-bold text-text-dark">{symptom.label}</span>
+                {(user?.is_postpartum
+                  ? [
+                      {
+                        key: 'bleeding',
+                        label: 'Heavy Postpartum Bleeding'
+                      },
+                      {
+                        key: 'fever',
+                        label: 'Fever / Wound Infection'
+                      },
+                      {
+                        key: 'headache',
+                        label: 'Severe Headache / Vision Changes'
+                      },
+                      {
+                        key: 'swelling',
+                        label: 'Extreme Swelling After Delivery'
+                      }
+                    ]
+                  : [
+                      {
+                        key: 'bleeding',
+                        label: 'Severe Vaginal Bleeding'
+                      },
+                      {
+                        key: 'headache',
+                        label: 'Severe Headache / Blurred Vision'
+                      },
+                      {
+                        key: 'swelling',
+                        label: 'Extreme Swelling (Hands/Face)'
+                      },
+                      {
+                        key: 'fever',
+                        label: 'High Fever & Chills'
+                      }
+                    ]
+                ).map((symptom) => (
+                  <label
+                    key={symptom.key}
+                    className="flex items-center gap-3 p-2.5 rounded-lg border border-primary-mauve/5 hover:bg-bg-rose-white transition-all cursor-pointer select-none"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={symptoms[symptom.key]}
+                      onChange={() => handleSymptomChange(symptom.key)}
+                      className="w-4 h-4 accent-danger cursor-pointer"
+                    />
+
+                    <span className="text-xs font-bold text-text-dark">
+                      {symptom.label}
+                    </span>
                   </label>
                 ))}
               </div>

@@ -50,6 +50,10 @@ const HealthTracker = () => {
   const [timelineTab, setTimelineTab] = useState('chart'); // default is 'chart' to look modern
   const [selectedVital, setSelectedVital] = useState('bp'); // 'bp', 'glucose', 'weight', 'water'
 
+  // breast feeding + sleep sessions
+  const [feedsToday, setFeedsToday] = useState(0);
+  const [sleepSessions, setSleepSessions] = useState(0);
+
   // Kick Counter States
   const [kickCount, setKickCount] = useState(0);
   const [elapsedSecs, setElapsedSecs] = useState(0);
@@ -503,52 +507,113 @@ const HealthTracker = () => {
           </form>
 
           {/* Danger Symptoms Checklist Card */}
+                  
           <div className="bg-white border border-primary-mauve/10 rounded-2xl p-6 shadow-premium space-y-4">
             <div className="flex items-center gap-2 text-danger border-b border-primary-mauve/5 pb-2.5">
               <ShieldAlert className="w-5 h-5 animate-pulse" />
               <h3 className="font-sans font-black text-sm uppercase tracking-wider text-text-dark">
-                Pregnancy Danger Signs Monitor
+                {user?.is_postpartum
+                  ? 'Postpartum Warning Signs Monitor'
+                  : 'Pregnancy Danger Signs Monitor'}
               </h3>
             </div>
+
             <p className="text-[11px] font-medium text-text-muted leading-relaxed">
-              Select symptoms that you are feeling right now. Reporting these symptoms will dynamically calculate a severity profile and automatically notify the clinician network:
+              {user?.is_postpartum
+                ? 'Select any postpartum warning signs you are experiencing. Severe symptoms may indicate complications requiring urgent clinical attention.'
+                : 'Select symptoms that you are feeling right now. Reporting these symptoms will dynamically calculate a severity profile and automatically notify the clinician network:'}
             </p>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              {[
-                { id: 'bleeding', title: 'Severe Vaginal Bleeding', desc: 'Critical clinical hemorrhage risk factor.' },
-                { id: 'vision', title: 'Blurred Vision / Severe Headache', desc: 'Elevated indicator for Preeclampsia.' },
-                { id: 'swelling', title: 'Extreme Swelling (Hands/Face)', desc: 'Water retention check for hypertensive spikes.' },
-                { id: 'fever', title: 'High Fever & Chills', desc: 'Possible internal gestational infection warning.' }
-              ].map((sym) => (
+              {(user?.is_postpartum
+                ? [
+                    {
+                      id: 'bleeding',
+                      title: 'Heavy Postpartum Bleeding',
+                      desc: 'Soaking more than one pad per hour — possible postpartum haemorrhage.'
+                    },
+                    {
+                      id: 'vision',
+                      title: 'Severe Headache / Vision Changes',
+                      desc: 'Possible postpartum pre-eclampsia requiring urgent evaluation.'
+                    },
+                    {
+                      id: 'swelling',
+                      title: 'Extreme Swelling',
+                      desc: 'Sudden swelling of face, hands, or legs after delivery.'
+                    },
+                    {
+                      id: 'fever',
+                      title: 'Fever / Wound Infection',
+                      desc: 'Temperature above 38°C or redness/discharge from incision site.'
+                    }
+                  ]
+                : [
+                    {
+                      id: 'bleeding',
+                      title: 'Severe Vaginal Bleeding',
+                      desc: 'Critical clinical hemorrhage risk factor.'
+                    },
+                    {
+                      id: 'vision',
+                      title: 'Blurred Vision / Severe Headache',
+                      desc: 'Elevated indicator for Preeclampsia.'
+                    },
+                    {
+                      id: 'swelling',
+                      title: 'Extreme Swelling (Hands/Face)',
+                      desc: 'Water retention check for hypertensive spikes.'
+                    },
+                    {
+                      id: 'fever',
+                      title: 'High Fever & Chills',
+                      desc: 'Possible internal gestational infection warning.'
+                    }
+                  ]
+              ).map((sym) => (
                 <label
                   key={sym.id}
-                  className={`flex items-start gap-3 p-3.5 rounded-xl border transition-all duration-300 cursor-pointer select-none ${dangerSigns[sym.id]
-                    ? 'bg-danger/10 border-danger/25 text-danger'
-                    : 'border-primary-mauve/5 hover:bg-bg-rose-white'
-                    }`}
+                  className={`flex items-start gap-3 p-3.5 rounded-xl border transition-all duration-300 cursor-pointer select-none ${
+                    dangerSigns[sym.id]
+                      ? 'bg-danger/10 border-danger/25 text-danger'
+                      : 'border-primary-mauve/5 hover:bg-bg-rose-white'
+                  }`}
                 >
                   <input
                     type="checkbox"
                     checked={dangerSigns[sym.id]}
-                    onChange={() => setDangerSigns(prev => ({ ...prev, [sym.id]: !prev[sym.id] }))}
+                    onChange={() =>
+                      setDangerSigns(prev => ({
+                        ...prev,
+                        [sym.id]: !prev[sym.id]
+                      }))
+                    }
                     className="mt-1 w-4.5 h-4.5 accent-danger cursor-pointer shrink-0"
                   />
+
                   <div>
-                    <span className="text-xs font-black block leading-none">{sym.title}</span>
-                    <span className="text-[9px] font-bold mt-1.5 block opacity-75">{sym.desc}</span>
+                    <span className="text-xs font-black block leading-none">
+                      {sym.title}
+                    </span>
+
+                    <span className="text-[9px] font-bold mt-1.5 block opacity-75">
+                      {sym.desc}
+                    </span>
                   </div>
                 </label>
               ))}
             </div>
 
             {dangerMessage && (
-              <div className={`p-4 rounded-xl text-xs font-bold border leading-relaxed animate-fadeIn ${dangerMessage.type === 'danger'
-                ? 'bg-danger/10 border-danger/25 text-danger animate-pulse-slow'
-                : dangerMessage.type === 'warning'
-                  ? 'bg-warning/10 border-warning/25 text-warning'
-                  : 'bg-danger/10 border-danger/25 text-danger'
-                }`}>
+              <div
+                className={`p-4 rounded-xl text-xs font-bold border leading-relaxed animate-fadeIn ${
+                  dangerMessage.type === 'danger'
+                    ? 'bg-danger/10 border-danger/25 text-danger animate-pulse-slow'
+                    : dangerMessage.type === 'warning'
+                    ? 'bg-warning/10 border-warning/25 text-warning'
+                    : 'bg-danger/10 border-danger/25 text-danger'
+                }`}
+              >
                 {dangerMessage.text}
               </div>
             )}
@@ -556,10 +621,11 @@ const HealthTracker = () => {
             <button
               onClick={handleDangerSignsSubmit}
               disabled={isDangerSubmitting || !Object.values(dangerSigns).some(s => s)}
-              className={`w-full py-3 rounded-xl text-xs font-black uppercase tracking-widest transition-all cursor-pointer select-none flex items-center justify-center gap-2 ${Object.values(dangerSigns).some(s => s)
-                ? 'bg-danger text-white hover:bg-bg-dark-mauve shadow-glow animate-pulse-slow'
-                : 'bg-gray-100 text-gray-400 border border-gray-200 cursor-not-allowed'
-                }`}
+              className={`w-full py-3 rounded-xl text-xs font-black uppercase tracking-widest transition-all cursor-pointer select-none flex items-center justify-center gap-2 ${
+                Object.values(dangerSigns).some(s => s)
+                  ? 'bg-danger text-white hover:bg-bg-dark-mauve shadow-glow animate-pulse-slow'
+                  : 'bg-gray-100 text-gray-400 border border-gray-200 cursor-not-allowed'
+              }`}
             >
               {isDangerSubmitting ? (
                 <>
@@ -567,7 +633,11 @@ const HealthTracker = () => {
                   <span>TRANSMITTING EMERGENCY ALERT...</span>
                 </>
               ) : (
-                <span>DISPATCH EMERGENCY WARNINGS</span>
+                <span>
+                  {user?.is_postpartum
+                    ? 'REPORT POSTPARTUM WARNING SIGNS'
+                    : 'DISPATCH EMERGENCY WARNINGS'}
+                </span>
               )}
             </button>
           </div>
@@ -719,7 +789,8 @@ const HealthTracker = () => {
         <div className="lg:col-span-5 flex flex-col gap-6">
 
           {/* Cardiff Kick Counter Dashboard */}
-          <div className="bg-white border border-primary-mauve/10 rounded-2xl p-6 shadow-premium space-y-5">
+          
+           {!user?.is_postpartum ?(<div className="bg-white border border-primary-mauve/10 rounded-2xl p-6 shadow-premium space-y-5">
             <div className="flex items-center justify-between border-b border-primary-mauve/5 pb-2.5">
               <div className="flex items-center gap-2 text-primary-mauve">
                 <Baby className="w-5 h-5" />
@@ -870,7 +941,61 @@ const HealthTracker = () => {
               </div>
             )}
           </div>
+            ):(
+          <div className="bg-white border border-primary-mauve/10 rounded-2xl p-5 shadow-premium space-y-4">
+            <div className="flex items-center gap-2">
+              <Baby className="w-5 h-5 text-primary-mauve" />
+              <h3 className="font-black text-xs uppercase tracking-wider">
+                Newborn Feeding Tracker
+              </h3>
+            </div>
 
+            <p className="text-[11px] font-medium text-text-muted leading-relaxed">
+              Track breastfeeding, formula feeds, and your baby's sleep routine.
+            </p>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div className="p-3 rounded-xl bg-bg-rose-white border border-primary-mauve/5">
+                <p className="text-[10px] font-black uppercase text-text-muted">
+                  Feeds Today
+                </p>
+                <h4 className="text-xl font-black text-primary-mauve mt-1">
+                  0
+                </h4>
+              </div>
+
+              <div className="p-3 rounded-xl bg-bg-rose-white border border-primary-mauve/5">
+                <p className="text-[10px] font-black uppercase text-text-muted">
+                  Sleep Sessions
+                </p>
+                <h4 className="text-xl font-black text-primary-mauve mt-1">
+                  0
+                </h4>
+              </div>
+            </div>
+
+            <div className="flex gap-2">
+              <button
+                onClick={() => setFeedsToday(prev => prev + 1)}
+                className="flex-1 py-2 bg-primary-mauve text-white rounded-lg text-xs font-bold"
+              >
+                + Feed
+              </button>
+
+              <button
+                onClick={() => setSleepSessions(prev => prev + 1)}
+                className="flex-1 py-2 border border-primary-mauve/20 text-primary-mauve rounded-lg text-xs font-bold"
+              >
+                + Sleep
+              </button>
+            </div>
+
+            <p className="text-[10px] text-text-muted">
+              Recommended newborn feeding frequency: every 2–3 hours.
+            </p>
+          </div>
+        )
+            }
           {/* Vitals History Timeline & Trend Charts */}
           <div className="bg-white border border-primary-mauve/10 rounded-2xl p-5 shadow-premium space-y-4 flex-1 flex flex-col min-h-[380px]">
             <div className="flex items-center justify-between border-b border-primary-mauve/5 pb-2.5 shrink-0 flex-wrap gap-2">

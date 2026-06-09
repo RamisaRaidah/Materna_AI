@@ -273,8 +273,17 @@ def generate_care_plan():
     water = data.get("water", 1.5)
     name = g.user.get("name", "Patient")
     bp_val = int(str(data.get("bp", "120/80")).split("/")[0])
+    is_postpartum = data.get("is_postpartum", False)
 
-    prompt = f"""You are a maternal health AI advisor for pregnant women in rural Bangladesh.
+    if is_postpartum:
+        prompt = f"""You are a postnatal health AI advisor for new mothers in rural Bangladesh...
+        - Focus: wound recovery, lochia monitoring, breastfeeding/formula support,
+        postpartum nutrition (iron, calcium), newborn sleep/feeding patterns
+        - No trimester references. No weeks-pregnant references.
+        ..."""
+    else:
+
+        prompt = f"""You are a maternal health AI advisor for pregnant women in rural Bangladesh.
 
 Generate a personalized daily pregnancy care plan in {"Bengali" if lang == "bn" else "English"} for this patient:
 - Name: {name}

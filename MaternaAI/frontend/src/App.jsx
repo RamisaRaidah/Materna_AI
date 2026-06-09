@@ -32,8 +32,10 @@ import LearnMore from './pages/LearnMore';
 import DiscoverMore from './pages/DiscoverMore';
 import BengaliSupport from './pages/BengaliSupport';
 import SmsService from './pages/SmsService';
-import AdminDashboard from './pages/AdminDashboard';
+import ReviewClinicians from './pages/ReviewClinicians';
+import AdminHome from './pages/AdminHome';
 import ClinicianVerificationPending from './pages/ClinicianVerificationPending';
+import AdminCommunityModeration from './pages/AdminCommunityModeration';
 
 const PrivateRoute = ({ children }) => {
   const constAuth = useAuth();
@@ -182,7 +184,17 @@ function App() {
         } />
         <Route path="admin" element={
           <AdminRoute>
-            <AdminDashboard />
+            <AdminHome />
+          </AdminRoute>
+        } />
+        <Route path="admin/review-doctors" element={
+          <AdminRoute>
+            <ReviewClinicians/>
+          </AdminRoute>
+        } />
+        <Route path="admin/community-moderation" element={
+          <AdminRoute>
+            <AdminCommunityModeration />
           </AdminRoute>
         } />
       </Route>

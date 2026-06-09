@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
+import api, { chatAPI } from '../api';
 import {
   Sparkles, Flame, Apple, CheckCircle2,
   MessageSquare, MapPin, RefreshCw, Clock,
@@ -89,6 +90,7 @@ const MealCard = ({ title, time, items = [], badges = [] }) => (
 
 /**
  * Isolated Sub-Component: DietaryComplianceTracker
+ * FIXED: Uses axios api instance instead of raw fetch
  */
 function DietaryComplianceTracker({ onMetricsUpdate, onNewAssistantMessage, userProfile, userId }) {
   const [selectedTracker, setSelectedTracker] = useState(null);
@@ -115,30 +117,22 @@ function DietaryComplianceTracker({ onMetricsUpdate, onNewAssistantMessage, user
     setErrorMessage("");
 
     try {
-      const res = await fetch("/api/chat/analyze", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          message: mealInput,
-          mode: "nutrition",
-          profile: userProfile,
-          user_id: userId,
-          date: new Date().toISOString().split('T')[0]
-        })
+      // FIXED: was raw fetch('/api/chat/analyze', ...) — now uses axios api instance
+      const { data } = await api.post('/api/chat/analyze', {
+        message: mealInput,
+        mode: "nutrition",
+        profile: userProfile,
+        user_id: userId,
+        date: new Date().toISOString().split('T')[0]
       });
-
-      if (!res.ok) throw new Error(`Server fault status: ${res.status}`);
-      const data = await res.json();
 
       if (data && data.extractedNutrients) {
         if (typeof onMetricsUpdate === "function") {
           onMetricsUpdate(data.extractedNutrients);
         }
-
         if (data.response && typeof onNewAssistantMessage === "function") {
-          onNewAssistantMessage(data.response);
+          onNewAssistantMessage(mealInput, data.response);
         }
-
         setMealInput("");
         setSelectedTracker(null);
       } else {
@@ -212,7 +206,6 @@ const Nutrition = () => {
 
   const [cleanTextPlan, setCleanTextPlan] = useState('');
   
-  // FIXED: Consolidated double declaration safely down to one block
   const [nutrients, setNutrients] = useState(() => {
     const todayStr = new Date().toISOString().split('T')[0];
     const saved = localStorage.getItem(`materna_nutrients_${todayStr}`);
@@ -237,7 +230,7 @@ const Nutrition = () => {
 
   // Audio & Recording states for Nutrition Chat
   const [isRecording, setIsRecording] = useState(false);
-  const [speechLang, setSpeechLang] = useState('bn-BD'); // 'bn-BD' or 'en-US'
+  const [speechLang, setSpeechLang] = useState('bn-BD');
   const [currentPlaybackMessageId, setCurrentPlaybackMessageId] = useState(null);
   const [audioPermissionError, setAudioPermissionError] = useState(null);
   const activeAudioRef = useRef(null);
@@ -246,6 +239,29 @@ const Nutrition = () => {
   const audioChunksRef = useRef([]);
   const clientTranscriptionRef = useRef('');
   const recognitionRef = useRef(null);
+
+  // FIXED: Load nutrition history using chatAPI (axios) instead of raw fetch
+  useEffect(() => {
+    const loadHistory = async () => {
+      if (!user?.id) return;
+      try {
+        const data = await chatAPI.getHistory(user.id);
+        const nutritionMsgs = data
+          .filter(msg => msg.intent === 'nutrition')
+          .map(msg => ({
+            role: msg.role === 'assistant' ? 'ai' : msg.role,
+            text: msg.content,
+            created_at: msg.created_at
+          }));
+        if (nutritionMsgs.length > 0) {
+          setMessages(nutritionMsgs);
+        }
+      } catch (err) {
+        console.error("Failed to load nutrition chat history:", err);
+      }
+    };
+    loadHistory();
+  }, [user]);
 
   // Clean up audio on unmount
   useEffect(() => {
@@ -265,7 +281,6 @@ const Nutrition = () => {
     setCurrentPlaybackMessageId(null);
   };
 
-  // Detect if text is primarily Bengali (Unicode range \u0980-\u09FF)
   const isBengaliText = (text) => /[\u0980-\u09FF]/.test(text);
 
   const playTTS = (text, messageIndex) => {
@@ -275,15 +290,14 @@ const Nutrition = () => {
     }
     stopTTS();
     try {
-      // Auto-detect language: use Bengali TTS voice if text has Bengali script, else English
       const lang = isBengaliText(text) ? 'bn' : 'en';
-      const audioUrl = `/api/chat/tts?text=${encodeURIComponent(text)}&lang=${lang}`;
+      // FIXED: TTS uses the backend base URL from env var
+      const baseURL = import.meta.env.VITE_API_URL || '';
+      const audioUrl = `${baseURL}/api/chat/tts?text=${encodeURIComponent(text)}&lang=${lang}`;
       const audio = new Audio(audioUrl);
       activeAudioRef.current = audio;
       setCurrentPlaybackMessageId(messageIndex);
-      audio.onended = () => {
-        setCurrentPlaybackMessageId(null);
-      };
+      audio.onended = () => setCurrentPlaybackMessageId(null);
       audio.onerror = (e) => {
         console.error("Audio playback error:", e);
         setCurrentPlaybackMessageId(null);
@@ -312,13 +326,9 @@ const Nutrition = () => {
         rec.lang = speechLang;
         rec.onresult = (event) => {
           const text = event.results[0][0].transcript;
-          if (text) {
-            clientTranscriptionRef.current = text;
-          }
+          if (text) clientTranscriptionRef.current = text;
         };
-        rec.onerror = (e) => {
-          console.warn("SpeechRecognition error:", e.error);
-        };
+        rec.onerror = (e) => console.warn("SpeechRecognition error:", e.error);
         rec.start();
         recognitionRef.current = rec;
       } catch (err) {
@@ -333,9 +343,7 @@ const Nutrition = () => {
       let mimeType = 'audio/webm';
       if (!MediaRecorder.isTypeSupported('audio/webm')) {
         mimeType = 'audio/ogg';
-        if (!MediaRecorder.isTypeSupported('audio/ogg')) {
-          mimeType = '';
-        }
+        if (!MediaRecorder.isTypeSupported('audio/ogg')) mimeType = '';
       }
 
       const recorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
@@ -343,11 +351,8 @@ const Nutrition = () => {
       audioChunksRef.current = [];
 
       recorder.ondataavailable = (event) => {
-        if (event.data && event.data.size > 0) {
-          audioChunksRef.current.push(event.data);
-        }
+        if (event.data && event.data.size > 0) audioChunksRef.current.push(event.data);
       };
-
       recorder.onstop = async () => {
         const audioBlob = new Blob(audioChunksRef.current, { type: mimeType || 'audio/webm' });
         await handleAudioSubmit(audioBlob, clientTranscriptionRef.current);
@@ -369,9 +374,7 @@ const Nutrition = () => {
       }
       setIsRecording(false);
     }
-    if (recognitionRef.current) {
-      recognitionRef.current.stop();
-    }
+    if (recognitionRef.current) recognitionRef.current.stop();
   };
 
   const handleAudioSubmit = async (audioBlob, clientTranscriptionText = '') => {
@@ -382,34 +385,29 @@ const Nutrition = () => {
       const profile = { name: user?.name || '', weeks_pregnant: user?.weeks_pregnant || trimester * 13 };
       const userId = user?.id || 1;
 
-      const { chatAPI } = await import('../api');
+      // chatAPI.speak already uses the axios instance — no change needed here
       const data = await chatAPI.speak(audioBlob, profile, 'nutrition', userId, clientTranscriptionText);
 
       const userText = data.transcribed_text || "[অডিও বার্তা]";
       const assistantText = data.response || 'কোন উত্তর পাওয়া যায়নি।';
       
-      // Update messages sequence
       setMessages(prev => {
         const updated = [...prev, { role: 'user', text: userText }, { role: 'ai', text: assistantText }];
         setTimeout(() => playTTS(assistantText, updated.length - 1), 200);
         return updated;
       });
 
-      // Update metrics if extracted
       if (data.extractedNutrients) {
         handleExtractedMetricsUpdate(data.extractedNutrients);
       }
     } catch (err) {
       console.error("Failed to process nutrition voice API:", err);
-      setMessages(prev => [...prev, { role: 'ai', text: 'ভয়েস বার্তা প্রসেস করতে সমস্যা হয়েছে।' }]);
+      setMessages(prev => [...prev, { role: 'ai', text: 'ভয়েস বার্তা প্রসেস করতে সমস্যা হয়েছে।' }]);
     } finally {
       setChatLoading(false);
     }
   };
 
-  /**
-   * Sync metrics update directly into local state and localStorage safely
-   */
   const handleExtractedMetricsUpdate = (extractedNutrients) => {
     setNutrients(prevNutrients => {
       if (!prevNutrients) return prevNutrients;
@@ -419,16 +417,22 @@ const Nutrition = () => {
           updated[key].current = parseFloat((updated[key].current + extractedNutrients[key]).toFixed(1));
         }
       });
-      // FIXED: Sync right away so memory doesn't depend on effect batch racing
       const todayStr = new Date().toISOString().split('T')[0];
       localStorage.setItem(`materna_nutrients_${todayStr}`, JSON.stringify(updated));
       return updated;
     });
   };
 
-  const handleAppendAssistantChatBubble = (responseText) => {
+  const handleAppendAssistantChatBubble = (userMealInput, responseText) => {
     if (!responseText) return;
-    setMessages(prev => [...prev, { role: 'ai', text: responseText }]);
+    setMessages(prev => {
+      const newMessages = [];
+      if (userMealInput && userMealInput.trim()) {
+        newMessages.push({ role: 'user', text: userMealInput.trim() });
+      }
+      newMessages.push({ role: 'ai', text: responseText });
+      return [...prev, ...newMessages];
+    });
   };
 
   const parseRAGTextResponse = (rawText) => {
@@ -442,7 +446,6 @@ const Nutrition = () => {
     const nutrientRegex = /\[NUTRIENT:\s*([^\]]+)\]/gi;
     let nutrientMatch;
 
-    // Load structure from cache if it exists, otherwise fall back to clinical defaults
     const freshlyParsedNutrients = cachedData ? JSON.parse(cachedData) : {
       iron: { current: 0, goal: 27, unit: 'mg' },
       folate: { current: 0, goal: 600, unit: 'mcg' },
@@ -455,12 +458,9 @@ const Nutrition = () => {
       components.forEach(item => {
         const [variableKey, variableValue] = item.split('=');
         const targetKey = variableKey?.trim().toLowerCase();
-
         if (targetKey && variableValue && freshlyParsedNutrients[targetKey]) {
           freshlyParsedNutrients[targetKey].goal = parseFloat(variableValue.trim());
-          if (!cachedData) {
-            freshlyParsedNutrients[targetKey].current = 0;
-          }
+          if (!cachedData) freshlyParsedNutrients[targetKey].current = 0;
         }
       });
     }
@@ -506,28 +506,24 @@ const Nutrition = () => {
     setCleanTextPlan(textToDisplay.trim().replace(/\n{3,}/g, '\n\n'));
   };
 
+  // FIXED: was raw fetch('/api/nutrition/plans') — now uses axios api instance
   const fetchPatientPlan = async () => {
     setPlanLoading(true);
     setPlanError('');
     try {
-      const res = await fetch('/api/nutrition/plans', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          user_id: user?.id || 1,
-          trimester,
-          conditions: user?.conditions || [],
-          profile: {
-            name: user?.name || 'Patient',
-            weeks_pregnant: user?.weeks_pregnant || trimester * 13,
-            location: 'Bangladesh',
-          },
-        }),
+      const { data } = await api.post('/api/nutrition/plans', {
+        user_id: user?.id || 1,
+        trimester,
+        conditions: user?.conditions || [],
+        profile: {
+          name: user?.name || 'Patient',
+          weeks_pregnant: user?.weeks_pregnant || trimester * 13,
+          location: 'Bangladesh',
+        },
       });
-      if (!res.ok) throw new Error('Network fault.');
-      const data = await res.json();
       parseRAGTextResponse(data.generated_plan);
     } catch (e) {
+      console.error("Nutrition plan fetch failed:", e);
       setPlanError('আপনার জন্য নির্দিষ্ট পরিকল্পনা তৈরি করা যায়নি। পুনরায় চেষ্টা করুন।');
     } finally {
       setPlanLoading(false);
@@ -545,6 +541,8 @@ const Nutrition = () => {
     }
   }, [nutrients]);
 
+  // FIXED: was raw fetch('/api/chat/message') to a non-existent endpoint
+  // Now uses chatAPI.analyze which maps to /api/chat/analyze via axios
   const sendChat = async (alternativeInput) => {
     const text = (alternativeInput || chatInput).trim();
     if (!text || chatLoading) return;
@@ -554,21 +552,11 @@ const Nutrition = () => {
     setChatLoading(true);
 
     try {
-      const res = await fetch('/api/chat/message', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          message: text,
-          mode: 'nutrition',
-          user_id: user?.id || 1,
-          profile: { name: user?.name || '', weeks_pregnant: user?.weeks_pregnant || trimester * 13 }
-        }),
-      });
-      const data = await res.json();
+      const profile = { name: user?.name || '', weeks_pregnant: user?.weeks_pregnant || trimester * 13 };
+      const data = await chatAPI.analyze(text, profile, 'nutrition', user?.id || 1);
       const responseText = data.response || 'কোন উত্তর পাওয়া যায়নি।';
       setMessages(prev => {
         const updated = [...prev, { role: 'ai', text: responseText }];
-        // Auto-play TTS for the new assistant message in its detected language
         setTimeout(() => playTTS(responseText, updated.length - 1), 200);
         return updated;
       });
@@ -764,7 +752,7 @@ const Nutrition = () => {
             >
               Consult Dietitian Assistant
             </SectionLabel>
-            <div className="min-h-[220px] max-h-[260px] overflow-y-auto flex flex-col gap-2 p-1">
+            <div className="min-h-[220px] max-h-[420px] overflow-y-auto flex flex-col gap-2 p-1">
               {messages.map((m, i) => {
                 const isUser = m.role === 'user';
                 return (
@@ -789,15 +777,9 @@ const Nutrition = () => {
                           }`}
                         >
                           {currentPlaybackMessageId === i ? (
-                            <>
-                              <Square className="w-2.5 h-2.5 fill-current" />
-                              <span>Stop</span>
-                            </>
+                            <><Square className="w-2.5 h-2.5 fill-current" /><span>Stop</span></>
                           ) : (
-                            <>
-                              <Play className="w-2.5 h-2.5 fill-current" />
-                              <span>Listen</span>
-                            </>
+                            <><Play className="w-2.5 h-2.5 fill-current" /><span>Listen</span></>
                           )}
                         </button>
                       </div>
@@ -811,7 +793,11 @@ const Nutrition = () => {
           </div>
           <div>
             <div className="flex flex-wrap gap-1 mb-2.5">
-              {QUICK_PROMPTS.map(p => <button key={p.label} onClick={() => sendChat(p.query)} className="text-[9px] font-bold text-white bg-bg-dark-mauve px-2.5 py-1 rounded-full hover:bg-primary-mauve transition-all shadow-sm cursor-pointer">{p.label}</button>)}
+              {QUICK_PROMPTS.map(p => (
+                <button key={p.label} onClick={() => sendChat(p.query)} className="text-[9px] font-bold text-white bg-bg-dark-mauve px-2.5 py-1 rounded-full hover:bg-primary-mauve transition-all shadow-sm cursor-pointer">
+                  {p.label}
+                </button>
+              ))}
             </div>
             <div className="flex gap-2 items-center">
               <button
@@ -859,7 +845,11 @@ const Nutrition = () => {
             <div key={key} className={`${bg} border ${border} rounded-xl p-3.5 space-y-2`}>
               <div className={`text-[10px] font-black ${title} uppercase tracking-wider`}>{label}</div>
               <ul className="space-y-1 text-[11px] font-medium text-gray-600">
-                {items.map((item, i) => <li key={i} className="flex items-center gap-1"><ChevronRight className="w-3 h-3 text-primary-mauve/40 shrink-0" />{item}</li>)}
+                {items.map((item, i) => (
+                  <li key={i} className="flex items-center gap-1">
+                    <ChevronRight className="w-3 h-3 text-primary-mauve/40 shrink-0" />{item}
+                  </li>
+                ))}
               </ul>
             </div>
           ))}

@@ -60,6 +60,10 @@ export const authAPI = {
     const response = await api.patch('/auth/me', userData);
     return response.data;
   },
+  pingPresence: async () => {
+    const response = await api.post('/auth/presence');
+    return response.data;
+  },
   registerFCM: async (fcmToken) => {
     const response = await api.post('/auth/me/fcm', { fcmToken });
     return response.data;
@@ -154,8 +158,10 @@ export const communityAPI = {
     const response = await api.post(`/api/community/groups/${groupId}/leave`, { user_id: userId });
     return response.data;
   },
-  getPosts: async (groupId) => {
-    const response = await api.get(`/api/community/groups/${groupId}/posts`);
+  getPosts: async (groupId, viewerId = null) => {
+    const response = await api.get(`/api/community/groups/${groupId}/posts`, {
+      params: viewerId ? { viewer_id: viewerId } : {}
+    });
     return response.data;
   },
   createPost: async (groupId, postData) => {
@@ -240,12 +246,24 @@ export const clinicianAPI = {
 };
 
 export const adminAPI = {
+  getDashboard: async () => {
+    const response = await api.get('/api/admin/dashboard');
+    return response.data;
+  },
   getPendingDoctors: async () => {
     const response = await api.get('/api/admin/pending-doctors');
     return response.data;
   },
   verifyDoctor: async (doctorId, action) => {
     const response = await api.post(`/api/admin/doctors/${doctorId}/verify`, { action });
+    return response.data;
+  },
+  getPendingCommunityPosts: async () => {
+    const response = await api.get('/api/admin/community/pending-posts');
+    return response.data;
+  },
+  moderateCommunityPost: async (postId, action) => {
+    const response = await api.post(`/api/admin/community/posts/${postId}/moderate`, { action });
     return response.data;
   }
 };

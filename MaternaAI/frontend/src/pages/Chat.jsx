@@ -1,4 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
+import removeMarkdown from "remove-markdown";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import { useAuth } from '../context/AuthContext';
 import { chatAPI } from '../api';
 import { 
@@ -145,9 +148,9 @@ const Chat = () => {
     setCurrentPlaybackMessageId(null);
   };
 
-  const playTTS = (text, messageIndex) => {
+  const playTTS = (text, messageKey) => {
     // If clicking on already playing audio, stop it
-    if (currentPlaybackMessageId === messageIndex) {
+    if (currentPlaybackMessageId === messageKey) {
       stopTTS();
       return;
     }
@@ -160,7 +163,7 @@ const Chat = () => {
       const audioUrl = `/api/chat/tts?text=${encodeURIComponent(text)}&lang=${lang}`;
       const audio = new Audio(audioUrl);
       activeAudioRef.current = audio;
-      setCurrentPlaybackMessageId(messageIndex);
+      setCurrentPlaybackMessageId(messageKey);
 
       audio.onended = () => {
         setCurrentPlaybackMessageId(null);
@@ -302,8 +305,7 @@ const Chat = () => {
 
       // If autoplay is checked, play the response immediately
       if (autoplayTTS) {
-        const newMsgIndex = messages.length + 1; // since we appended two messages, assistantMsg will be at messages.length + 1
-        playTTS(data.response, newMsgIndex);
+        playTTS(data.response, assistantMsg.created_at + '-assistant');
       }
     } catch (err) {
       console.error("Failed to process speech API:", err);
@@ -351,8 +353,7 @@ const Chat = () => {
       setMessages(prev => [...prev, assistantMsg]);
 
       if (autoplayTTS) {
-        const newMsgIndex = messages.length + 1; // user is messages.length, assistant is messages.length + 1
-        playTTS(data.response, newMsgIndex);
+        playTTS(data.response, assistantMsg.created_at + '-assistant');
       }
     } catch (err) {
       console.error("Text submission failed:", err);
@@ -361,6 +362,11 @@ const Chat = () => {
       setIsProcessing(false);
     }
   };
+
+  const filteredMessages = messages.filter(msg => {
+    const msgIntent = msg.intent || 'general';
+    return msgIntent === mode;
+  });
 
   return (
     <div className="p-4 md:p-8 max-w-7xl mx-auto space-y-6 font-sans">
@@ -568,13 +574,13 @@ const Chat = () => {
               <span>Conversation Transcript</span>
             </h3>
             <span className="text-[10px] font-extrabold text-text-muted bg-white border border-primary-mauve/10 px-2.5 py-1 rounded-lg">
-              {messages.length} Messages
+              {filteredMessages.length} Messages
             </span>
           </div>
 
           {/* Messages Scrollbox */}
           <div className="flex-1 overflow-y-auto p-4 md:p-6 space-y-4">
-            {messages.length === 0 ? (
+            {filteredMessages.length === 0 ? (
               <div className="flex flex-col items-center justify-center text-center h-full max-w-sm mx-auto space-y-4">
                 <div className="w-14 h-14 rounded-full bg-primary-mauve/10 flex items-center justify-center text-primary-mauve">
                   <MessageSquare className="w-7 h-7" />
@@ -585,10 +591,11 @@ const Chat = () => {
                 </p>
               </div>
             ) : (
-              messages.map((msg, index) => {
+              filteredMessages.map((msg, index) => {
                 const isUser = msg.role === 'user';
                 const isBangla = msg.language === 'bn' || /[\u0980-\u09FF]/.test(msg.content);
                 const msgIntentDetails = modes[msg.intent] || modes.general;
+                const msgKey = msg.created_at + '-' + msg.role;
 
                 return (
                   <div 
@@ -609,23 +616,25 @@ const Chat = () => {
                       
                       <div className={`p-4 rounded-2xl border text-sm font-medium leading-relaxed relative ${
                         isUser 
-                          ? 'bg-primary-mauve text-white border-primary-mauve/15 rounded-tr-none' 
-                          : `bg-bg-rose-white text-text-dark border-primary-mauve/5 rounded-tl-none`
+                           ? 'bg-primary-mauve text-white border-primary-mauve/15 rounded-tr-none' 
+                           : `bg-bg-rose-white text-text-dark border-primary-mauve/5 rounded-tl-none`
                       } ${isBangla ? 'bengali-text text-base' : 'font-sans'}`}>
-                        {msg.content}
+                        <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                          {msg.content}
+                        </ReactMarkdown>
 
                         {/* Speech controls on assistant answers */}
                         {!isUser && (
                           <div className="flex justify-end mt-2 pt-2 border-t border-primary-mauve/5">
                             <button
-                              onClick={() => playTTS(msg.content, index)}
+                              onClick={() => playTTS(removeMarkdown(msg.content), msgKey)}
                               className={`flex items-center gap-1 px-2.5 py-1 rounded-md text-[10px] font-black uppercase tracking-wider transition-all cursor-pointer ${
-                                currentPlaybackMessageId === index
+                                currentPlaybackMessageId === msgKey
                                   ? `bg-danger text-white border border-danger/10`
                                   : `bg-${msgIntentDetails.colorClass}/10 hover:bg-${msgIntentDetails.colorClass}/20 border border-${msgIntentDetails.colorClass}/15 ${msgIntentDetails.textClass}`
                               }`}
                             >
-                              {currentPlaybackMessageId === index ? (
+                              {currentPlaybackMessageId === msgKey ? (
                                 <>
                                   <Square className="w-3 h-3 fill-current" />
                                   <span>Stop</span>

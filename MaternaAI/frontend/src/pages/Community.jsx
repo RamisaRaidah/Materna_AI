@@ -35,11 +35,13 @@ import {
   Sparkles,
   MapPin,
   CheckCircle2,
-  Calendar
+  Calendar,
+  AlertTriangle
 } from 'lucide-react';
 
 const Community = () => {
   const { user } = useAuth();
+  const [moderationLang, setModerationLang] = useState('en');
 
   // Dynamic lists
   const [groups, setGroups] = useState([]);
@@ -279,7 +281,7 @@ const Community = () => {
   const loadPosts = async (groupId) => {
     setIsPostsLoading(true);
     try {
-      const data = await communityAPI.getPosts(groupId);
+      const data = await communityAPI.getPosts(groupId, user?.id);
       setPosts(data || []);
     } catch (err) {
       console.error("Failed to load posts:", err);
@@ -913,6 +915,39 @@ const Community = () => {
                       </button>
                     )}
                   </div>
+
+                  {/* Moderation Status Banner (bilingual toggle) */}
+                  {post.moderation_status && post.moderation_status !== 'approved' && (
+                    <div className={`px-4 py-3 border-b flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs font-bold ${
+                      post.moderation_status === 'pending'
+                        ? 'bg-warning/10 border-warning/20 text-warning'
+                        : 'bg-danger/10 border-danger/20 text-danger'
+                    }`}>
+                      <div className="flex items-center gap-2">
+                        <AlertTriangle className="w-4 h-4 shrink-0" />
+                        <span>
+                          {moderationLang === 'en' ? (
+                            post.moderation_status === 'pending'
+                              ? 'This message is being reviewed for spreading misinformation'
+                              : 'This message has been flagged as containing misinformation'
+                          ) : (
+                            post.moderation_status === 'pending'
+                              ? 'এই বার্তাটি বিভ্রান্তিমূলক তথ্য ছড়ানোর জন্য পর্যালোচনা করা হচ্ছে'
+                              : 'এই বার্তাটি বিভ্রান্তিমূলক তথ্য ধারণ করার জন্য চিহ্নিত করা হয়েছে'
+                          )}
+                        </span>
+                      </div>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setModerationLang(prev => prev === 'en' ? 'bn' : 'en');
+                        }}
+                        className="shrink-0 px-2.5 py-1 rounded-md bg-white border border-current text-[10px] font-black uppercase tracking-wider hover:bg-current hover:text-white transition-all cursor-pointer"
+                      >
+                        {moderationLang === 'en' ? 'বাংলা' : 'English'}
+                      </button>
+                    </div>
+                  )}
 
                   {/* Post Media Card (Image simulation with text overlay) */}
                   <div className={`w-full aspect-square md:aspect-[16/10] bg-gradient-to-br ${cardGradient} p-6 flex items-center justify-center relative select-none`}>
