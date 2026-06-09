@@ -38,6 +38,12 @@ const Home = () => {
   const { user, updateProfile } = useAuth();
   const avatarInputRef = useRef(null);
 
+  console.log("user: ",user)
+
+  const daysTillToday=Math.round((new Date()-new Date(user.weeks_updated_at))/(1000*60*60*24))
+  console.log("Days left:",daysTillToday)
+  const daysRemaining=user.weeks_pregnant*7+daysTillToday
+
   // Dashboard Interactive States
   const [symptoms, setSymptoms] = useState({
     bleeding: false,
@@ -251,7 +257,7 @@ useEffect(() => {
   };
 
   const weeks = getCalculatedWeeks() ?? user?.weeks_pregnant ?? 24;
-  const daysToBirth = Math.max(0, (40 - weeks) * 7);
+  const daysToBirth = (40*7)-(daysRemaining); //gotta change this
   const progressPercent = Math.min(100, Math.round((weeks / 40) * 100));
 
   // Determine baby size information dynamically
