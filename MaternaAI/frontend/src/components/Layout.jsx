@@ -173,7 +173,7 @@ const Layout = () => {
           </div>
 
           <div className="w-8 h-8 rounded-full bg-secondary-blush/20 flex items-center justify-center text-sm font-bold text-primary-mauve">
-            {user?.role === 'admin' ? '🛡️' : user?.role === 'clinician' ? '🩺' : '🤰'}
+            {user?.role === 'admin' ? '🛡️' : user?.role === 'clinician' ? '🩺' : user?.is_postpartum ? '🤱' : '🤰'}
           </div>
         </header>
 

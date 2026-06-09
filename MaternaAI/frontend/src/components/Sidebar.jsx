@@ -250,13 +250,27 @@ const Sidebar = ({
               {user?.profile_image ? (
                 <img src={user.profile_image} alt={user?.name || 'Profile'} className="w-full h-full object-cover" />
               ) : (
-                <span>{user?.role === 'admin' ? '🛡️' : user?.role === 'clinician' ? '🩺' : '🤰'}</span>
+                <span>
+                  {user?.role === 'admin'
+                    ? '🛡️'
+                    : user?.role === 'clinician'
+                      ? '🩺'
+                      : user?.is_postpartum
+                        ? '🤱'
+                        : '🤰'}
+                </span>
               )}
             </div>
             <div className="overflow-hidden">
               <h4 className="font-bold text-sm text-text-dark truncate">{user?.name || 'Guest User'}</h4>
               <span className="inline-block mt-0.5 px-2 py-0.5 rounded-full text-[10px] font-extrabold tracking-wider bg-primary-mauve text-white uppercase">
-                {user?.role === 'admin' ? 'Admin Portal' : user?.role === 'clinician' ? 'Clinician Portal' : 'Pregnancy Mode'}
+                {user?.role === 'admin'
+                  ? 'Admin Portal'
+                  : user?.role === 'clinician'
+                    ? 'Clinician Portal'
+                    : user?.is_postpartum
+                      ? 'Postpartum Mode'
+                      : 'Pregnancy Mode'}
               </span>
             </div>
           </div>

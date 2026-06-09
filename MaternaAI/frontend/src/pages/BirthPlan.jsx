@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
 import { FileText, Sparkles, Loader2, CheckCircle2, Printer, Download, RotateCcw, AlertCircle, MapPin, Users, Zap, Truck, Phone, Volume2, VolumeX, History, TrendingUp, ShieldCheck, ShieldAlert, ChevronDown } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
@@ -615,6 +616,43 @@ const getTrack = (facilityValue) => {
 // Main BirthPlan Page
 const BirthPlan = () => {
   const { user } = useAuth();
+
+  if (!user) {
+    return null; // or loading spinner
+  }
+
+  if (user.is_postpartum) {
+    return (
+      <div className="p-8 max-w-2xl mx-auto text-center space-y-4">
+        <span className="text-4xl">🤱</span>
+
+        <h2 className="text-xl font-black text-text-dark">
+          Birth plan not needed
+        </h2>
+
+        <p className="text-sm text-text-muted">
+          You've already delivered! Birth plans are for upcoming births.
+        </p>
+
+        <div className="flex justify-center gap-3">
+          <Link
+            to="/ppd"
+            className="px-4 py-2 rounded-lg bg-primary-mauve text-white"
+          >
+            Wellbeing Check
+          </Link>
+
+          <Link
+            to="/health"
+            className="px-4 py-2 rounded-lg border border-primary-mauve/20"
+          >
+            Health Tracker
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
   const [showAllVersions, setShowAllVersions] = useState(false);
 
   // Bilingual support state

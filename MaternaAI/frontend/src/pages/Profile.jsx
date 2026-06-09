@@ -247,7 +247,7 @@ const Profile = () => {
             {user?.profile_image ? (
               <img src={user.profile_image} alt={user?.name || 'Profile'} className="w-full h-full object-cover" />
             ) : (
-              <span>{user?.role === 'clinician' ? '🩺' : '🤰'}</span>
+              <span>{user?.role === 'clinician' ? '🩺' : user?.is_postpartum ? '🤱' : '🤰'}</span>
             )}
           </div>
           <div>
@@ -424,7 +424,7 @@ const Profile = () => {
       )}
 
       {/* INDIVIDUAL SUMMARY LIST DIRECTLY INSIDE PROFILE */}
-      {user?.role === 'patient' && !showSecurityFields && (
+      {user?.role === 'patient' && !user?.is_postpartum && !showSecurityFields && (
         <div className="bg-white/80 backdrop-blur-sm border border-primary-mauve/10 rounded-2xl p-6 shadow-sm space-y-4">
           <div>
             <h4 className="text-xs font-black uppercase text-primary-mauve tracking-wider flex items-center gap-2">
