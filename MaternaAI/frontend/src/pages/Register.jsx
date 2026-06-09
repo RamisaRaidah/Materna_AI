@@ -284,7 +284,7 @@ const Register = () => {
   const [emergencyContact, setEmergencyContact] = useState('');
   const [weeksPregnant, setWeeksPregnant] = useState('');
   const [isPostpartum, setIsPostpartum] = useState(false);
-  const [persona, setPersona] = useState('pregnant');
+  const [persona, setPersona] = useState(role === 'clinician' ? 'clinician' : 'pregnant');
   const [touched, setTouched] = useState({});
   const [submitError, setSubmitError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -446,6 +446,7 @@ const Register = () => {
     }
 
     if (role === 'clinician') {
+      payload.persona = 'clinician';
       payload.verification_documents = JSON.stringify({
         licenseNumber: licenseNumber.trim(),
         files: uploadedFiles
@@ -539,7 +540,7 @@ const Register = () => {
         {/* Role Toggle */}
         <div className="p-1 rounded-xl bg-bg-rose-white border border-primary-mauve/10 flex select-none mb-5">
           {['patient', 'clinician'].map(r => (
-            <button key={r} type="button" onClick={() => { setRole(r); setSubmitError(''); }}
+            <button key={r} type="button" onClick={() => { setRole(r); setSubmitError(''); setPersona(r === 'clinician' ? 'clinician' : 'pregnant'); }}
               className={`flex-1 py-2.5 rounded-lg text-xs font-black tracking-wider transition-all cursor-pointer ${role === r ? 'bg-primary-mauve text-white shadow-md' : 'text-text-muted hover:text-text-dark'}`}>
               {r === 'patient' ? 'PATIENT (EXPECTING/NEW MOTHER)' : 'CLINICIAN (DOCTOR/MIDWIFE)'}
             </button>

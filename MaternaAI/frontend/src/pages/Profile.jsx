@@ -2,8 +2,9 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import SavedBirthPlans from './SavedBirthPlans';
-import { 
-  User, Phone, Calendar, MapPin, Heart, Sparkles, 
+import SafeWordPicker from '../components/SafeWordPicker';
+import {
+  User, Phone, Calendar, MapPin, Heart, Sparkles,
   CheckCircle2, AlertCircle, Save, Edit2, Shield, KeyRound, Trash2, FileText, ChevronDown, ChevronUp
 } from 'lucide-react';
 
@@ -21,11 +22,10 @@ const BANGLADESH_LOCATIONS = {
 const BD_PHONE_REGEX = /^(\+8801|01)[3-9]\d{8}$/;
 
 const classes = {
-  input: (isEditable) => `w-full bg-white/50 border ${
-    isEditable 
-      ? 'border-primary-mauve/30 focus:border-primary-mauve focus:ring-1 focus:ring-primary-mauve' 
-      : 'border-gray-200 bg-gray-50/50 text-text-muted cursor-not-allowed'
-  } outline-none text-text-dark text-sm px-4 py-2.5 rounded-lg transition-all`,
+  input: (isEditable) => `w-full bg-white/50 border ${isEditable
+    ? 'border-primary-mauve/30 focus:border-primary-mauve focus:ring-1 focus:ring-primary-mauve'
+    : 'border-gray-200 bg-gray-50/50 text-text-muted cursor-not-allowed'
+    } outline-none text-text-dark text-sm px-4 py-2.5 rounded-lg transition-all`,
   label: "text-[10px] font-black text-text-muted uppercase tracking-wider block mb-1",
   sectionTitle: "text-xs font-black uppercase text-primary-mauve tracking-widest flex items-center gap-2 mb-2",
   card: "bg-white/80 backdrop-blur-sm border border-primary-mauve/10 rounded-2xl p-6 shadow-sm"
@@ -34,7 +34,7 @@ const classes = {
 const Profile = () => {
   const { user, updateProfile, logout } = useAuth();
   const navigate = useNavigate();
-  
+
   // UI Panel Controls
   const [isEditing, setIsEditing] = useState(false);
   const [showSecurityFields, setShowSecurityFields] = useState(false);
@@ -48,7 +48,7 @@ const Profile = () => {
 
   // Core Form Demographics states
   const [formData, setFormData] = useState({
-    name: '', age: '', division: '', district: '', subArea: '', emergencyContact: '', weeksPregnant: '', isPostpartum: false, persona: 'pregnant'
+    name: '', age: '', division: '', district: '', subArea: '', emergencyContact: '', weeksPregnant: '', isPostpartum: false, persona: 'pregnant', safeWord: user.safe_word || '',
   });
 
   // Security input contexts
@@ -67,7 +67,8 @@ const Profile = () => {
         emergencyContact: user.emergency_contact || '',
         weeksPregnant: user.weeks_pregnant || '',
         isPostpartum: user.is_postpartum || false,
-        persona: user.persona || 'pregnant'
+        persona: user.persona || 'pregnant',
+        safeWord: user.safe_word || '',
       });
     }
   }, [user]);
@@ -134,14 +135,16 @@ const Profile = () => {
     e.preventDefault();
     resetMessages();
     const updatedPayload = {};
-    const { name, age, division, district, subArea, emergencyContact, weeksPregnant, isPostpartum, persona } = formData;
-    
+    const { name, age, division, district, subArea, emergencyContact, weeksPregnant, isPostpartum, persona, safeWord } = formData;
+
     if (name.trim() && name.trim() !== user?.name) updatedPayload.name = name.trim();
     if (age && parseInt(age) !== user?.age) updatedPayload.age = parseInt(age);
     if (division && division !== user?.division) updatedPayload.division = division;
     if (district && district !== user?.district) updatedPayload.district = district;
     if (subArea.trim() && subArea.trim() !== user?.area) updatedPayload.area = subArea.trim();
-    
+    if (safeWord.trim() !== (user?.safe_word || '')) {
+      updatedPayload.safe_word = safeWord.trim();
+    }
     if (emergencyContact.trim() && emergencyContact.trim() !== user?.emergency_contact) {
       const formattedPhone = emergencyContact.replace(/\s/g, '');
       if (!BD_PHONE_REGEX.test(formattedPhone)) {
@@ -277,9 +280,8 @@ const Profile = () => {
 
       {/* Messages */}
       {msg.text && (
-        <div className={`p-4 rounded-xl border flex items-center gap-3 text-xs font-bold ${
-          msg.type === 'success' ? 'bg-green-50 border-green-200 text-green-700' : 'bg-danger/10 border-danger/20 text-danger'
-        }`}>
+        <div className={`p-4 rounded-xl border flex items-center gap-3 text-xs font-bold ${msg.type === 'success' ? 'bg-green-50 border-green-200 text-green-700' : 'bg-danger/10 border-danger/20 text-danger'
+          }`}>
           {msg.type === 'success' ? <CheckCircle2 className="w-4 h-4 shrink-0" /> : <AlertCircle className="w-4 h-4 shrink-0" />}
           <span>{msg.text}</span>
         </div>
@@ -414,6 +416,20 @@ const Profile = () => {
                 </div>
               </div>
             )}
+            {/* Safety Settings */}
+            {user?.role === 'patient' && (
+              <div className={classes.card}>
+                <h3 className="text-xs font-black uppercase text-primary-mauve tracking-widest
+                                      flex items-center gap-2 mb-4">
+                  <Shield className="w-4 h-4" /> Safety Settings
+                </h3>
+                <SafeWordPicker
+                  value={formData.safeWord}
+                  onChange={(word) => handleInputChange('safeWord', word)}
+                  isEditing={isEditing}
+                />
+              </div>
+            )}
             {isEditing && (
               <button type="submit" disabled={isSubmitting} className="w-full py-3 bg-primary-mauve text-white text-xs font-black tracking-widest uppercase rounded-xl hover:bg-bg-dark-mauve transition-all flex items-center justify-center gap-2 cursor-pointer">
                 <Save className="w-4 h-4" /> Commit Profile Updates
@@ -447,13 +463,12 @@ const Profile = () => {
                 const isSelected = expandedPlanId === plan.id;
                 return (
                   <div key={plan.id} className="border border-primary-mauve/10 rounded-xl bg-white shadow-xs overflow-hidden transition-all">
-                    
+
                     {/* Brief Summary Info Row */}
-                    <div 
+                    <div
                       onClick={() => setExpandedPlanId(isSelected ? null : plan.id)}
-                      className={`p-4 flex items-center justify-between cursor-pointer transition-all ${
-                        isSelected ? 'bg-bg-rose-white' : 'bg-white hover:bg-bg-rose-white/20'
-                      }`}
+                      className={`p-4 flex items-center justify-between cursor-pointer transition-all ${isSelected ? 'bg-bg-rose-white' : 'bg-white hover:bg-bg-rose-white/20'
+                        }`}
                     >
                       <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-6">
                         <div className="flex items-center gap-2">

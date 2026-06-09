@@ -1,9 +1,16 @@
 from flask import Blueprint, request, jsonify, Response
 from services.rag import rag_query, clinician_rag_query, get_db
 from services.tts import generate_tts_stream, is_bengali
+from services.abuse_detection import run_detection_async
 import json
 
 chat_bp = Blueprint("chat", __name__)
+
+_user_message_counts: dict[int, int] = {}
+
+def _increment_message_count(user_id: int) -> int:
+    _user_message_counts[user_id] = _user_message_counts.get(user_id, 0) + 1
+    return _user_message_counts[user_id]
 
 def ensure_user_exists(user_id, name="Mim Akter"):
     """
@@ -62,6 +69,165 @@ def save_chat_message(user_id, role, content, intent=None, language='en'):
         if conn:
             conn.close()
 
+
+def get_recent_history_for_detection(user_id: int, limit: int = 8, after_ts=None) -> list[dict]:
+    """Fetch recent messages for abuse detection. after_ts filters to only post-resolve messages."""
+    conn = None
+    try:
+        conn = get_db()
+        cur = conn.cursor()
+        if after_ts:
+            cur.execute("""
+                SELECT role, content FROM chat_messages
+                WHERE user_id = %s AND created_at > %s
+                ORDER BY id DESC LIMIT %s
+            """, (user_id, after_ts, limit))
+        else:
+            cur.execute("""
+                SELECT role, content FROM chat_messages
+                WHERE user_id = %s
+                ORDER BY id DESC LIMIT %s
+            """, (user_id, limit))
+        rows = cur.fetchall()
+        cur.close()
+        rows.reverse()
+        return [{"role": r[0], "content": r[1]} for r in rows]
+    except Exception:
+        return []
+    finally:
+        if conn:
+            conn.close()
+
+def _get_alert_state(user_id: int) -> dict:
+    """Returns whether an alert is currently open, and when the last one was resolved."""
+    conn = None
+    try:
+        conn = get_db()
+        cur = conn.cursor()
+        cur.execute("""
+            SELECT
+                EXISTS(
+                    SELECT 1 FROM clinician_alerts
+                    WHERE patient_id = %s
+                      AND is_dismissed = FALSE
+                      AND alert_type = 'abuse_alert'
+                    LIMIT 1
+                ) AS AS has_open_abuse_alert,,
+                (
+                    SELECT created_at FROM clinician_alerts
+                    WHERE patient_id = %s
+                      AND is_dismissed = TRUE
+                      AND alert_type = 'abuse_alert'
+                    ORDER BY created_at DESC
+                    LIMIT 1
+                ) AS last_resolved_at
+        """, (user_id, user_id))
+        row = cur.fetchone()
+        cur.close()
+        return {
+            "has_open_abuse_alert": row[0] if row else False,
+            "has_open_alert": row[0] if row else False,
+            "last_resolved_at": row[1] if row else None,
+        }
+    except Exception:
+        return {"has_open_abuse_alert": False, "has_open_alert": False, "last_resolved_at": None}
+    finally:
+        if conn:
+            conn.close()
+
+            
+def get_user_safe_word(user_id: int) -> str | None:
+    from services.abuse_detection import PREDEFINED_SAFE_WORDS
+    conn = None
+    try:
+        conn = get_db()
+        cur = conn.cursor()
+        cur.execute("SELECT safe_word FROM users WHERE id = %s", (user_id,))
+        row = cur.fetchone()
+        cur.close()
+        word = row[0] if row and row[0] else None
+        if word and word.strip().lower() in PREDEFINED_SAFE_WORDS:
+            result = word.strip().lower()
+        else:
+            result = None
+        print(f"[AbuseDetect] safe_word for user {user_id}: '{result}'")
+        return result
+    except Exception:
+        return None
+    finally:
+        if conn:
+            conn.close()
+
+def _dispatch_abuse_alert(user_id, reason, location, method, confidence):
+    print(f"[AbuseDetect] _dispatch_abuse_alert CALLED for user {user_id}")
+    try:
+        from db import query
+
+        def _get_name(uid):
+            try:
+                row = query("SELECT name FROM users WHERE id = %s", (uid,), fetch="one")
+                return row["name"] if row else "Unknown Patient"
+            except Exception:
+                return "Unknown Patient"
+
+        patient_name = _get_name(user_id)
+        title = "🔴 SILENT ABUSE ALERT"
+        body = (
+            f"Patient: {patient_name} (ID {user_id}). "
+            f"Trigger: {method}. Reason: {reason}. "
+            f"Location: {location}. Confidence: {confidence:.0%}."
+        )
+        result = query(
+            """
+            INSERT INTO clinician_alerts (patient_id, alert_type, title, body)
+            VALUES (%s, %s, %s, %s)
+            RETURNING id
+            """,
+            (user_id, "abuse_alert", title, body),
+            fetch="one",
+        )
+        alert_id = result["id"] if result else None
+        print(f"[AbuseDetect] Alert saved for user {user_id} via {method}")
+
+        from services.firebase_service import sync_abuse_alert_to_firestore
+        sync_abuse_alert_to_firestore(
+            alert_id=alert_id,
+            patient_id=user_id,
+            patient_name=patient_name,
+            title=title,
+            body=body,
+            trigger=method,
+            location=location,
+            confidence=confidence,
+        )
+    except Exception as e:
+        print(f"[AbuseDetect] Failed to save alert: {e}")
+
+
+def _run_abuse_detection(user_id: int, text: str, location: str = "Unknown"):
+    safe_word = get_user_safe_word(user_id)
+    state = _get_alert_state(user_id)
+    # AI only sees messages sent after the last resolved alert — prevents re-triggering on old danger messages
+    history = get_recent_history_for_detection(
+        user_id,
+        limit=8,
+        after_ts=state["last_resolved_at"]
+    )
+    msg_count = _increment_message_count(user_id)
+
+    run_detection_async(
+        text=text,
+        safe_word=safe_word,
+        recent_history=history,
+        message_count=msg_count,
+        user_id=user_id,
+        location=location,
+        on_trigger=_dispatch_abuse_alert,
+        has_open_alert=state["has_open_alert"],
+    )
+ 
+
+
 # scan_message_and_recompute_risk has been refactored and moved to services.risk_engine as extract_symptoms_from_text_and_update_risk
 
 @chat_bp.route("/message", methods=["POST"])
@@ -72,6 +238,7 @@ def analyze():
     user_profile = data.get("profile", {})
     mode = data.get("mode", "danger")  # danger / ppd / nutrition / general
     user_id = data.get("user_id", 1)  # Default dummy user_id for sessionless calls
+    location   = data.get("location", "Unknown")
 
     if not user_input:
         return jsonify({"error": "No message provided"}), 400
@@ -92,6 +259,8 @@ def analyze():
         ).start()
     except Exception as e:
         print("Symptom scanning failed:", e)
+
+    _run_abuse_detection(user_id, user_input, location)
 
     # Run RAG Query — pass detected language and user_id to leverage history context
     try:
@@ -226,6 +395,7 @@ def speak():
         
     mode = request.form.get("mode", "danger")
     user_id = request.form.get("user_id")
+    location = request.form.get("location", "Unknown") 
     try:
         user_id = int(user_id) if user_id else 1
     except:
@@ -290,6 +460,8 @@ def speak():
             ).start()
         except Exception as e:
             print("Symptom scanning failed:", e)
+
+        _run_abuse_detection(user_id, transcribed_text, location)
 
     # Pass transcribed text to RAG with history context
     try:

@@ -2,6 +2,8 @@ import React, { useEffect, useMemo, useState, useRef } from 'react';
 import { Activity, AlertTriangle, CheckCircle2, ClipboardList, Sparkles, Users, Camera } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { clinicianAPI } from '../api';
+import { doc as fsDoc, deleteDoc } from 'firebase/firestore';
+import { db } from '../api/firebase';
 
 const STATS_CACHE_KEY = 'clinicianStatsCache';
 const ALERTS_CACHE_KEY = 'clinicianAlertsCache';
@@ -60,7 +62,7 @@ const ClinicianDashboard = () => {
         if (cachedAlerts) {
           const parsedAlerts = JSON.parse(cachedAlerts);
           const safeCachedAlerts = Array.isArray(parsedAlerts)
-            ? parsedAlerts.filter((alert) => alert.alert_type !== 'sos')
+            ? parsedAlerts.filter((alert) => alert.alert_type !== 'sos' && alert.alert_type !== 'abuse_alert')
             : [];
           setAlerts(safeCachedAlerts);
         }
@@ -86,7 +88,7 @@ const ClinicianDashboard = () => {
         }
         const safeStats = statsData || { total_patients: 0, active_alerts: 0, high_risk_week: 0 };
         const safeAlerts = Array.isArray(alertsData)
-          ? alertsData.filter((alert) => alert.alert_type !== 'sos')
+          ? alertsData.filter((alert) => alert.alert_type !== 'sos' && alert.alert_type !== 'abuse_alert')
           : [];
         setStats(safeStats);
         setAlerts(safeAlerts);
@@ -116,17 +118,24 @@ const ClinicianDashboard = () => {
     };
   }, []);
 
-  const handleResolve = async (alertId) => {
-    if (resolvingIds.includes(alertId)) {
-      return;
-    }
+  const handleResolve = async (alertId, alertType) => {
+    if (resolvingIds.includes(alertId)) return;
+
     const currentAlerts = alerts;
     const nextAlerts = currentAlerts.filter((alert) => alert.id !== alertId);
     setResolvingIds((prev) => [...prev, alertId]);
     setAlerts(nextAlerts);
     localStorage.setItem(ALERTS_CACHE_KEY, JSON.stringify(nextAlerts));
+
     try {
       await clinicianAPI.dismissAlert(alertId);
+
+      // Also delete from Firestore if it's an abuse alert
+      if (alertType === 'abuse_alert' && db) {
+        await deleteDoc(fsDoc(db, 'abuse_alerts', `alert_${alertId}`)).catch((e) => {
+          console.warn('[Dashboard] Firestore delete failed:', e);
+        });
+      }
     } catch (err) {
       setAlerts(currentAlerts);
       localStorage.setItem(ALERTS_CACHE_KEY, JSON.stringify(currentAlerts));
@@ -241,7 +250,7 @@ const ClinicianDashboard = () => {
                         {alert.created_at ? new Date(alert.created_at).toLocaleString() : 'Just now'}
                       </span>
                       <button
-                        onClick={() => handleResolve(alert.id)}
+                        onClick={() => handleResolve(alert.id, alert.alert_type)}
                         disabled={resolvingIds.includes(alert.id)}
                         className="px-3 py-1.5 rounded-full bg-white text-[10px] font-black uppercase tracking-wider border border-danger/20 text-danger hover:bg-danger hover:text-white transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
                       >

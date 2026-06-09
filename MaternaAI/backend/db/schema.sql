@@ -13,16 +13,30 @@ CREATE TABLE users (
     is_postpartum BOOLEAN DEFAULT FALSE,
     persona VARCHAR(20) DEFAULT 'pregnant', -- pregnant | postpartum | recovery
     due_date DATE,
-    location VARCHAR(100),
+    location TEXT,
+    latitude  DOUBLE PRECISION,
+    longitude DOUBLE PRECISION,
     division VARCHAR(50),
     district VARCHAR(100),
     area VARCHAR(100),
     address_details TEXT,
     emergency_contact VARCHAR(20),
     fcm_token VARCHAR(255),
+    safe_word VARCHAR(100),
     weeks_updated_at TIMESTAMPTZ DEFAULT NOW(),
     profile_image TEXT,
-    created_at TIMESTAMPTZ DEFAULT NOW()
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+
+    CONSTRAINT chk_safe_word_predefined CHECK (
+        safe_word IS NULL OR safe_word = ''
+        OR safe_word IN (
+            'telescope', 'mosaic', 'lantern', 'compass', 'anchor',
+            'prism', 'fortress', 'velvet', 'cobalt', 'labyrinth',
+            'marble', 'quartz', 'signal', 'ember', 'zenith',
+            'পথ', 'নৌকা', 'গাম', 'বেল', 'পাথর', 
+            'সোনা', 'পেন', 'বাস', 'টপ', 'লক'
+        )
+    )
 );
 
 -- Health logs (what user reports each session)
@@ -327,3 +341,6 @@ $$;
 CREATE TRIGGER trg_care_plan_updated_at
 BEFORE UPDATE ON care_plan_items
 FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+
+CREATE INDEX idx_clinician_alerts_patient_open
+    ON clinician_alerts (patient_id, is_dismissed, created_at DESC);

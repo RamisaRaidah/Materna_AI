@@ -71,9 +71,10 @@ def query(sql, params=None, fetch="all"):
 def init_db():
     """Run schema.sql to create tables if they don't exist."""
     schema_path = os.path.join(os.path.dirname(__file__),"schema.sql")
-    conn = get_conn()
+    conn = None
     cur = None
     try:
+        conn = get_conn()
         with open(schema_path,"r") as f:
             sql = f.read()
 
@@ -103,4 +104,4 @@ def ensure_user_profile_image_column():
 def ensure_clinician_verification_columns():
     """Add status and verification_documents columns to users table."""
     query("ALTER TABLE users ADD COLUMN IF NOT EXISTS status VARCHAR(20) DEFAULT 'approved'", fetch="none")
-    query("ALTER TABLE users ADD COLUMN IF NOT EXISTS verification_documents TEXT", fetch="none")
+    query("ALTER TABLE users ADD COLUMN IF NOT EXISTS verification_documents TEXT", fetch="none")

@@ -71,16 +71,17 @@ export const chatAPI = {
     const response = await api.get(`/api/chat/history/${userId}`);
     return response.data;
   },
-  analyze: async (message, profile, mode, userId) => {
-    const response = await api.post('/api/chat/analyze', { message, profile, mode, user_id: userId });
+  analyze: async (message, profile, mode, userId, location = "Unknown") => {
+    const response = await api.post('/api/chat/analyze', { message, profile, mode, user_id: userId, location, });
     return response.data;
   },
-  speak: async (audioBlob, profile, mode, userId, clientTranscribedText = '') => {
+  speak: async (audioBlob, profile, mode, userId, clientTranscribedText = '', location = "Unknown") => {
     const formData = new FormData();
     formData.append('audio', audioBlob, 'recording.webm');
     formData.append('profile', JSON.stringify(profile));
     formData.append('mode', mode);
     formData.append('user_id', userId);
+    formData.append('location', location);
     if (clientTranscribedText) {
       formData.append('client_transcribed_text', clientTranscribedText);
     }
@@ -263,6 +264,10 @@ export const notificationsAPI = {
 export const sosAPI = {
   triggerSOS: async (sosData) => {
     const response = await api.post('/api/sos/trigger', sosData);
+    return response.data;
+  },
+  triggerAbuseAlert: async (payload) => {
+    const response = await api.post('/api/sos/abuse-alert', payload);
     return response.data;
   },
   getContacts: async () => {

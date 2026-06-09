@@ -4,7 +4,7 @@ import json
 import logging
 from datetime import datetime
 import firebase_admin
-from firebase_admin import credentials, messaging
+from firebase_admin import credentials, messaging, firestore
 
 logger = logging.getLogger("firebase_sync")
 
@@ -12,16 +12,19 @@ logger = logging.getLogger("firebase_sync")
 PROJECT_ID = os.getenv("VITE_FIREBASE_PROJECT_ID", "maternaai-bd943")
 
 # Initialize Firebase Admin
+db= None
 try:
     cred_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "serviceAccountKey.json")
     if os.path.exists(cred_path):
         cred = credentials.Certificate(cred_path)
         firebase_admin.initialize_app(cred)
+        db = firestore.client()
         logger.info("Firebase Admin initialized successfully.")
     else:
         logger.warning(f"serviceAccountKey.json not found at {cred_path}. FCM push notifications will fail.")
 except Exception as e:
     logger.error(f"Failed to initialize Firebase Admin: {e}")
+
 
 def send_fcm_notification(fcm_token, title, body, data=None):
     """
@@ -84,3 +87,27 @@ def sync_notification_to_firestore(user_id, title, body, notif_type="info", data
         logger.error(f"Firestore request exception: {e}")
         
     return None
+
+def sync_abuse_alert_to_firestore(alert_id, patient_id, patient_name, title, body, trigger, location, confidence):
+    print("DEBUG: Entering sync_abuse_alert_to_firestore")
+    if db is None:
+        print("[AbuseDetect] Firestore client not initialized — skipping write")
+        return
+    try:
+        from datetime import datetime, timezone
+        doc_id = f"alert_{alert_id or int(datetime.now().timestamp())}"
+        db.collection("abuse_alerts").document(doc_id).set({
+            "alert_id": alert_id,
+            "patient_id": patient_id,
+            "patient_name": patient_name,
+            "title": title,
+            "body": body,
+            "trigger": trigger,
+            "location": location,
+            "confidence": confidence,
+            "is_read": False,
+            "createdAt": datetime.now(timezone.utc),
+        })
+        print(f"[AbuseDetect] Firestore written for alert {alert_id}")
+    except Exception as e:
+        print(f"[AbuseDetect] Firestore write failed: {e}")

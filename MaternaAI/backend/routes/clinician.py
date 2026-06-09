@@ -81,7 +81,7 @@ def dismiss_alert(alert_id):
 
     role = g.user.get("role", "patient")
     alert = query(
-        "SELECT id, patient_id, title FROM clinician_alerts WHERE id=%s",
+        "SELECT id, patient_id, title, alert_type FROM clinician_alerts WHERE id=%s",
         (alert_id,),
         fetch="one"
     )
@@ -102,6 +102,15 @@ def dismiss_alert(alert_id):
             (alert_id, g.user["id"]),
             fetch="none"
         )
+
+    if alert.get("alert_type") == "abuse_alert":
+        try:
+            from services.firebase_service import db as fdb
+            doc_id = f"alert_{alert_id}"
+            fdb.collection("abuse_alerts").document(doc_id).delete()
+        except Exception as e:
+            print(f"[Dismiss] Firestore delete failed (non-fatal): {e}")
+
 
     if role in ("clinician", "admin"):
         problem_name = alert.get("title") or "your concern"
@@ -127,11 +136,11 @@ def get_sos_alerts():
     alerts = query(
         """
         SELECT ca.*, u.name AS patient_name, u.phone AS patient_phone,
-               u.weeks_pregnant, u.location
+               u.weeks_pregnant, COALESCE(u.location, '') AS location
         FROM clinician_alerts ca
         JOIN users u ON u.id = ca.patient_id
         WHERE ca.is_dismissed = FALSE
-          AND ca.alert_type = 'sos'
+          AND ca.alert_type IN ('sos', 'abuse_alert')
           AND (
                 ca.assigned_to = %s
                 OR (
@@ -147,11 +156,12 @@ def get_sos_alerts():
         """,
         (g.user["id"], clinician_district, clinician_district)
     )
-    return jsonify(alerts)
+    return jsonify(alerts or [])
 
 @clinician_bp.route("/alerts/<int:alert_id>/assign", methods=["PATCH"])
 @require_auth
 def assign_alert(alert_id):
+    from services.firebase_service import db as fdb
     auth_error = _require_clinician()
     if auth_error:
         return auth_error
@@ -162,9 +172,22 @@ def assign_alert(alert_id):
         fetch="one"
     )
     if not alert:
-        return jsonify({"error": "Alert not found"}), 404
-    if alert.get("alert_type") != "sos":
-        return jsonify({"error": "Only SOS alerts can be assigned"}), 400
+        doc = fdb.collection("abuse_alerts").document(f"alert_{alert_id}").get()
+        if not doc.exists:
+            return jsonify({"error": "Alert not found in SQL or Firestore"}), 404
+        
+        # Insert into SQL table
+        data = doc.to_dict()
+        query("""
+            INSERT INTO clinician_alerts (patient_id, alert_type, title, body, status, assigned_to, assigned_at)
+            VALUES (%s, %s, %s, %s, 'assigned', %s, NOW())
+            ON CONFLICT DO NOTHING
+        """, (int(data['patient_id']), 'abuse_alert', data.get('title', '🔴 SILENT ABUSE ALERT'), data.get('body', ''), g.user["id"]), fetch="none")
+        
+        return jsonify({"message": "Alert synchronized and assigned"})
+    
+    if alert.get("alert_type") not in ("sos", "abuse_alert"):
+        return jsonify({"error": "Only SOS/abuse alerts alerts can be assigned"}), 400
     if alert.get("assigned_to") and alert.get("assigned_to") != g.user["id"]:
         return jsonify({"error": "Alert already assigned"}), 409
     if alert.get("assigned_to") == g.user["id"]:
@@ -380,4 +403,24 @@ def list_contacts():
         (role_filter,)
     )
     return jsonify(contacts)
+
+@clinician_bp.route("/alerts/sos/debug", methods=["GET"])
+@require_auth  
+def debug_sos():
+    auth_error = _require_clinician()
+    if auth_error:
+        return auth_error
+    
+    rows = query(
+        """
+        SELECT ca.id, ca.alert_type, ca.is_dismissed, ca.status, 
+               ca.created_at, ca.patient_id, u.name as patient_name
+        FROM clinician_alerts ca
+        JOIN users u ON u.id = ca.patient_id
+        WHERE ca.is_dismissed = FALSE
+        ORDER BY ca.created_at DESC
+        LIMIT 10
+        """,
+    )
+    return jsonify(rows)
  

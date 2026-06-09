@@ -3,6 +3,7 @@ import random
 from db import query
 from services.auth import hash_password, check_password, create_token, require_auth
 from services.sms import send_simulated_sms
+from services.abuse_detection import PREDEFINED_SAFE_WORDS, validate_safe_word
 
 auth_bp = Blueprint("auth", __name__)
 
@@ -134,8 +135,19 @@ def me():
 def update_me():
     data = request.get_json() or {}
     allowed = ["name", "age", "weeks_pregnant", "is_postpartum", "persona",
-               "division", "district", "area", "emergency_contact", "due_date", "profile_image"]
-    updates = {k: v for k, v in data.items() if k in allowed}
+               "division", "district", "area", "emergency_contact", "due_date", "profile_image", "location", "latitude", "longitude", "safe_word"]
+    updates = {k: v for k, v in data.items() if k in allowed and v is not None}
+
+    if "safe_word" in updates:
+        raw_word = updates["safe_word"]
+        validated = validate_safe_word(raw_word)
+        if raw_word != "" and validated is None:
+            return jsonify({
+                "error": "Invalid safe word. Please choose one of the predefined options.",
+                "valid_options": sorted(PREDEFINED_SAFE_WORDS),
+            }), 400
+        updates["safe_word"] = validated or ""
+
     if not updates:
         return jsonify({"error": "Nothing to update"}), 400
  
