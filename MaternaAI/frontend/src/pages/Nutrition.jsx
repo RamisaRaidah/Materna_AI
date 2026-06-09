@@ -752,7 +752,7 @@ const Nutrition = () => {
             >
               Consult Dietitian Assistant
             </SectionLabel>
-            <div className="min-h-[220px] max-h-[260px] overflow-y-auto flex flex-col gap-2 p-1">
+            <div className="min-h-[220px] max-h-[420px] overflow-y-auto flex flex-col gap-2 p-1">
               {messages.map((m, i) => {
                 const isUser = m.role === 'user';
                 return (
