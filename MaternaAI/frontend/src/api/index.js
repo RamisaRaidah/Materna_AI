@@ -143,6 +143,22 @@ export const healthAPI = {
     const response = await api.post('/api/health/care-plan', vitalsData);
     return response.data;
   },
+  logFeed: async ({ feed_type = 'breast' } = {}) => {
+    const response = await api.post('/api/health/newborn/feed', { feed_type });
+    return response.data;
+  },
+  logSleep: async (durationMins = null) => {
+    const response = await api.post('/api/health/newborn/sleep', { duration_mins: durationMins });
+    return response.data;
+  },
+  logDiaper: async () => {
+    const response = await api.post('/api/health/newborn/diaper');
+    return response.data;
+  },
+  getNewbornToday: async () => {
+    const response = await api.get('/api/health/newborn/today');
+    return response.data;
+  },
 };
 
 export const communityAPI = {

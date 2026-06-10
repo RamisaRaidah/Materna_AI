@@ -85,12 +85,23 @@ def report_danger_signs():
     )
 
     # Create alert for clinician
-    alert_map = {
-        "bleeding": ("hemorrhage", "🚨 CRITICAL: Active Severe Vaginal Bleeding"),
-        "vision":   ("preeclampsia", "⚡ PREECLAMPSIA DANGER SIGNS FLAGGED"),
-        "swelling": ("preeclampsia", "⚡ PREECLAMPSIA DANGER SIGNS FLAGGED"),
-        "fever":    ("infection", "🔥 INFECTION ALERT: High Fever Reported"),
-    }
+    is_postpartum = g.user.get("is_postpartum", False)
+    if is_postpartum:
+        alert_map = {
+            "bleeding": ("hemorrhage", "🚨 POSTPARTUM HAEMORRHAGE: Heavy Bleeding Reported"),
+            "vision":   ("preeclampsia", "⚡ POSTPARTUM PRE-ECLAMPSIA: Danger Signs"),
+            "swelling": ("preeclampsia", "⚡ POSTPARTUM PRE-ECLAMPSIA: Danger Signs"),
+            "fever":    ("infection", "🔥 POSTPARTUM INFECTION RISK: Wound Fever/Infection"),
+        }
+        sos_title = "🚨 POSTPARTUM EMERGENCY SOS — Danger Signs"
+    else:
+        alert_map = {
+            "bleeding": ("hemorrhage", "🚨 CRITICAL: Active Severe Vaginal Bleeding"),
+            "vision":   ("preeclampsia", "⚡ PREECLAMPSIA DANGER SIGNS FLAGGED"),
+            "swelling": ("preeclampsia", "⚡ PREECLAMPSIA DANGER SIGNS FLAGGED"),
+            "fever":    ("infection", "🔥 INFECTION ALERT: High Fever Reported"),
+        }
+        sos_title = "🚨 EMERGENCY SOS — Danger Signs"
 
     if score >= 8:
         matched = False
@@ -119,7 +130,7 @@ def report_danger_signs():
         query(
             """INSERT INTO clinician_alerts (patient_id, alert_type, title, body)
             VALUES (%s,%s,%s,%s)""",
-            (g.user["id"], "sos", "🚨 EMERGENCY SOS — Danger Signs",
+            (g.user["id"], "sos", sos_title,
             f"Symptoms: {', '.join(symptoms)}"),
             fetch="none"
         )
@@ -293,11 +304,33 @@ def generate_care_plan():
     is_postpartum = data.get("is_postpartum", False)
 
     if is_postpartum:
-        prompt = f"""You are a postnatal health AI advisor for new mothers in rural Bangladesh...
-        - Focus: wound recovery, lochia monitoring, breastfeeding/formula support,
-        postpartum nutrition (iron, calcium), newborn sleep/feeding patterns
-        - No trimester references. No weeks-pregnant references.
-        ..."""
+        prompt = f"""You are a postnatal health AI advisor for new mothers in rural Bangladesh.
+
+Generate a personalized daily postpartum care plan in {"Bengali" if lang == "bn" else "English"} for this patient:
+- Name: {name}
+- Mode: Postpartum (already delivered baby, in the recovery stage)
+- Latest BP: {bp} mmHg
+- Latest glucose: {glucose} mmol/L
+- Water intake today: {water} L
+- Location: Dhaka/Sreemangal, Bangladesh
+
+Return ONLY a valid JSON array (no markdown, no backticks) of exactly 4 care plan items. Schema:
+[
+  {{
+    "id": "ai-1",
+    "title": "Short action title",
+    "desc": "Specific, postpartum-related actionable advice in 1-2 sentences tailored to her vitals and postpartum status."
+  }}
+]
+
+Rules:
+- Focus: wound recovery (cesarean or perineal), lochia monitoring (postpartum bleeding), breastfeeding/formula support, postpartum nutrition (iron, calcium, protein-rich foods for lactation), newborn sleep/feeding patterns, maternal mental well-being (checking for low mood/PPD).
+- No trimester references. No weeks-pregnant references (the patient has already given birth).
+- If BP systolic >= 140, include postpartum preeclampsia / hypertension monitoring advice.
+- If glucose >= 7.8, include postpartum blood sugar / dietary guidance.
+- Always include one nutrition tip using locally available Bangladeshi foods suitable for lactating mothers (e.g., small mola fish, spinach, lentils, bottle gourd/lau, bananas, milk).
+- Keep language simple, empathetic, warm, and appropriate for a rural Bangladeshi patient.
+- If language is 'bn', use natural, empathetic, and culturally appropriate Bengali."""
     else:
 
         prompt = f"""You are a maternal health AI advisor for pregnant women in rural Bangladesh.
@@ -350,50 +383,201 @@ Rules:
             print("Gemini care plan failed:", e)
 
     # Fallback — static contextual plan based on vitals
-    if lang == "bn":
-        fallback = [
-            {
-                "id": "fallback-1",
-                "title": "রক্তচাপ পর্যবেক্ষণ" if bp_val >= 130 else "প্রতিদিনের আয়রন ট্যাবলেট",
-                "desc": "প্রতিদিন দুবার রক্তচাপ মাপুন এবং মাথাব্যথা বা ঝাপসা দৃষ্টি দেখলে ধাত্রীকে জানান।" if bp_val >= 130 else "আয়রনের অভাব দূর করতে প্রতিদিন দুপুর ২টায় একটি আয়রন ট্যাবলেট খান।"
-            },
-            {
-                "id": "fallback-2",
-                "title": "পানি পানের লক্ষ্য",
-                "desc": f"আপনি আজ {water} লিটার পানি পান করেছেন। গর্ভের তরল ঠিক রাখতে প্রতিদিন অন্তত ২.৫ লিটার বিশুদ্ধ পানি পান করুন।"
-            },
-            {
-                "id": "fallback-3",
-                "title": "পুষ্টি — স্থানীয় খাবার",
-                "desc": "আয়রন, প্রোটিন এবং ফোলেটের জন্য আজকের খাবারে ছোট মলা মাছ, ডাল এবং শাকসবজি অন্তর্ভুক্ত করুন।"
-            },
-            {
-                "id": "fallback-4",
-                "title": "হালকা ব্যায়াম",
-                "desc": f"{weeks} সপ্তাহে, ১০ মিনিট ধীরে হাঁটুন বা হালকা ব্যায়াম করুন। ভারী কাজ বা হঠাৎ ঝোঁক নেওয়া থেকে বিরত থাকুন।"
-            }
-        ]
+    if is_postpartum:
+        if lang == "bn":
+            fallback = [
+                {
+                    "id": "fallback-1",
+                    "title": "রক্তচাপ পর্যবেক্ষণ" if bp_val >= 130 else "প্রসবোত্তর বিশ্রাম",
+                    "desc": "প্রসবের পর রক্তচাপের দিকে নজর রাখুন। মাথা ব্যথা বা ঝাপসা দৃষ্টি হলে দ্রুত মিডওয়াইফকে জানান।" if bp_val >= 130 else "নবজাতকের ঘুমের সাথে নিজের ঘুমের সমন্বয় করুন এবং শরীরকে নিরাময় হতে পর্যাপ্ত বিশ্রাম দিন।"
+                },
+                {
+                    "id": "fallback-2",
+                    "title": "স্তন্যপান করানোর পুষ্টি",
+                    "desc": "স্তন্যদানকারী মায়েদের অতিরিক্ত ক্যালোরি ও পুষ্টি প্রয়োজন। খাবারে ডিম, দুধ, ও প্রোটিন রাখুন এবং আয়রন-ক্যালসিয়াম সাপ্লিমেন্ট চালু রাখুন।"
+                },
+                {
+                    "id": "fallback-3",
+                    "title": "পানি পানের লক্ষ্য",
+                    "desc": f"আপনি আজ {water} লিটার পানি পান করেছেন। স্তন্যপান করানোর জন্য শরীর হাইড্রেটেড রাখা অত্যন্ত জরুরি, তাই দৈনিক ৩ লিটার পানি পান করার চেষ্টা করুন।"
+                },
+                {
+                    "id": "fallback-4",
+                    "title": "প্রসবোত্তর বিপদের লক্ষণ",
+                    "desc": "যদি অতিরিক্ত রক্তপাত (লোচিয়া), প্রস্রাবে জ্বালাপোড়া বা তীব্র জ্বর হয়, তবে কালবিলম্ব না করে মিডওয়াইফ বা হাসপাতালে যোগাযোগ করুন।"
+                }
+            ]
+        else:
+            fallback = [
+                {
+                    "id": "fallback-1",
+                    "title": "Blood Pressure Monitoring" if bp_val >= 130 else "Postpartum Rest",
+                    "desc": "Monitor your blood pressure closely. Report severe headache or vision changes to your midwife." if bp_val >= 130 else "Rest whenever your newborn sleeps to help your body heal and recover."
+                },
+                {
+                    "id": "fallback-2",
+                    "title": "Nutrition for Lactation",
+                    "desc": "Lactating mothers need extra calories and protein. Include eggs, milk, lentils in your meals, and continue iron/calcium supplements."
+                },
+                {
+                    "id": "fallback-3",
+                    "title": "Hydration Goal",
+                    "desc": f"You've logged {water}L today. Aim for 3L of water daily to support healthy lactation and recovery."
+                },
+                {
+                    "id": "fallback-4",
+                    "title": "Postpartum Danger Signs",
+                    "desc": "Seek immediate care if you experience excessive bleeding, foul-smelling discharge, or high fever."
+                }
+            ]
     else:
-        fallback = [
-            {
-                "id": "fallback-1",
-                "title": "Blood Pressure Monitoring" if bp_val >= 130 else "Daily Iron Supplementation",
-                "desc": "Monitor your BP twice daily and report any headache or vision changes to your midwife immediately." if bp_val >= 130 else "Take your iron tablet at 2 PM with a glass of guava juice for best absorption."
-            },
-            {
-                "id": "fallback-2",
-                "title": "Hydration Goal",
-                "desc": f"You've logged {water}L today. Aim for 2.5L of filtered water daily to support amniotic fluid levels."
-            },
-            {
-                "id": "fallback-3",
-                "title": "Nutrition — Local Foods",
-                "desc": "Include small mola fish, lentil soup, and leafy greens in today's meals for iron, protein and folate."
-            },
-            {
-                "id": "fallback-4",
-                "title": "Gentle Movement",
-                "desc": f"At week {weeks}, try 10 minutes of slow walking or pelvic tilts. Avoid heavy lifting or sudden exertion."
-            }
-        ]
+        if lang == "bn":
+            fallback = [
+                {
+                    "id": "fallback-1",
+                    "title": "রক্তচাপ পর্যবেক্ষণ" if bp_val >= 130 else "প্রতিদিনের আয়রন ট্যাবলেট",
+                    "desc": "প্রতিদিন দুবার রক্তচাপ মাপুন এবং মাথাব্যথা বা ঝাপসা দৃষ্টি দেখলে ধাত্রীকে জানান।" if bp_val >= 130 else "আয়রনের অভাব দূর করতে প্রতিদিন দুপুর ২টায় একটি আয়রন ট্যাবলেট খান।"
+                },
+                {
+                    "id": "fallback-2",
+                    "title": "পানি পানের লক্ষ্য",
+                    "desc": f"আপনি আজ {water} লিটার পানি পান করেছেন। গর্ভের তরল ঠিক রাখতে প্রতিদিন অন্তত ২.৫ লিটার বিশুদ্ধ পানি পান করুন।"
+                },
+                {
+                    "id": "fallback-3",
+                    "title": "পুষ্টি — স্থানীয় খাবার",
+                    "desc": "আয়রন, প্রোটিন এবং ফোলেটের জন্য আজকের খাবারে ছোট মলা মাছ, ডাল এবং শাকসবজি অন্তর্ভুক্ত করুন।"
+                },
+                {
+                    "id": "fallback-4",
+                    "title": "হালকা ব্যায়াম",
+                    "desc": f"{weeks} সপ্তাহে, ১০ মিনিট ধীরে হাঁটুন বা হালকা ব্যায়াম করুন। ভারী কাজ বা হঠাৎ ঝোঁক নেওয়া থেকে বিরত থাকুন।"
+                }
+            ]
+        else:
+            fallback = [
+                {
+                    "id": "fallback-1",
+                    "title": "Blood Pressure Monitoring" if bp_val >= 130 else "Daily Iron Supplementation",
+                    "desc": "Monitor your BP twice daily and report any headache or vision changes to your midwife immediately." if bp_val >= 130 else "Take your iron tablet at 2 PM with a glass of guava juice for best absorption."
+                },
+                {
+                    "id": "fallback-2",
+                    "title": "Hydration Goal",
+                    "desc": f"You've logged {water}L today. Aim for 2.5L of filtered water daily to support amniotic fluid levels."
+                },
+                {
+                    "id": "fallback-3",
+                    "title": "Nutrition — Local Foods",
+                    "desc": "Include small mola fish, lentil soup, and leafy greens in today's meals for iron, protein and folate."
+                },
+                {
+                    "id": "fallback-4",
+                    "title": "Gentle Movement",
+                    "desc": f"At week {weeks}, try 10 minutes of slow walking or pelvic tilts. Avoid heavy lifting or sudden exertion."
+                }
+            ]
     return jsonify(fallback), 200
+
+
+# Newborn Tracking Endpoints
+
+@health_bp.route("/newborn/feed", methods=["POST"])
+@require_auth
+def log_newborn_feed():
+    # force=True  — ignore Content-Type header (axios omits it for bodyless POST)
+    # silent=True — return None instead of raising a 415 when body is absent/invalid
+    data = request.get_json(force=True, silent=True) or {}
+    # Accept optional feed_type: 'breast' | 'formula' — defaults to 'breast'
+    feed_type = data.get("feed_type", "breast")
+    if feed_type not in ("breast", "formula"):
+        feed_type = "breast"
+
+    log = query(
+        """
+        INSERT INTO newborn_logs (user_id, log_type, notes)
+        VALUES (%s, 'feed', %s)
+        RETURNING *
+        """,
+        (g.user["id"], feed_type),
+        fetch="one"
+    )
+    return jsonify({"success": True, "log": log}), 201
+
+
+@health_bp.route("/newborn/sleep", methods=["POST"])
+@require_auth
+def log_newborn_sleep():
+    data = request.get_json(force=True, silent=True) or {}
+    duration_mins = data.get("duration_mins")
+    notes = data.get("notes")
+    
+    log = query(
+        """
+        INSERT INTO newborn_logs (user_id, log_type, duration_mins, notes)
+        VALUES (%s, 'sleep', %s, %s)
+        RETURNING *
+        """,
+        (g.user["id"], duration_mins, notes),
+        fetch="one"
+    )
+    return jsonify({"success": True, "log": log}), 201
+
+
+@health_bp.route("/newborn/diaper", methods=["POST"])
+@require_auth
+def log_newborn_diaper():
+    """Log a wet diaper event. No body required — just a tap counter."""
+    log = query(
+        """
+        INSERT INTO newborn_logs (user_id, log_type)
+        VALUES (%s, 'diaper')
+        RETURNING *
+        """,
+        (g.user["id"],),
+        fetch="one"
+    )
+    return jsonify({"success": True, "log": log}), 201
+
+
+@health_bp.route("/newborn/today", methods=["GET"])
+@require_auth
+def get_newborn_today():
+    # Counts by log_type
+    logs = query(
+        """
+        SELECT log_type, COUNT(*) as count
+        FROM newborn_logs
+        WHERE user_id = %s AND created_at >= CURRENT_DATE
+        GROUP BY log_type
+        """,
+        (g.user["id"],),
+        fetch="all"
+    )
+
+    result = {"feed": 0, "sleep": 0, "diaper": 0}
+    for row in logs:
+        log_type = row["log_type"]
+        if log_type in result:
+            result[log_type] = row["count"]
+
+    # Return timestamp of the most recent feed today so the frontend
+    # can display "last feed X minutes ago" without a separate request
+    last_feed_row = query(
+        """
+        SELECT created_at
+        FROM newborn_logs
+        WHERE user_id = %s
+          AND log_type = 'feed'
+          AND created_at >= CURRENT_DATE
+        ORDER BY created_at DESC
+        LIMIT 1
+        """,
+        (g.user["id"],),
+        fetch="one"
+    )
+    result["last_feed_at"] = (
+        last_feed_row["created_at"].isoformat() if last_feed_row else None
+    )
+
+    return jsonify(result), 200

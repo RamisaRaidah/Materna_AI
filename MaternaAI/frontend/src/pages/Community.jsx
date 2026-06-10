@@ -98,6 +98,7 @@ const Community = () => {
   // Firestore listeners unsubscribe refs
   const inboxUnsubscribeRef = useRef(null);
   const threadUnsubscribeRef = useRef(null);
+  const threadPollIntervalRef = useRef(null);
   const [activePartnerPhone, setActivePartnerPhone] = useState('');
 
   // Clean up listeners on unmount
@@ -105,6 +106,7 @@ const Community = () => {
     return () => {
       if (inboxUnsubscribeRef.current) inboxUnsubscribeRef.current();
       if (threadUnsubscribeRef.current) threadUnsubscribeRef.current();
+      if (threadPollIntervalRef.current) clearInterval(threadPollIntervalRef.current);
     };
   }, []);
 
@@ -142,18 +144,32 @@ const Community = () => {
     dmThreadEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [dmMessages]);
 
-  // Fetch legacy MySQL Inbox
+  // Fetch legacy MySQL Inbox / Polling fallback
   useEffect(() => {
-    if (user?.id) {
+    if (!user?.id) return;
+
+    const fetchInbox = () => {
       communityAPI.getInbox(user.id)
         .then(data => setMysqlInbox(Array.isArray(data) ? data : []))
         .catch(err => console.warn("Could not load legacy inbox:", err));
+    };
+
+    fetchInbox();
+
+    let pollInbox = null;
+    if (!db) {
+      pollInbox = setInterval(fetchInbox, 10000);
     }
-  }, [user]);
+
+    return () => {
+      if (pollInbox) clearInterval(pollInbox);
+    };
+  }, [user?.id, db]);
 
   // 4. Global listener for DM Inbox (required for unread count badge)
   useEffect(() => {
-    if (!user?.id || !db) return;
+    if (!user?.id) return;
+    if (!db) return;
 
     if (inboxUnsubscribeRef.current) {
       inboxUnsubscribeRef.current();
@@ -497,10 +513,10 @@ const Community = () => {
     return `room_${id1}_${id2}`;
   };
 
-  // API Call: Load DM Inbox List from Firestore
+  // API Call: Load DM Inbox List
   const handleOpenDMDrawer = async () => {
     setShowDMDrawer(true);
-    if (!user?.id || !db) return;
+    if (!user?.id) return;
     setIsDMLoading(true);
     try {
       const clinicianData = await communityAPI.getContacts('clinician');
@@ -512,9 +528,9 @@ const Community = () => {
     }
   };
 
-  // API Call: Load active DM Chat Thread in Real-time
+  // API Call: Load active DM Chat Thread in Real-time / Polling fallback
   const handleSelectDMPartner = async (partnerId, partnerName, partnerPhone = '') => {
-    if (!user?.id || !db) return;
+    if (!user?.id) return;
 
     setActivePartnerId(partnerId);
     setActivePartnerName(partnerName);
@@ -523,15 +539,33 @@ const Community = () => {
     setDmMessages([]); // Clear previous messages instantly
     setMysqlMessages([]);
 
-    try {
-      const legacyMsgs = await communityAPI.getDMThread(user.id, partnerId);
-      setMysqlMessages(legacyMsgs || []);
-    } catch (err) {
-      console.warn("Could not load legacy messages:", err);
-    }
+    const fetchThread = () => {
+      communityAPI.getDMThread(user.id, partnerId)
+        .then(data => {
+          setMysqlMessages(data || []);
+          setIsDMLoading(false);
+        })
+        .catch(err => {
+          console.warn("Could not load legacy messages:", err);
+          setIsDMLoading(false);
+        });
+    };
+
+    fetchThread();
 
     if (threadUnsubscribeRef.current) {
       threadUnsubscribeRef.current();
+      threadUnsubscribeRef.current = null;
+    }
+
+    if (threadPollIntervalRef.current) {
+      clearInterval(threadPollIntervalRef.current);
+      threadPollIntervalRef.current = null;
+    }
+
+    if (!db) {
+      threadPollIntervalRef.current = setInterval(fetchThread, 4000);
+      return;
     }
 
     const roomId = getRoomId(user.id, partnerId);
@@ -596,93 +630,103 @@ const Community = () => {
         threadUnsubscribeRef.current();
         threadUnsubscribeRef.current = null;
       }
+      if (threadPollIntervalRef.current) {
+        clearInterval(threadPollIntervalRef.current);
+        threadPollIntervalRef.current = null;
+      }
     }
   }, [activePartnerId, showDMDrawer]);
 
   // API Call: Dispatch direct message
   const handleSendDMSubmit = async (e) => {
     e.preventDefault();
-    if (!newDMText.trim() || !activePartnerId || !user?.id || !db) return;
+    if (!newDMText.trim() || !activePartnerId || !user?.id) return;
 
     const text = newDMText.trim();
     setNewDMText('');
     setIsSubmittingDM(true);
 
-    const roomId = getRoomId(user.id, activePartnerId);
-
-    try {
-      const timestamp = new Date().toISOString();
-      const messagesRef = collection(db, 'rooms', roomId, 'messages');
-
-      // Write message to Firestore subcollection (IndexedDB queues locally if offline)
-      await addDoc(messagesRef, {
-        senderId: user.id,
-        receiverId: activePartnerId,
-        content: text,
-        createdAt: timestamp,
-        status: 'sent'
-      });
-
-      // Fetch current room summaries to increment recipient unread count
-      const roomRef = doc(db, 'rooms', roomId);
-
-      let partnerUnread = 0;
-      const roomSnapData = await getDoc(roomRef);
-      if (roomSnapData.exists()) {
-        const roomData = roomSnapData.data();
-        partnerUnread = roomData.unreadCount?.[String(activePartnerId)] || 0;
-      }
-
-      // Update room metadata
-      await setDoc(roomRef, {
-        participants: [user.id, activePartnerId],
-        lastMessage: text,
-        lastSentAt: timestamp,
-        partnerNames: {
-          [String(user.id)]: user.name,
-          [String(activePartnerId)]: activePartnerName
-        },
-        unreadCount: {
-          [String(activePartnerId)]: partnerUnread + 1,
-          [String(user.id)]: 0
-        }
-      }, { merge: true });
-
-      // Simultaneously save to MySQL backend database
+    if (db) {
+      const roomId = getRoomId(user.id, activePartnerId);
       try {
-        await communityAPI.sendDM(activePartnerId, { sender_id: user.id, content: text });
-      } catch (sqlErr) {
-        console.warn("Failed to sync message to MySQL:", sqlErr);
-      }
+        const timestamp = new Date().toISOString();
+        const messagesRef = collection(db, 'rooms', roomId, 'messages');
 
-      // If online, trigger simulated offline SMS fallback notify
-      if (navigator.onLine) {
-        let phoneNum = activePartnerPhone;
-        if (!phoneNum) {
-          const clin = clinicianContacts.find(c => c.id === activePartnerId);
-          if (clin) phoneNum = clin.phone;
+        // Write message to Firestore subcollection (IndexedDB queues locally if offline)
+        await addDoc(messagesRef, {
+          senderId: user.id,
+          receiverId: activePartnerId,
+          content: text,
+          createdAt: timestamp,
+          status: 'sent'
+        });
+
+        // Fetch current room summaries to increment recipient unread count
+        const roomRef = doc(db, 'rooms', roomId);
+
+        let partnerUnread = 0;
+        const roomSnapData = await getDoc(roomRef);
+        if (roomSnapData.exists()) {
+          const roomData = roomSnapData.data();
+          partnerUnread = roomData.unreadCount?.[String(activePartnerId)] || 0;
         }
-        if (phoneNum) {
-          try {
-            await fetch('/api/sms/send_offline_notify', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                sender_name: user.name,
-                recipient_phone: phoneNum,
-                message_content: text
-              })
-            });
-          } catch (smsErr) {
-            console.warn("Simulated SMS gateway failed:", smsErr);
+
+        // Update room metadata
+        await setDoc(roomRef, {
+          participants: [user.id, activePartnerId],
+          lastMessage: text,
+          lastSentAt: timestamp,
+          partnerNames: {
+            [String(user.id)]: user.name,
+            [String(activePartnerId)]: activePartnerName
+          },
+          unreadCount: {
+            [String(activePartnerId)]: partnerUnread + 1,
+            [String(user.id)]: 0
           }
+        }, { merge: true });
+      } catch (err) {
+        console.error("DM Firestore dispatch failed:", err);
+      }
+    }
+
+    // Simultaneously save to MySQL backend database
+    try {
+      await communityAPI.sendDM(activePartnerId, { sender_id: user.id, content: text });
+      if (!db) {
+        // Fetch thread to show new message immediately
+        const legacyMsgs = await communityAPI.getDMThread(user.id, activePartnerId);
+        setMysqlMessages(legacyMsgs || []);
+      }
+    } catch (sqlErr) {
+      console.warn("Failed to sync message to MySQL:", sqlErr);
+    }
+
+    // If online, trigger simulated offline SMS fallback notify
+    if (navigator.onLine) {
+      let phoneNum = activePartnerPhone;
+      if (!phoneNum) {
+        const clin = clinicianContacts.find(c => c.id === activePartnerId);
+        if (clin) phoneNum = clin.phone;
+      }
+      if (phoneNum) {
+        try {
+          await fetch('/api/sms/send_offline_notify', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              sender_name: user.name,
+              recipient_phone: phoneNum,
+              message_content: text
+            })
+          });
+        } catch (smsErr) {
+          console.warn("Simulated SMS gateway failed:", smsErr);
         }
       }
-    } catch (err) {
-      console.error("DM Firestore dispatch failed:", err);
-    } finally {
-      setIsSubmittingDM(false);
     }
+
+    setIsSubmittingDM(false);
   };
 
   // Generate dynamic CSS gradients for post visuals based on the active group ID or Category

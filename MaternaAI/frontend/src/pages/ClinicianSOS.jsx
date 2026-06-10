@@ -52,6 +52,7 @@ const ClinicianSOS = () => {
   const [activeMap, setActiveMap] = useState(null);
   const resolvedFirestoreIds = useRef(new Set());
   const sqlAlertsRef = useRef([]);
+  const pendingAssignRef = useRef(new Set());
 
   useEffect(() => {
     let isActive = true;
@@ -105,6 +106,15 @@ const ClinicianSOS = () => {
       snapshot.forEach((docSnap) => {
         if (resolvedFirestoreIds.current.has(docSnap.id)) return;
         const data = docSnap.data();
+
+        if (data.assigned_to) {
+          pendingAssignRef.current.delete(docSnap.id);
+        }
+
+        const assignedTo = pendingAssignRef.current.has(docSnap.id)
+          ? user?.id
+          : (data.assigned_to || null);
+
         firestoreAlerts.push({
           id: docSnap.id,           // e.g. "alert_123"
           sql_id: data.alert_id,    // the real integer SQL id
@@ -116,7 +126,7 @@ const ClinicianSOS = () => {
           trigger: data.trigger || 'unknown',
           confidence: data.confidence || 1,
           created_at: data.createdAt?.toDate?.()?.toISOString() || new Date().toISOString(),
-          assigned_to: null,
+          assigned_to: assignedTo,
           from_firestore: true,
         });
       });
@@ -156,16 +166,18 @@ const ClinicianSOS = () => {
   const handleAssign = async (item) => {
     try {
       setAssigningId(item.id);
-      const numericId = item.from_firestore 
-      ? parseInt(item.id.replace('alert_', '')) 
-      : item.id;
+      pendingAssignRef.current.add(item.id);
+
+      const numericId = item.from_firestore
+        ? parseInt(item.id.replace('alert_', ''))
+        : item.id;
       await clinicianAPI.assignAlert(numericId);
 
       if (item.from_firestore && db) {
         const { doc: fsDocRef, updateDoc } = await import('firebase/firestore');
         await updateDoc(fsDocRef(db, 'abuse_alerts', item.id), {
           assigned_to: user?.id,
-        }).catch(() => {});
+        }).catch(() => { });
       }
 
       setDispatches((prev) => prev.map((alert) => (
@@ -174,6 +186,7 @@ const ClinicianSOS = () => {
           : alert
       )));
     } catch (err) {
+      pendingAssignRef.current.delete(item.id);
       setError('Unable to assign SOS alert. It may already be handled.');
     } finally {
       setAssigningId(null);

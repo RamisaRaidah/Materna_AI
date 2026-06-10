@@ -372,19 +372,6 @@ def create_post(group_id):
         cur = conn.cursor()
         # Insert the post first
         cur.execute("""
-<<<<<<< Updated upstream
-            INSERT INTO posts (group_id, user_id, content, is_anonymous,
-                               moderation_status, moderation_reason)
-            VALUES (%s, %s, %s, %s, %s, %s)
-            RETURNING id, group_id, user_id, content,
-                      is_anonymous, is_flagged, likes, created_at,
-                      NULL as author_name,
-                      COALESCE(moderation_status, 'approved'),
-                      moderation_reason
-        """, (group_id, user_id, content, data.get("is_anonymous", False),
-               moderation_status, moderation_reason))
-        row = cur.fetchone()
-=======
             INSERT INTO posts (group_id, user_id, content, is_anonymous)
             VALUES (%s, %s, %s, %s)
             RETURNING id, group_id, user_id, content, is_anonymous, is_flagged, likes, created_at
@@ -415,7 +402,6 @@ def create_post(group_id):
             (author_image if not inserted[4] else None)
         )
 
->>>>>>> Stashed changes
         conn.commit()
         cur.close()
         return jsonify(_row_to_post(row)), 201

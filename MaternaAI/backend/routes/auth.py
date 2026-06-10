@@ -107,25 +107,43 @@ def register():
  
 @auth_bp.route("/login", methods=["POST"])
 def login():
-    data = request.get_json() or {}
-    phone    = data.get("phone", "").strip()
-    password = data.get("password", "")
- 
-    if not phone or not password:
-        return jsonify({"error": "phone and password required"}), 400
- 
-    user = query("SELECT * FROM users WHERE phone = %s", (phone,), fetch="one")
-    if not user or not check_password(password, user["password_hash"]):
-        return jsonify({"error": "Invalid credentials"}), 401
+    try: 
+        data = request.get_json() or {}
+        phone = data.get("phone", "").strip()
+        password = data.get("password", "")
 
-    if user.get("status") == "rejected":
-        return jsonify({"error": "Your account has been rejected and you are banned from the system."}), 403
- 
-    query("UPDATE users SET last_seen_at = NOW() WHERE id = %s", (user["id"],), fetch="none")
+        print("logging in :", phone, password)
 
-    token = create_token(user["id"], user["role"])
-    safe = {k: v for k, v in user.items() if k != "password_hash"}
-    return jsonify({"token": token, "user": safe})
+        user = query(
+            "SELECT * FROM users WHERE phone = %s",
+            (phone,),
+            fetch="one"
+        )
+
+        print("user =", user)
+
+        print("before password check")
+        result = check_password(password, user["password_hash"])
+        print("password check =", result)
+
+        print("before update")
+        query(
+            "UPDATE users SET last_seen_at = NOW() WHERE id = %s",
+            (user["id"],),
+            fetch="none"
+        )
+
+        print("before token")
+        token = create_token(user["id"], user["role"])
+
+        print("token created")
+
+        safe = {k: v for k, v in user.items() if k != "password_hash"}
+        return jsonify({"token": token, "user": safe})
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({"error": str(e)}), 500
 
 @auth_bp.route("/presence", methods=["POST"])
 @require_auth

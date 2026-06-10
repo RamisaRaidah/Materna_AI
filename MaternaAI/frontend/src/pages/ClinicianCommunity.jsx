@@ -38,12 +38,14 @@ const ClinicianCommunity = () => {
 
   const threadUnsubscribeRef = useRef(null);
   const inboxUnsubscribeRef = useRef(null);
+  const threadPollIntervalRef = useRef(null);
   const messageInputRef = useRef(null);
 
   useEffect(() => {
     return () => {
       if (threadUnsubscribeRef.current) threadUnsubscribeRef.current();
       if (inboxUnsubscribeRef.current) inboxUnsubscribeRef.current();
+      if (threadPollIntervalRef.current) clearInterval(threadPollIntervalRef.current);
     };
   }, []);
 
@@ -76,18 +78,32 @@ const ClinicianCommunity = () => {
     fetchData();
   }, [activeTab, user]);
 
-  // Fetch legacy MySQL Inbox
+  // Fetch legacy MySQL Inbox / Polling fallback
   useEffect(() => {
-    if (user?.id) {
+    if (!user?.id) return;
+
+    const fetchInbox = () => {
       communityAPI.getInbox(user.id)
         .then(data => setMysqlInbox(Array.isArray(data) ? data : []))
         .catch(err => console.warn("Could not load legacy inbox:", err));
+    };
+
+    fetchInbox();
+
+    let pollInbox = null;
+    if (!db) {
+      pollInbox = setInterval(fetchInbox, 10000);
     }
-  }, [user]);
+
+    return () => {
+      if (pollInbox) clearInterval(pollInbox);
+    };
+  }, [user?.id, db]);
 
   // Firestore inbox listener
   useEffect(() => {
-    if (!user?.id || !db) return;
+    if (!user?.id) return;
+    if (!db) return;
 
     const q = fsQuery(
       collection(db, 'rooms'),
@@ -118,7 +134,7 @@ const ClinicianCommunity = () => {
       console.error("Firestore inbox listener error:", err);
     });
 
-  }, [user]);
+  }, [user, db]);
 
   const combinedInbox = useMemo(() => {
     const map = new Map();
@@ -141,9 +157,9 @@ const ClinicianCommunity = () => {
     return merged;
   }, [mysqlInbox, inbox]);
 
-  // Firestore thread listener
+  // Firestore thread listener / Polling fallback
   useEffect(() => {
-    if (!activeContact || !user?.id || !db) {
+    if (!activeContact || !user?.id) {
       setThread([]);
       setMysqlThread([]);
       return;
@@ -153,9 +169,34 @@ const ClinicianCommunity = () => {
     setThread([]);
     setMysqlThread([]);
 
-    communityAPI.getDMThread(user.id, activeContact.id)
-      .then(data => setMysqlThread(data || []))
-      .catch(err => console.warn("Could not load legacy thread:", err));
+    const fetchThread = () => {
+      communityAPI.getDMThread(user.id, activeContact.id)
+        .then(data => {
+          setMysqlThread(data || []);
+          setLoadingThread(false);
+        })
+        .catch(err => {
+          console.warn("Could not load legacy thread:", err);
+          setLoadingThread(false);
+        });
+    };
+
+    fetchThread();
+
+    if (threadUnsubscribeRef.current) {
+      threadUnsubscribeRef.current();
+      threadUnsubscribeRef.current = null;
+    }
+
+    if (threadPollIntervalRef.current) {
+      clearInterval(threadPollIntervalRef.current);
+      threadPollIntervalRef.current = null;
+    }
+
+    if (!db) {
+      threadPollIntervalRef.current = setInterval(fetchThread, 4000);
+      return;
+    }
 
     const roomId = getRoomId(user.id, activeContact.id);
 
@@ -171,10 +212,6 @@ const ClinicianCommunity = () => {
       collection(db, 'rooms', roomId, 'messages'),
       orderBy('createdAt', 'asc')
     );
-
-    if (threadUnsubscribeRef.current) {
-      threadUnsubscribeRef.current();
-    }
 
     threadUnsubscribeRef.current = onSnapshot(q, { includeMetadataChanges: true }, (snapshot) => {
       const msgs = [];
@@ -217,7 +254,17 @@ const ClinicianCommunity = () => {
       setLoadingThread(false);
     });
 
-  }, [activeContact, user]);
+    return () => {
+      if (threadUnsubscribeRef.current) {
+        threadUnsubscribeRef.current();
+        threadUnsubscribeRef.current = null;
+      }
+      if (threadPollIntervalRef.current) {
+        clearInterval(threadPollIntervalRef.current);
+        threadPollIntervalRef.current = null;
+      }
+    };
+  }, [activeContact, user, db]);
 
   const combinedThread = useMemo(() => {
     const earliestFirebaseTime = thread.reduce((min, m) => {
@@ -326,7 +373,7 @@ const ClinicianCommunity = () => {
   const handleSend = (event) => {
     event?.preventDefault();
     const text = message.trim();
-    if (!text || !activeContact || !user?.id || !db) {
+    if (!text || !activeContact || !user?.id) {
       return;
     }
 
@@ -334,48 +381,55 @@ const ClinicianCommunity = () => {
     setMessage('');
     refocusComposer();
 
-    const roomId = getRoomId(user.id, contact.id);
-
     const partnerLabel = activeTab === 'clinician' ? 'Clinician' : 'Patient';
 
     void (async () => {
       try {
         const timestamp = new Date().toISOString();
-        const messagesRef = collection(db, 'rooms', roomId, 'messages');
 
-        await addDoc(messagesRef, {
-          senderId: user.id,
-          receiverId: contact.id,
-          content: text,
-          createdAt: timestamp,
-          status: 'sent'
-        });
+        if (db) {
+          const roomId = getRoomId(user.id, contact.id);
+          const messagesRef = collection(db, 'rooms', roomId, 'messages');
 
-        const roomRef = doc(db, 'rooms', roomId);
+          await addDoc(messagesRef, {
+            senderId: user.id,
+            receiverId: contact.id,
+            content: text,
+            createdAt: timestamp,
+            status: 'sent'
+          });
 
-        let partnerUnread = 0;
-        const roomSnapData = await getDoc(roomRef);
-        if (roomSnapData.exists()) {
-          const roomData = roomSnapData.data();
-          partnerUnread = roomData.unreadCount?.[String(contact.id)] || 0;
-        }
+          const roomRef = doc(db, 'rooms', roomId);
 
-        await setDoc(roomRef, {
-          participants: [user.id, contact.id],
-          lastMessage: text,
-          lastSentAt: timestamp,
-          partnerNames: {
-            [String(user.id)]: user.name,
-            [String(contact.id)]: contact.name || partnerLabel
-          },
-          unreadCount: {
-            [String(contact.id)]: partnerUnread + 1,
-            [String(user.id)]: 0
+          let partnerUnread = 0;
+          const roomSnapData = await getDoc(roomRef);
+          if (roomSnapData.exists()) {
+            const roomData = roomSnapData.data();
+            partnerUnread = roomData.unreadCount?.[String(contact.id)] || 0;
           }
-        }, { merge: true });
+
+          await setDoc(roomRef, {
+            participants: [user.id, contact.id],
+            lastMessage: text,
+            lastSentAt: timestamp,
+            partnerNames: {
+              [String(user.id)]: user.name,
+              [String(contact.id)]: contact.name || partnerLabel
+            },
+            unreadCount: {
+              [String(contact.id)]: partnerUnread + 1,
+              [String(user.id)]: 0
+            }
+          }, { merge: true });
+        }
 
         try {
           await communityAPI.sendDM(contact.id, { sender_id: user.id, content: text });
+          if (!db) {
+            // Fetch thread manually to update locally
+            const legacyMsgs = await communityAPI.getDMThread(user.id, contact.id);
+            setMysqlThread(legacyMsgs || []);
+          }
         } catch (sqlErr) {
           console.warn("Failed to sync message to MySQL:", sqlErr);
         }
