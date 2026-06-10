@@ -276,8 +276,8 @@ const Sidebar = ({
             {/* Name + badge + hold avatar */}
             <div className="flex-1 min-w-0">
               <h4 className="font-bold text-sm text-text-dark truncate">{user?.name || 'Guest User'}</h4>
-              <div className="flex items-center gap-2 mt-0.5 flex-wrap">
-                <span className="inline-block px-2 py-0.5 rounded-full text-[10px] font-extrabold tracking-wider bg-primary-mauve text-white uppercase">
+              <div className="flex items-center gap-2 mt-0.5">
+                <span className="inline-block px-2.5 py-1 rounded-full text-[11.5px] font-extrabold tracking-wide bg-primary-mauve text-white uppercase">
                   {user?.role === 'admin' ? 'Admin Portal'
                     : user?.role === 'clinician' ? 'Clinician Portal'
                       : user?.is_postpartum ? 'Postpartum Mode'
@@ -286,7 +286,7 @@ const Sidebar = ({
 
                 {/* Silent SOS hold avatar — patients only, desktop only */}
                 {user?.role === 'patient' && (
-                  <div className="relative select-none hidden lg:block shrink-0" style={{ width: 32, height: 32 }}>
+                  <div className="relative select-none hidden lg:block shrink-0 items-center justify-center" style={{ width: 32, height: 32 }}>
                     {holdActive && (
                       <svg
                         width="32" height="32" viewBox="0 0 36 36"
