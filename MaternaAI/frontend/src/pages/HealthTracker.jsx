@@ -53,6 +53,9 @@ const HealthTracker = () => {
   // breast feeding + sleep sessions
   const [feedsToday, setFeedsToday] = useState(0);
   const [sleepSessions, setSleepSessions] = useState(0);
+  const [lastFeedTime, setLastFeedTime] = useState(null);   // timestamp of last feed
+  const [feedType, setFeedType] = useState('breast');        // 'breast' | 'formula'
+  const [diapersToday, setDiapersToday] = useState(0);
 
   // Kick Counter States
   const [kickCount, setKickCount] = useState(0);
@@ -90,7 +93,13 @@ const HealthTracker = () => {
   // Load history on mount
   useEffect(() => {
     fetchHistory();
-  }, []);
+}, []);
+
+useEffect(() => {
+    if (user?.is_postpartum) {
+        fetchNewbornToday();
+    }
+}, [user?.is_postpartum]);   // only re-run when this specific field resolves
 
   // Kick Counter stopwatch ticker
   useEffect(() => {
@@ -113,6 +122,57 @@ const HealthTracker = () => {
       console.error("Failed to load vitals history:", err);
     }
   };
+
+  const fetchNewbornToday = async () => {
+    try {
+      const data = await healthAPI.getNewbornToday();
+      setFeedsToday(data.feed || 0);
+      setSleepSessions(data.sleep || 0);
+    } catch (err) {
+      console.error("Failed to load today's newborn logs:", err);
+    }
+  };
+
+  const handleLogFeed = async () => {
+    try {
+      setFeedsToday(prev => prev + 1);
+      setLastFeedTime(Date.now());
+      await healthAPI.logFeed({ feed_type: feedType });
+    } catch (err) {
+      console.error("Failed to log feed:", err);
+      setFeedsToday(prev => Math.max(0, prev - 1));
+    }
+  };
+
+  const handleLogSleep = async () => {
+    try {
+      setSleepSessions(prev => prev + 1);
+      await healthAPI.logSleep();
+    } catch (err) {
+      console.error("Failed to log sleep:", err);
+      setSleepSessions(prev => Math.max(0, prev - 1));
+    }
+  };
+
+  const handleLogDiaper = () => {
+    setDiapersToday(prev => prev + 1);
+  };
+
+  // Format elapsed time since last feed as "Xh Ym ago"
+  const formatTimeSinceFeed = (timestamp) => {
+    if (!timestamp) return null;
+    const diffMs = Date.now() - timestamp;
+    const totalMins = Math.floor(diffMs / 60000);
+    const hours = Math.floor(totalMins / 60);
+    const mins = totalMins % 60;
+    return hours > 0 ? `${hours}h ${mins}m ago` : `${mins}m ago`;
+  };
+
+  const timeSinceFeed = formatTimeSinceFeed(lastFeedTime);
+  const msSinceFeed = lastFeedTime ? Date.now() - lastFeedTime : 0;
+  const feedAlertLevel = msSinceFeed > 4 * 60 * 60 * 1000 ? 'danger'
+    : msSinceFeed > 3 * 60 * 60 * 1000 ? 'warning'
+    : 'safe';
 
   const handleVitalsSubmit = async (e) => {
     e.preventDefault();
@@ -943,55 +1003,107 @@ const HealthTracker = () => {
           </div>
             ):(
           <div className="bg-white border border-primary-mauve/10 rounded-2xl p-5 shadow-premium space-y-4">
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 border-b border-primary-mauve/5 pb-2.5">
               <Baby className="w-5 h-5 text-primary-mauve" />
-              <h3 className="font-black text-xs uppercase tracking-wider">
+              <h3 className="font-black text-sm uppercase tracking-wider text-text-dark flex-1">
                 Newborn Feeding Tracker
               </h3>
+              <span className="text-[9px] font-extrabold tracking-wider bg-primary-mauve/15 text-primary-mauve px-2.5 py-0.5 rounded-full uppercase">
+                Postnatal
+              </span>
             </div>
 
             <p className="text-[11px] font-medium text-text-muted leading-relaxed">
-              Track breastfeeding, formula feeds, and your baby's sleep routine.
+              Track breastfeeding, formula feeds, your baby's sleep, and wet diapers.
             </p>
 
-            <div className="grid grid-cols-2 gap-3">
-              <div className="p-3 rounded-xl bg-bg-rose-white border border-primary-mauve/5">
-                <p className="text-[10px] font-black uppercase text-text-muted">
-                  Feeds Today
-                </p>
-                <h4 className="text-xl font-black text-primary-mauve mt-1">
-                  0
-                </h4>
-              </div>
-
-              <div className="p-3 rounded-xl bg-bg-rose-white border border-primary-mauve/5">
-                <p className="text-[10px] font-black uppercase text-text-muted">
-                  Sleep Sessions
-                </p>
-                <h4 className="text-xl font-black text-primary-mauve mt-1">
-                  0
-                </h4>
+            {/* Feed type toggle */}
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] font-black text-text-muted uppercase tracking-wider">Feed Type:</span>
+              <div className="flex bg-primary-mauve/10 p-0.5 rounded-lg border border-primary-mauve/10">
+                <button
+                  type="button"
+                  onClick={() => setFeedType('breast')}
+                  className={`px-3 py-1 text-[10px] font-black uppercase tracking-wider rounded-md transition-all cursor-pointer ${feedType === 'breast' ? 'bg-primary-mauve text-white shadow-xs' : 'text-text-muted hover:text-text-dark'}`}
+                >
+                  🤱 Breast
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setFeedType('formula')}
+                  className={`px-3 py-1 text-[10px] font-black uppercase tracking-wider rounded-md transition-all cursor-pointer ${feedType === 'formula' ? 'bg-primary-mauve text-white shadow-xs' : 'text-text-muted hover:text-text-dark'}`}
+                >
+                  🍼 Formula
+                </button>
               </div>
             </div>
 
+            {/* Stats grid */}
+            <div className="grid grid-cols-3 gap-3">
+              <div className="p-3 rounded-xl bg-bg-rose-white border border-primary-mauve/5 text-center">
+                <p className="text-[10px] font-black uppercase text-text-muted">Feeds</p>
+                <h4 className="text-xl font-black text-primary-mauve mt-1">{feedsToday}</h4>
+                <p className="text-[9px] text-text-muted mt-0.5">Today</p>
+              </div>
+              <div className="p-3 rounded-xl bg-bg-rose-white border border-primary-mauve/5 text-center">
+                <p className="text-[10px] font-black uppercase text-text-muted">Sleep</p>
+                <h4 className="text-xl font-black text-primary-mauve mt-1">{sleepSessions}</h4>
+                <p className="text-[9px] text-text-muted mt-0.5">Sessions</p>
+              </div>
+              <div className={`p-3 rounded-xl border text-center ${diapersToday < 6 && diapersToday > 0 ? 'bg-warning/10 border-warning/25' : 'bg-bg-rose-white border-primary-mauve/5'}`}>
+                <p className="text-[10px] font-black uppercase text-text-muted">Diapers</p>
+                <h4 className={`text-xl font-black mt-1 ${diapersToday < 6 && diapersToday > 0 ? 'text-warning' : 'text-primary-mauve'}`}>{diapersToday}</h4>
+                <p className="text-[9px] text-text-muted mt-0.5">Wet today</p>
+              </div>
+            </div>
+
+            {/* Time since last feed badge */}
+            {timeSinceFeed && (
+              <div className={`flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-bold border ${
+                feedAlertLevel === 'danger' ? 'bg-danger/10 border-danger/25 text-danger animate-pulse-slow'
+                : feedAlertLevel === 'warning' ? 'bg-warning/10 border-warning/25 text-warning'
+                : 'bg-success/10 border-success/20 text-success'
+              }`}>
+                <Clock className="w-3.5 h-3.5 shrink-0" />
+                <span>Last feed: {timeSinceFeed}
+                  {feedAlertLevel === 'danger' && ' — Feed overdue, check on baby'}
+                  {feedAlertLevel === 'warning' && ' — Consider feeding soon'}
+                </span>
+              </div>
+            )}
+
+            {/* Action buttons */}
             <div className="flex gap-2">
               <button
-                onClick={() => setFeedsToday(prev => prev + 1)}
-                className="flex-1 py-2 bg-primary-mauve text-white rounded-lg text-xs font-bold"
+                onClick={handleLogFeed}
+                className="flex-1 py-2.5 bg-primary-mauve text-white rounded-xl text-xs font-black uppercase tracking-wider hover:bg-bg-dark-mauve transition-all cursor-pointer shadow-glow"
               >
                 + Feed
               </button>
-
               <button
-                onClick={() => setSleepSessions(prev => prev + 1)}
-                className="flex-1 py-2 border border-primary-mauve/20 text-primary-mauve rounded-lg text-xs font-bold"
+                onClick={handleLogSleep}
+                className="flex-1 py-2.5 border border-primary-mauve/20 text-primary-mauve rounded-xl text-xs font-black uppercase tracking-wider hover:bg-bg-rose-white transition-all cursor-pointer"
               >
                 + Sleep
               </button>
+              <button
+                onClick={handleLogDiaper}
+                className="flex-1 py-2.5 border border-primary-mauve/20 text-primary-mauve rounded-xl text-xs font-black uppercase tracking-wider hover:bg-bg-rose-white transition-all cursor-pointer"
+              >
+                + Diaper
+              </button>
             </div>
 
+            {/* Wet diaper warning */}
+            {diapersToday < 6 && diapersToday > 0 && (
+              <div className="flex items-start gap-2 p-3 rounded-xl bg-warning/10 border border-warning/25 text-warning text-[11px] font-bold">
+                <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5 animate-pulse" />
+                <span>Only {diapersToday} wet diaper{diapersToday !== 1 ? 's' : ''} today — 6+ expected. Low count may indicate insufficient milk intake. Monitor closely.</span>
+              </div>
+            )}
+
             <p className="text-[10px] text-text-muted">
-              Recommended newborn feeding frequency: every 2–3 hours.
+              WHO guideline: feed every 2–3 hours · 6+ wet diapers/day indicates adequate hydration.
             </p>
           </div>
         )
