@@ -47,6 +47,7 @@ def query(sql, params=None, fetch="all"):
     cur = None
     try:
         cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        
         cur.execute(sql, params or ())
         conn.commit()
         if fetch == "all":

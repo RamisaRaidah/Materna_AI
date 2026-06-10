@@ -15,6 +15,7 @@ def hash_password(plain: str) -> str:
  
  
 def check_password(plain: str, hashed: str) -> bool:
+    print("check password")
     return bcrypt.checkpw(plain.encode(), hashed.encode())
 
 # Token helpers
@@ -26,6 +27,7 @@ def create_token(user_id: int, role: str = "patient") -> str:
         "iat": datetime.now(timezone.utc),
         "exp": datetime.now(timezone.utc) + timedelta(hours=JWT_EXPIRY_HOURS),
     }
+    print("token created")
     return jwt.encode(payload, SECRET_KEY, algorithm="HS256")
  
  
