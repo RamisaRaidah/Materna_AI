@@ -15,6 +15,38 @@ const TICK_MS = 50;    // progress ring update interval
 
 const CHAT_ROUTES = ['/clinician-chat', '/clinician/community'];
 
+const useEmojiCycle = (primary, active, stayMs = 5000) => {
+  const [currentEmoji, setCurrentEmoji] = useState(primary);
+  const [visible, setVisible] = useState(true);
+
+  useEffect(() => {
+    if (!active) return;
+
+    let cancelled = false;
+    const wait = (ms) => new Promise((res) => setTimeout(res, ms));
+
+    const cycle = async () => {
+      while (!cancelled) {
+        await wait(stayMs);
+        setVisible(false);
+        await wait(400);
+        setCurrentEmoji('🔕');
+        setVisible(true);
+        await wait(stayMs);
+        setVisible(false);
+        await wait(400);
+        setCurrentEmoji(primary);
+        setVisible(true);
+      }
+    };
+
+    cycle();
+    return () => { cancelled = true; };
+  }, [primary, active, stayMs]);
+
+  return { currentEmoji, visible };
+};
+
 const Layout = () => {
   const location = useLocation();
   const isChatRoute = CHAT_ROUTES.includes(location.pathname);
@@ -204,7 +236,10 @@ const Layout = () => {
 
   const unreadCount = notifications.filter((note) => !note.is_read).length;
 
-  const avatarEmoji = user?.role === 'admin' ? '🛡️' : user?.role === 'clinician' ? '🩺' : user?.is_postpartum ? '🤱' : '🤰';
+  const primaryEmoji = user?.role === 'admin' ? '🛡️' : user?.role === 'clinician' ? '🩺' : user?.is_postpartum ? '🤱' : '🤰';
+  const isPatient = user?.role === 'patient';
+  const { currentEmoji, visible } = useEmojiCycle(primaryEmoji, isPatient, 5000);
+  const avatarEmoji = currentEmoji;
   const ringColor = holdProgress < 60 ? '#f59e0b' : '#ef4444';
   const ringCircumference = 2 * Math.PI * 19;
 
@@ -277,7 +312,9 @@ const Layout = () => {
 
             {/* Avatar */}
             <div
+              style={{ transition: 'opacity 0.4s ease', opacity: visible ? 1 : 0 }}
               role="button"
+              title="Hold 5s for silent emergency alert"
               aria-label={
                 user?.role === 'patient'
                   ? 'Hold 5 seconds to send a silent emergency alert'

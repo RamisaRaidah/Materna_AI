@@ -329,7 +329,7 @@ const Sidebar = ({
                         : 'bg-secondary-blush/30 border-primary-mauve/20',
                   ].join(' ')}
                 >
-                  {alertDispatched ? '✓' : '🆘'}
+                  {alertDispatched ? '✓' : '🔕'}
                 </div>
 
                 {/* Countdown tooltip */}

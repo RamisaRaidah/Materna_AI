@@ -8,6 +8,39 @@ import { db } from '../api/firebase';
 const STATS_CACHE_KEY = 'clinicianStatsCache';
 const ALERTS_CACHE_KEY = 'clinicianAlertsCache';
 
+const PROTOCOLS = [
+  {
+    category: 'High-Risk Triage',
+    steps: [
+      'Confirm patient identity and gestational age',
+      'Check BP — flag if systolic > 140 or diastolic > 90',
+      'Review fetal movement report from last 24 hours',
+      'Order glucose screening if not done in past 7 days',
+      'Document findings and assign risk level (low / medium / high)',
+    ],
+  },
+  {
+    category: 'SOS / Abuse Alert Response',
+    steps: [
+      'Acknowledge alert within 5 minutes',
+      'Attempt direct contact via secure chat',
+      'If no response in 10 minutes, escalate to emergency services',
+      'Document all actions taken with timestamps',
+      'Schedule follow-up within 24 hours',
+    ],
+  },
+  {
+    category: 'PPD Screening',
+    steps: [
+      'Administer Edinburgh Postnatal Depression Scale (EPDS)',
+      'Score ≥ 10 — schedule immediate counselling referral',
+      'Inform patient of support resources available',
+      'Log screening result in patient record',
+      'Set reminder for re-screening at 6 weeks postpartum',
+    ],
+  },
+];
+
 const ClinicianDashboard = () => {
   const [stats, setStats] = useState({ total_patients: 0, active_alerts: 0, high_risk_week: 0 });
   const [alerts, setAlerts] = useState([]);
@@ -16,6 +49,13 @@ const ClinicianDashboard = () => {
   const [resolvingIds, setResolvingIds] = useState([]);
   const { user, updateProfile } = useAuth();
   const avatarInputRef = useRef(null);
+  const [showProtocol, setShowProtocol] = useState(false);
+  const [checked, setChecked] = useState({});
+
+  const toggleCheck = (catIdx, stepIdx) => {
+    const key = `${catIdx}-${stepIdx}`;
+    setChecked((prev) => ({ ...prev, [key]: !prev[key] }));
+  };
 
   const handleAvatarUpload = () => {
     avatarInputRef.current?.click();
@@ -297,12 +337,91 @@ const ClinicianDashboard = () => {
             <p className="text-[11px] font-medium text-text-muted leading-relaxed">
               Standardize triage steps for high-risk cases and keep escalation workflows consistent.
             </p>
-            <button className="w-full py-2 rounded-lg bg-primary-mauve text-white text-xs font-bold uppercase tracking-wider hover:bg-bg-dark-mauve transition-all">
+            <button
+              onClick={() => setShowProtocol(true)}
+              className="w-full py-2 rounded-lg bg-primary-mauve text-white text-xs font-bold uppercase tracking-wider hover:bg-bg-dark-mauve transition-all"
+            >
               View Protocol Checklist
             </button>
           </div>
         </div>
       </div>
+      {showProtocol && (
+        <div
+          className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4"
+          onClick={() => setShowProtocol(false)}
+        >
+          <div
+            className="bg-white rounded-2xl shadow-premium w-full max-w-lg max-h-[80vh] overflow-y-auto"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div className="sticky top-0 bg-white px-6 py-4 border-b border-primary-mauve/10 flex items-center justify-between rounded-t-2xl">
+              <h2 className="text-sm font-black text-text-dark uppercase tracking-wider">Clinical Protocol Checklist</h2>
+              <button
+                onClick={() => setShowProtocol(false)}
+                className="text-text-muted hover:text-text-dark text-lg font-bold leading-none"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Body */}
+            <div className="px-6 py-4 space-y-6">
+              {PROTOCOLS.map((protocol, catIdx) => {
+                const total = protocol.steps.length;
+                const done = protocol.steps.filter((_, sIdx) => checked[`${catIdx}-${sIdx}`]).length;
+                return (
+                  <div key={protocol.category}>
+                    <div className="flex items-center justify-between mb-3">
+                      <h3 className="text-xs font-black text-primary-mauve uppercase tracking-wider">{protocol.category}</h3>
+                      <span className="text-[10px] font-bold text-text-muted">{done}/{total} done</span>
+                    </div>
+                    <div className="space-y-2">
+                      {protocol.steps.map((step, stepIdx) => {
+                        const key = `${catIdx}-${stepIdx}`;
+                        const isChecked = !!checked[key];
+                        return (
+                          <label
+                            key={key}
+                            className="flex items-start gap-3 cursor-pointer group"
+                          >
+                            <input
+                              type="checkbox"
+                              checked={isChecked}
+                              onChange={() => toggleCheck(catIdx, stepIdx)}
+                              className="mt-0.5 accent-primary-mauve shrink-0"
+                            />
+                            <span className={`text-[12px] font-semibold leading-relaxed ${isChecked ? 'line-through text-text-muted' : 'text-text-dark'}`}>
+                              {step}
+                            </span>
+                          </label>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Footer */}
+            <div className="sticky bottom-0 bg-white px-6 py-4 border-t border-primary-mauve/10 rounded-b-2xl flex justify-between items-center">
+              <button
+                onClick={() => setChecked({})}
+                className="text-[11px] font-bold text-text-muted hover:text-danger transition-colors"
+              >
+                Reset all
+              </button>
+              <button
+                onClick={() => setShowProtocol(false)}
+                className="px-4 py-2 rounded-lg bg-primary-mauve text-white text-xs font-bold uppercase tracking-wider hover:bg-bg-dark-mauve transition-all"
+              >
+                Done
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
