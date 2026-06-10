@@ -326,7 +326,7 @@ const Sidebar = ({
                     'border transition-colors duration-200',
                     alertDispatched ? 'bg-green-100 border-green-300'
                       : holdActive ? 'bg-danger/15 border-danger/30'
-                        : 'bg-secondary-blush/30 border-primary-mauve/20',
+                        : 'bg-secondary-blush/30 border-primary-mauve/20 animate-pulse',
                   ].join(' ')}
                 >
                   {alertDispatched ? '✓' : '🔕'}

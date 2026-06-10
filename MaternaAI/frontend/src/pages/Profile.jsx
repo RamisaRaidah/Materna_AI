@@ -55,6 +55,12 @@ const Profile = () => {
   const [securityData, setSecurityData] = useState({ currentPassword: '', newPassword: '', confirmPassword: '' });
   const [deleteConfirmationText, setDeleteConfirmationText] = useState('');
 
+  // Safe word gate
+  const [safeWordGatePassword, setSafeWordGatePassword] = useState('');
+  const [safeWordUnlocked, setSafeWordUnlocked] = useState(false);
+  const [safeWordGateError, setSafeWordGateError] = useState('');
+  const [safeWordGateLoading, setSafeWordGateLoading] = useState(false);
+
   // Hydrate Profile fields from session auth context
   useEffect(() => {
     if (user) {
@@ -93,6 +99,16 @@ const Profile = () => {
     };
     fetchUserBirthPlans();
   }, [user?.id]);
+
+  useEffect(() => {
+    if (msg.text) {
+      const timer = setTimeout(() => {
+        setMsg({ text: '', type: '' });
+      }, 6000);
+
+      return () => clearTimeout(timer);
+    }
+  }, [msg]);
 
   const handlePlanDelete = async (e, planId) => {
     e.stopPropagation();
@@ -171,6 +187,7 @@ const Profile = () => {
       if (freshUser) {
         setMsg({ text: 'Profile metrics updated successfully!', type: 'success' });
         setIsEditing(false);
+        setSafeWordUnlocked(false);
       }
     } catch (err) {
       setMsg({ text: typeof err === 'string' ? err : err?.message || 'Network dispatch failure.', type: 'danger' });
@@ -241,6 +258,36 @@ const Profile = () => {
     }
   };
 
+  const handleVerifySafeWord = async (e) => {
+    e.preventDefault();
+    if (!safeWordGatePassword) return;
+
+    setSafeWordGateLoading(true);
+    setSafeWordGateError('')
+    try {
+      const res = await fetch('/auth/me/verify-password', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        },
+        body: JSON.stringify({ password: safeWordGatePassword })
+      });
+
+      if (res.ok) {
+        setSafeWordUnlocked(true);
+        setSafeWordGateError('');
+      } else {
+        setSafeWordGateError('Incorrect password.');
+      }
+    } catch (err) {
+      setSafeWordGateError('Network error.');
+    } finally {
+      setSafeWordGateLoading(false);
+      setSafeWordGatePassword('');
+    }
+  };
+
   return (
     <div className="p-6 max-w-4xl mx-auto space-y-6">
       {/* Upper Profile Header Card */}
@@ -270,7 +317,7 @@ const Profile = () => {
           </button>
           <button
             type="button"
-            onClick={() => { setIsEditing(!isEditing); setShowSecurityFields(false); resetMessages(); }}
+            onClick={() => { setIsEditing(!isEditing); setShowSecurityFields(false); setSafeWordUnlocked(false); setSafeWordGatePassword(''); resetMessages(); }}
             className="flex items-center gap-2 px-4 py-2 bg-white text-primary-mauve font-black text-xs uppercase tracking-wider rounded-xl shadow-md hover:bg-bg-rose-white transition-all cursor-pointer"
           >
             {isEditing ? 'Cancel' : <><Edit2 className="w-3.5 h-3.5" /> Edit Info</>}
@@ -419,20 +466,70 @@ const Profile = () => {
             {/* Safety Settings */}
             {user?.role === 'patient' && (
               <div className={classes.card}>
-                <h3 className="text-xs font-black uppercase text-primary-mauve tracking-widest
-                                      flex items-center gap-2 mb-4">
+                <h3 className="text-xs font-black uppercase text-primary-mauve tracking-widest flex items-center gap-2 mb-4">
                   <Shield className="w-4 h-4" /> Safety Settings
                 </h3>
-                <SafeWordPicker
-                  value={formData.safeWord}
-                  onChange={(word) => handleInputChange('safeWord', word)}
-                  isEditing={isEditing}
-                />
+
+                {isEditing ? (
+                  !safeWordUnlocked ? (
+                    <div className="space-y-3">
+                      <p className="text-[10px] text-text-muted">Enter password to unlock Safe Word selection:</p>
+                      <input
+                        type="password"
+                        className={classes.input(true)}
+                        placeholder="Current Password"
+                        value={safeWordGatePassword}
+                        onChange={(e) => setSafeWordGatePassword(e.target.value)}
+                      />
+                      {safeWordGateError && <p className="text-[10px] text-danger font-bold">{safeWordGateError}</p>}
+                      <button
+                        type="button"
+                        onClick={handleVerifySafeWord}
+                        disabled={safeWordGateLoading}
+                        className="w-full py-2 bg-primary-mauve text-white text-[10px] font-bold rounded-lg flex items-center justify-center gap-2"
+                      >
+                        {safeWordGateLoading ? (
+                          <>
+                            <div className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                            Verifying...
+                          </>
+                        ) : (
+                          "Verify Password"
+                        )}
+                      </button>
+                    </div>
+                  ) : (
+                    <SafeWordPicker
+                      value={formData.safeWord}
+                      onChange={(word) => handleInputChange('safeWord', word)}
+                      isEditing={true}
+                    />
+                  )
+                ) : (
+                  <SafeWordPicker
+                    value={formData.safeWord}
+                    onChange={() => { }}
+                    isEditing={false}
+                  />
+                )}
               </div>
             )}
             {isEditing && (
-              <button type="submit" disabled={isSubmitting} className="w-full py-3 bg-primary-mauve text-white text-xs font-black tracking-widest uppercase rounded-xl hover:bg-bg-dark-mauve transition-all flex items-center justify-center gap-2 cursor-pointer">
-                <Save className="w-4 h-4" /> Commit Profile Updates
+              <button
+                type="submit"
+                disabled={isSubmitting}
+                className="w-full py-3 bg-primary-mauve text-white text-xs font-black tracking-widest uppercase rounded-xl hover:bg-bg-dark-mauve transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-70"
+              >
+                {isSubmitting ? (
+                  <>
+                    <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                    Committing...
+                  </>
+                ) : (
+                  <>
+                    <Save className="w-4 h-4" /> Commit Profile Updates
+                  </>
+                )}
               </button>
             )}
           </div>

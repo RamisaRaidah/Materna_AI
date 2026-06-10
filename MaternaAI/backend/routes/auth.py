@@ -216,6 +216,17 @@ def change_password():
     query("UPDATE users SET password_hash = %s WHERE id = %s", (new_hash, g.user["id"]), fetch="none")
     return jsonify({"message": "Security credentials rotated successfully."}), 200
 
+@auth_bp.route("/me/verify-password", methods=["POST"])
+@require_auth
+def verify_password():
+    data = request.get_json() or {}
+    password = data.get("password", "")
+    if not password:
+        return jsonify({"error": "Password is required"}), 400
+    if not check_password(password, g.user["password_hash"]):
+        return jsonify({"error": "Incorrect password"}), 401
+    return jsonify({"success": True}), 200
+
 @auth_bp.route("/me", methods=["DELETE"])
 @require_auth
 def delete_account():

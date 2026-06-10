@@ -116,6 +116,16 @@ const ClinicianProfile = () => {
     };
   }, []);
 
+  useEffect(() => {
+    if (msg.text) {
+      const timer = setTimeout(() => {
+        setMsg({ text: '', type: '' });
+      }, 6000);
+
+      return () => clearTimeout(timer);
+    }
+  }, [msg]);
+
   const handleSave = async (event) => {
     event.preventDefault();
     setMsg({ text: '', type: '' });
@@ -145,7 +155,7 @@ const ClinicianProfile = () => {
       // 2. Professional profile payload
       const payload = { profileType, form, savedAt: new Date().toISOString() };
       localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
-      
+
       if (updateUserLocalContext) {
         updateUserLocalContext((currentUser) => ({
           ...currentUser,
@@ -235,7 +245,7 @@ const ClinicianProfile = () => {
 
   return (
     <div className="p-4 md:p-8 max-w-5xl mx-auto space-y-6 font-sans">
-      
+
       {/* Header Card */}
       <div className="bg-gradient-to-r from-primary-mauve to-bg-dark-mauve rounded-2xl p-6 text-white shadow-premium flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
         <div className="flex items-center gap-4">
@@ -269,9 +279,8 @@ const ClinicianProfile = () => {
 
       {/* Messages */}
       {msg.text && (
-        <div className={`p-4 rounded-xl border flex items-center gap-3 text-xs font-bold ${
-          msg.type === 'success' ? 'bg-green-50 border-green-200 text-green-700' : 'bg-danger/10 border-danger/20 text-danger'
-        }`}>
+        <div className={`p-4 rounded-xl border flex items-center gap-3 text-xs font-bold ${msg.type === 'success' ? 'bg-green-50 border-green-200 text-green-700' : 'bg-danger/10 border-danger/20 text-danger'
+          }`}>
           {msg.type === 'success' ? <CheckCircle2 className="w-4 h-4 shrink-0" /> : <AlertCircle className="w-4 h-4 shrink-0" />}
           <span>{msg.text}</span>
         </div>
@@ -445,13 +454,24 @@ const ClinicianProfile = () => {
             )}
 
             <div className="pt-2 flex justify-end">
-              <button
-                type="submit"
-                disabled={isSubmitting}
-                className="w-full md:w-auto px-6 py-2.5 rounded-lg bg-primary-mauve text-white text-xs font-bold uppercase tracking-wider hover:bg-bg-dark-mauve transition-all flex items-center justify-center gap-2 cursor-pointer"
-              >
-                <Save className="w-4 h-4" /> Commit Profile Updates
-              </button>
+              {isEditing && (
+                <button
+                  type="submit"
+                  disabled={isSubmitting}
+                  className="w-full py-3 bg-primary-mauve text-white text-xs font-black tracking-widest uppercase rounded-xl hover:bg-bg-dark-mauve transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-70"
+                >
+                  {isSubmitting ? (
+                    <>
+                      <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                      Committing...
+                    </>
+                  ) : (
+                    <>
+                      <Save className="w-4 h-4" /> Commit Profile Updates
+                    </>
+                  )}
+                </button>
+              )}
             </div>
           </div>
         </form>
