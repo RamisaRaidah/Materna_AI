@@ -128,6 +128,10 @@ useEffect(() => {
       const data = await healthAPI.getNewbornToday();
       setFeedsToday(data.feed || 0);
       setSleepSessions(data.sleep || 0);
+      setDiapersToday(data.diaper || 0);
+      if (data.last_feed_at) {
+        setLastFeedTime(new Date(data.last_feed_at).getTime());
+      }
     } catch (err) {
       console.error("Failed to load today's newborn logs:", err);
     }
@@ -141,6 +145,7 @@ useEffect(() => {
     } catch (err) {
       console.error("Failed to log feed:", err);
       setFeedsToday(prev => Math.max(0, prev - 1));
+      setLastFeedTime(null);
     }
   };
 
@@ -154,8 +159,14 @@ useEffect(() => {
     }
   };
 
-  const handleLogDiaper = () => {
-    setDiapersToday(prev => prev + 1);
+  const handleLogDiaper = async () => {
+    try {
+      setDiapersToday(prev => prev + 1);
+      await healthAPI.logDiaper();
+    } catch (err) {
+      console.error("Failed to log diaper:", err);
+      setDiapersToday(prev => Math.max(0, prev - 1));
+    }
   };
 
   // Format elapsed time since last feed as "Xh Ym ago"
@@ -403,7 +414,7 @@ useEffect(() => {
           </p>
         </div>
         <div className="w-9 h-9 rounded-full bg-primary-mauve/10 flex items-center justify-center text-primary-mauve animate-float">
-          🤰
+          {user?.is_postpartum ? '🤱' : '🤰'}
         </div>
       </div>
 

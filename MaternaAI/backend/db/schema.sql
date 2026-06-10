@@ -329,6 +329,18 @@ CREATE TABLE care_plan_items (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+CREATE TABLE IF NOT EXISTS newborn_logs (
+    id            SERIAL PRIMARY KEY,
+    user_id       INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    log_type      VARCHAR(20) NOT NULL,
+    duration_mins INTEGER,
+    notes         TEXT,
+    created_at    TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_newborn_logs_user_date
+    ON newborn_logs (user_id, created_at);
+
 CREATE UNIQUE INDEX uq_care_plan_active_item
     ON care_plan_items (user_id, item_key)
     WHERE is_dismissed = FALSE;

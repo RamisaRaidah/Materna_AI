@@ -485,7 +485,9 @@ Rules:
 @health_bp.route("/newborn/feed", methods=["POST"])
 @require_auth
 def log_newborn_feed():
-    data = request.get_json() or {}
+    # force=True  — ignore Content-Type header (axios omits it for bodyless POST)
+    # silent=True — return None instead of raising a 415 when body is absent/invalid
+    data = request.get_json(force=True, silent=True) or {}
     # Accept optional feed_type: 'breast' | 'formula' — defaults to 'breast'
     feed_type = data.get("feed_type", "breast")
     if feed_type not in ("breast", "formula"):
@@ -493,7 +495,7 @@ def log_newborn_feed():
 
     log = query(
         """
-        INSERT INTO newborn_logs (user_id, log_type, feed_type)
+        INSERT INTO newborn_logs (user_id, log_type, notes)
         VALUES (%s, 'feed', %s)
         RETURNING *
         """,
@@ -506,7 +508,7 @@ def log_newborn_feed():
 @health_bp.route("/newborn/sleep", methods=["POST"])
 @require_auth
 def log_newborn_sleep():
-    data = request.get_json() or {}
+    data = request.get_json(force=True, silent=True) or {}
     duration_mins = data.get("duration_mins")
     notes = data.get("notes")
     
