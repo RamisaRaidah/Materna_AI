@@ -408,9 +408,6 @@ const Nutrition = () => {
 
     try {
       const profile = { name: user?.name || '', weeks_pregnant: isPostpartum ? null : (user?.weeks_pregnant || (trimester ?? 2) * 13), is_postpartum: isPostpartum };
-      const userId = user?.id || 1;
-
-      // chatAPI.speak already uses the axios instance — no change needed here
       const data = await chatAPI.speak(audioBlob, profile, 'nutrition', userId, clientTranscriptionText);
 
       const userText = data.transcribed_text || "[অডিও বার্তা]";
@@ -538,7 +535,7 @@ const Nutrition = () => {
     try {
       const { data } = await api.post('/api/nutrition/plans', {
         user_id: user?.id || 1,
-        trimester,
+        trimester: isPostpartum ? null : (trimester ?? 2),
         is_postpartum: isPostpartum,
         conditions: user?.conditions || [],
         profile: {
@@ -549,6 +546,10 @@ const Nutrition = () => {
         },
       });
       parseRAGTextResponse(data.generated_plan);
+      // data.id === null means the backend returned the static fallback (quota exhausted)
+      if (data.id === null) {
+        setPlanError('⚠️ AI সেবা সাময়িকভাবে অনুপলব্ধ। নিচে একটি সাধারণ পরিকল্পনা দেখানো হচ্ছে।');
+      }
     } catch (e) {
       console.error("Nutrition plan fetch failed:", e);
       setPlanError('আপনার জন্য নির্দিষ্ট পরিকল্পনা তৈরি করা যায়নি। পুনরায় চেষ্টা করুন।');
