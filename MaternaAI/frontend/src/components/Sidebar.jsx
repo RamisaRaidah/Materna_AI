@@ -101,8 +101,13 @@ const Sidebar = ({
     ? adminSections
     : user?.role === 'clinician'
       ? clinicianSections
-      : patientSections;
-
+      : patientSections.map(section => ({
+        ...section,
+        items: section.title === 'Care & Planning' && user?.is_postpartum
+          ? section.items.filter(item => item.name !== 'Birth Plan Compiler')
+          : section.items
+      }));
+      
   const handleLogout = () => {
     logout();
     navigate('/login');

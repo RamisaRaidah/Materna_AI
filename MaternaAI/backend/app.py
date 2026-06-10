@@ -9,7 +9,6 @@ CORS(app, resources={
     r"/auth/*": {"origins": CORS_ORIGINS},
 })
 
-
 # ─────────────────────────────────────────────
 # Register Blueprints
 # ─────────────────────────────────────────────

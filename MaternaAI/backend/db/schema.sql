@@ -26,6 +26,10 @@ CREATE TABLE users (
     weeks_updated_at TIMESTAMPTZ DEFAULT NOW(),
     profile_image TEXT,
     created_at TIMESTAMPTZ DEFAULT NOW(),
+    status VARCHAR(20),
+    verification_documents TEXT,
+    last_seen_at TIMESTAMPTZ,
+
 
     CONSTRAINT chk_safe_word_predefined CHECK (
         safe_word IS NULL OR safe_word = ''
@@ -166,6 +170,8 @@ CREATE TABLE posts (
     is_flagged BOOLEAN DEFAULT FALSE,  -- AI moderation flag
     flag_reason TEXT,
     likes INTEGER DEFAULT 0,
+    moderation_status VARCHAR(20),
+    moderation_reason TEXT,
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
