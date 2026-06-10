@@ -94,7 +94,7 @@ const Layout = () => {
     if (!user) return;
 
     const pingPresence = () => {
-      authAPI.pingPresence().catch(() => {});
+      authAPI.pingPresence().catch(() => { });
     };
 
     pingPresence();
@@ -222,6 +222,13 @@ const Layout = () => {
         acknowledgingIds={acknowledgingIds}
         onAcknowledge={handleAcknowledge}
         unreadDMs={unreadDMs}
+        holdProgress={holdProgress}
+        holdActive={holdActive}
+        alertDispatched={alertDispatched}
+        startHold={startHold}
+        cancelHold={cancelHold}
+        ringColor={ringColor}
+        ringCircumference={ringCircumference}
       />
 
       {/* Main Content Area */}
