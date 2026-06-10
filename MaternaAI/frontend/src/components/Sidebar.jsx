@@ -257,9 +257,9 @@ const Sidebar = ({
           )}
 
           {/* User Persona Capsule */}
-          <div className="mx-4 my-5 p-4 rounded-xl bg-bg-rose-white border border-primary-mauve/5 flex items-center gap-3 overflow-visible">
+          <div className="mx-4 my-5 p-4 rounded-xl bg-bg-rose-white border border-primary-mauve/5 flex items-center gap-3">
 
-            {/* Static profile avatar — unchanged */}
+            {/* Profile avatar */}
             <div className="w-10 h-10 rounded-full bg-secondary-blush/20 flex items-center justify-center text-lg font-bold text-primary-mauve overflow-hidden shrink-0 border border-primary-mauve/10">
               {user?.profile_image ? (
                 <img src={user.profile_image} alt={user?.name || 'Profile'} className="w-full h-full object-cover" />
@@ -273,83 +273,88 @@ const Sidebar = ({
               )}
             </div>
 
-            {/* Name + badge + hold avatar */}
+            {/* Name + badge */}
             <div className="flex-1 min-w-0">
               <h4 className="font-bold text-sm text-text-dark truncate">{user?.name || 'Guest User'}</h4>
-              <div className="flex items-center gap-2 mt-0.5">
-                <span className="inline-block px-2.5 py-1 rounded-full text-[11.5px] font-extrabold tracking-wide bg-primary-mauve text-white uppercase">
+              <div className="mt-0.5">
+                <span className="inline-block px-2.5 py-1 rounded-full text-[10px] font-extrabold tracking-wide bg-primary-mauve text-white uppercase whitespace-nowrap">
                   {user?.role === 'admin' ? 'Admin Portal'
                     : user?.role === 'clinician' ? 'Clinician Portal'
                       : user?.is_postpartum ? 'Postpartum Mode'
                         : 'Pregnancy Mode'}
                 </span>
+              </div>
+            </div>
 
-                {/* Silent SOS hold avatar — patients only, desktop only */}
-                {user?.role === 'patient' && (
-                  <div className="relative select-none hidden lg:block shrink-0 items-center justify-center" style={{ width: 32, height: 32 }}>
-                    {holdActive && (
-                      <svg
-                        width="32" height="32" viewBox="0 0 36 36"
-                        className="absolute inset-0 pointer-events-none"
-                        style={{ transform: 'rotate(-90deg)' }}
-                      >
-                        <circle
-                          cx="18" cy="18" r="15"
-                          fill="none"
-                          stroke={ringColor}
-                          strokeWidth="2.5"
-                          strokeLinecap="round"
-                          strokeDasharray={2 * Math.PI * 15}
-                          strokeDashoffset={2 * Math.PI * 15 * (1 - holdProgress / 100)}
-                          style={{ transition: `stroke-dashoffset 50ms linear, stroke 0.3s ease` }}
-                        />
-                      </svg>
-                    )}
-                    <div
-                      role="button"
-                      aria-label="Hold 5 seconds to send a silent emergency alert"
-                      onMouseDown={startHold}
-                      onMouseUp={cancelHold}
-                      onMouseLeave={cancelHold}
-                      onTouchStart={startHold}
-                      onTouchEnd={cancelHold}
-                      onTouchCancel={cancelHold}
-                      className={[
-                        'w-7 h-7 rounded-full flex items-center justify-center',
-                        'text-base font-bold absolute inset-0 m-auto cursor-pointer',
-                        'border transition-colors duration-200',
-                        alertDispatched ? 'bg-green-100 border-green-300'
-                          : holdActive ? 'bg-danger/15 border-danger/30'
-                            : 'bg-secondary-blush/30 border-primary-mauve/20',
-                      ].join(' ')}
-                    >
-                      {alertDispatched ? '✓' : user?.is_postpartum ? '🤱' : '🤰'}
+            {/* Silent SOS hold button — patients only, desktop only */}
+            {user?.role === 'patient' && (
+              <div
+                className="relative select-none hidden lg:flex shrink-0 items-center justify-center"
+                style={{ width: 32, height: 32 }}
+              >
+                {holdActive && (
+                  <svg
+                    width="32" height="32" viewBox="0 0 36 36"
+                    className="absolute inset-0 pointer-events-none"
+                    style={{ transform: 'rotate(-90deg)' }}
+                  >
+                    <circle
+                      cx="18" cy="18" r="15"
+                      fill="none"
+                      stroke={ringColor}
+                      strokeWidth="2.5"
+                      strokeLinecap="round"
+                      strokeDasharray={2 * Math.PI * 15}
+                      strokeDashoffset={2 * Math.PI * 15 * (1 - holdProgress / 100)}
+                      style={{ transition: `stroke-dashoffset 50ms linear, stroke 0.3s ease` }}
+                    />
+                  </svg>
+                )}
+                <div
+                  role="button"
+                  title="Hold 5s for silent emergency alert"
+                  aria-label="Hold 5 seconds to send a silent emergency alert"
+                  onMouseDown={startHold}
+                  onMouseUp={cancelHold}
+                  onMouseLeave={cancelHold}
+                  onTouchStart={startHold}
+                  onTouchEnd={cancelHold}
+                  onTouchCancel={cancelHold}
+                  className={[
+                    'w-7 h-7 rounded-full flex items-center justify-center',
+                    'text-base font-bold absolute inset-0 m-auto cursor-pointer',
+                    'border transition-colors duration-200',
+                    alertDispatched ? 'bg-green-100 border-green-300'
+                      : holdActive ? 'bg-danger/15 border-danger/30'
+                        : 'bg-secondary-blush/30 border-primary-mauve/20',
+                  ].join(' ')}
+                >
+                  {alertDispatched ? '✓' : '🆘'}
+                </div>
+
+                {/* Countdown tooltip */}
+                {holdActive && !alertDispatched && (
+                  <div className="absolute bottom-11 left-1/2 -translate-x-1/2 z-50 pointer-events-none whitespace-nowrap">
+                    <div className="bg-gray-900/85 text-white text-[10px] font-bold px-2 py-1 rounded-lg shadow-lg">
+                      {holdProgress < 100
+                        ? `${Math.max(1, Math.ceil(5000 * (1 - holdProgress / 100) / 1000))}s…`
+                        : 'Sending…'}
                     </div>
+                  </div>
+                )}
 
-                    {/* Countdown tooltip */}
-                    {holdActive && !alertDispatched && (
-                      <div className="absolute bottom-11 left-1/2 -translate-x-1/2 z-50 pointer-events-none whitespace-nowrap">
-                        <div className="bg-gray-900/85 text-white text-[10px] font-bold px-2 py-1 rounded-lg shadow-lg">
-                          {holdProgress < 100
-                            ? `${Math.max(1, Math.ceil(5000 * (1 - holdProgress / 100) / 1000))}s…`
-                            : 'Sending…'}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Success tooltip */}
-                    {alertDispatched && (
-                      <div className="absolute bottom-11 left-1/2 -translate-x-1/2 z-50 pointer-events-none whitespace-nowrap">
-                        <div className="bg-green-700/90 text-white text-[10px] font-bold px-2 py-1 rounded-lg shadow-lg">
-                          Sent ✓
-                        </div>
-                      </div>
-                    )}
+                {/* Success tooltip */}
+                {alertDispatched && (
+                  <div className="absolute bottom-11 left-1/2 -translate-x-1/2 z-50 pointer-events-none whitespace-nowrap">
+                    <div className="bg-green-700/90 text-white text-[10px] font-bold px-2 py-1 rounded-lg shadow-lg">
+                      Sent ✓
+                    </div>
                   </div>
                 )}
               </div>
-            </div>
+            )}
           </div>
+
           {/* Nav Items */}
           <nav className="px-3 space-y-4 overflow-y-auto max-h-[50vh]">
             {navSections.map((section) => (
