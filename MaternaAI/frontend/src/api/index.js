@@ -1,7 +1,12 @@
 import axios from 'axios';
 
+const resolvedBaseURL = import.meta.env.VITE_API_URL || '';
+if (!import.meta.env.VITE_API_URL) {
+  console.warn('[API] VITE_API_URL is not set — using relative requests. Ensure dev proxy or backend is running.');
+}
+
 const api = axios.create({
-  baseURL: import.meta.env.VITE_API_URL,
+  baseURL: resolvedBaseURL,
   timeout: 60000,
   headers: {
     'Content-Type': 'application/json',
@@ -30,6 +35,9 @@ api.interceptors.response.use(
       // Clear token on token expiration or invalidity
       localStorage.removeItem('token');
       localStorage.removeItem('user');
+    }
+    if (error.response && error.response.status >= 500) {
+      console.error('[API] Server error:', error.response.status, error.response.statusText);
     }
     return Promise.reject(error);
   }

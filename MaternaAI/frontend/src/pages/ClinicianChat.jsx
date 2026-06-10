@@ -507,10 +507,18 @@ const ClinicianChat = () => {
                   <div key={msg.id} className={`flex items-start gap-3 ${isSelf ? 'flex-row-reverse' : 'flex-row'}`}>
                     <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 text-sm font-bold shadow-xs overflow-hidden ${isSelf ? 'bg-primary-mauve text-white' : 'bg-bg-rose-white text-text-dark border border-primary-mauve/10'
                       }`}>
-                      {isSelf && user?.profile_image ? (
-                        <img src={user.profile_image} alt={user?.name || 'You'} className="w-full h-full object-cover" />
+                      {isSelf ? (
+                        user?.profile_image ? (
+                          <img src={user.profile_image} alt={user?.name || 'You'} className="w-full h-full object-cover" />
+                        ) : (
+                          '🤰'
+                        )
                       ) : (
-                        <span>{isSelf ? '🤰' : '🩺'}</span>
+                        activeContact?.profile_image ? (
+                          <img src={activeContact.profile_image} alt={activeContact.name || 'Clinician'} className="w-full h-full object-cover" />
+                        ) : (
+                          '🩺'
+                        )
                       )}
                     </div>
                     <div className="flex flex-col max-w-[80%] space-y-1">

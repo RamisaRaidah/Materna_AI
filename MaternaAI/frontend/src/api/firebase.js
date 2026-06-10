@@ -14,21 +14,28 @@ const firebaseConfig = {
 let app;
 let db;
 let messaging = null;
+// Ensure required config values exist before attempting to initialize Firebase
+const requiredKeys = ['apiKey', 'authDomain', 'projectId', 'storageBucket', 'messagingSenderId', 'appId'];
+const missing = requiredKeys.filter((k) => !firebaseConfig[k]);
 
-try {
-  app = initializeApp(firebaseConfig);
-  db = initializeFirestore(app, {
-    localCache: persistentLocalCache({
-      tabManager: persistentMultipleTabManager()
-    })
-  });
-  console.log("[Firebase] Initialized Firestore with offline persistence cache successfully.");
-  
-  if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
-    messaging = getMessaging(app);
+if (missing.length > 0) {
+  console.warn(`[Firebase] Skipping initialization — missing config values: ${missing.join(', ')}`);
+} else {
+  try {
+    app = initializeApp(firebaseConfig);
+    db = initializeFirestore(app, {
+      localCache: persistentLocalCache({
+        tabManager: persistentMultipleTabManager()
+      })
+    });
+    console.log("[Firebase] Initialized Firestore with offline persistence cache successfully.");
+
+    if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
+      messaging = getMessaging(app);
+    }
+  } catch (err) {
+    console.error("[Firebase] Initialization failed:", err);
   }
-} catch (err) {
-  console.error("[Firebase] Initialization failed:", err);
 }
 
 export { app, db, messaging };

@@ -3,7 +3,16 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-DATABASE_URL = os.getenv("DATABASE_URL")
+def _with_connect_timeout(url, timeout_seconds=5):
+    if not url:
+        return url
+    if "connect_timeout=" in url:
+        return url
+    separator = "&" if "?" in url else "?"
+    return f"{url}{separator}connect_timeout={timeout_seconds}"
+
+
+DATABASE_URL = _with_connect_timeout(os.getenv("DATABASE_URL"))
 
 SECRET_KEY = os.getenv("SECRET_KEY", "dev-secret-key")
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")

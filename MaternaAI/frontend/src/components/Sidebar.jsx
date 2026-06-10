@@ -19,7 +19,8 @@ import {
   UserRound,
   UserCheck
 } from 'lucide-react';
-import Logo from './assets/Logo.png'
+import Logo from './assets/Logo.png';
+
 const Sidebar = ({
   isOpen,
   setIsOpen,
@@ -114,12 +115,10 @@ const Sidebar = ({
   };
 
   const triggerSOS = async () => {
-    // Quick confirm for SOS trigger
     const confirmSOS = window.confirm("⚠️ WARNING: This will trigger an EMERGENCY SOS dispatch to the registered community clinician. Are you sure you want to proceed?");
     if (!confirmSOS) return;
 
     try {
-      // Post to SOS endpoint
       const response = await fetch('/api/sos/trigger', {
         method: 'POST',
         headers: {
@@ -168,7 +167,7 @@ const Sidebar = ({
           {/* Logo / Header */}
           <div className="flex items-center justify-between p-6 border-b border-primary-mauve/5">
             <div className="flex items-center cursor-pointer" onClick={() => { navigate('/'); setIsOpen(false); }}>
-              <img className="block -mr-2" src={Logo} style={{ width: "50px", height: "40px", paddingRight: "2px", margin: "-12px" }} />
+              <img className="block -mr-2" src={Logo} style={{ width: "50px", height: "40px", paddingRight: "2px", margin: "-12px" }} alt="Logo" />
               <span className="font-sans font-extrabold text-xl tracking-tight text-text-dark">
                 aterna<span className="text-primary-mauve">AI</span>
               </span>
@@ -200,6 +199,7 @@ const Sidebar = ({
             </div>
           </div>
 
+          {/* Notifications Dropdown */}
           {user?.role === 'patient' && showNotifications && (
             <div className="fixed left-6 top-24 z-50 w-[320px] max-h-[420px] overflow-hidden">
               <div className="bg-white border border-primary-mauve/20 rounded-2xl shadow-premium p-4 flex flex-col gap-3">
@@ -249,7 +249,7 @@ const Sidebar = ({
             </div>
           )}
 
-          {/* User Persona Capsule */}
+          {/* User Persona Capsule (ভুলটি এখানে সংশোধন করা হয়েছে) */}
           <div className="mx-4 my-5 p-4 rounded-xl bg-bg-rose-white border border-primary-mauve/5 flex items-center gap-3">
             <div className="w-10 h-10 rounded-full bg-secondary-blush/20 flex items-center justify-center text-lg font-bold text-primary-mauve overflow-hidden shrink-0 border border-primary-mauve/10">
               {user?.profile_image ? (

@@ -125,7 +125,7 @@ const ClinicianCommunity = () => {
     // Use String key always to prevent int vs string mismatch causing duplicates
     mysqlInbox.forEach(c => map.set(String(c.partner_id), c));
     // Overwrite with Firebase ones if exists (they have real-time unread counts)
-    inbox.forEach(c => map.set(String(c.partner_id), c));
+    inbox.forEach(c => map.set(String(c.partner_id), { ...map.get(String(c.partner_id)), ...c }));
 
     const merged = Array.from(map.values());
     merged.sort((a, b) => {
@@ -290,8 +290,23 @@ const ClinicianCommunity = () => {
     });
   }, [contacts, search]);
 
-  const selectContact = (contact) => {
-    setActiveContact(contact);
+  const selectContact = (contactInfo) => {
+    let fullContact = contacts.find(c => String(c.id) === String(contactInfo.id));
+    if (!fullContact) {
+      const inboxItem = combinedInbox.find(i => String(i.partner_id) === String(contactInfo.id));
+      if (inboxItem) {
+        fullContact = {
+          id: inboxItem.partner_id,
+          name: inboxItem.partner_name,
+          profile_image: inboxItem.profile_image
+        };
+      }
+    }
+    setActiveContact(fullContact || contactInfo);
+
+    setTimeout(() => {
+      chatPanelRef.current?.scrollIntoView({ behavior: "smooth", block: 'start' });
+    }, 100);
   };
 
   const refocusComposer = () => {
@@ -563,9 +578,21 @@ const ClinicianCommunity = () => {
                 const isSelf = msg.sender_id === user?.id;
                 return (
                   <div key={msg.id} className={`flex items-start gap-3 ${isSelf ? 'flex-row-reverse' : 'flex-row'}`}>
-                    <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 text-sm font-bold shadow-xs ${isSelf ? 'bg-primary-mauve text-white' : 'bg-bg-rose-white text-text-dark border border-primary-mauve/10'
+                    <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 text-sm font-bold shadow-xs overflow-hidden ${isSelf ? 'bg-primary-mauve text-white' : 'bg-bg-rose-white text-text-dark border border-primary-mauve/10'
                       }`}>
-                      {isSelf ? '🩺' : '👤'}
+                      {isSelf ? (
+                        user?.profile_image ? (
+                          <img src={user.profile_image} alt={user?.name || 'You'} className="w-full h-full object-cover" />
+                        ) : (
+                          '🩺'
+                        )
+                      ) : (
+                        activeContact?.profile_image ? (
+                          <img src={activeContact.profile_image} alt={activeContact.name || 'Contact'} className="w-full h-full object-cover" />
+                        ) : (
+                          activeContact?.role === 'clinician' ? '🩺' : '🤰'
+                        )
+                      )}
                     </div>
                     <div className="flex flex-col max-w-[80%] space-y-1">
                       <div className={`p-4 rounded-2xl border text-sm font-medium leading-relaxed ${isSelf

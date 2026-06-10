@@ -208,7 +208,7 @@ const Community = () => {
     // Use String key always to prevent int vs string mismatch causing duplicates
     mysqlInbox.forEach(c => map.set(String(c.partner_id), c));
     // Overwrite with Firebase ones if exists (they have real-time unread counts)
-    inboxConversations.forEach(c => map.set(String(c.partner_id), c));
+    inboxConversations.forEach(c => map.set(String(c.partner_id), { ...map.get(String(c.partner_id)), ...c }));
 
     const merged = Array.from(map.values());
     merged.sort((a, b) => {
@@ -392,7 +392,17 @@ const Community = () => {
 
     try {
       const created = await communityAPI.createPost(activeGroupId, payload);
-      setPosts(prev => [created, ...prev]);
+      // Ensure newly created post shows the local saved profile immediately
+      const mergedPost = { ...created };
+      if (!mergedPost.author_name) {
+        mergedPost.author_name = newPostAnonymous ? 'Anonymous Mother' : (user?.name || 'Community Member');
+      }
+      if (!mergedPost.author_image) {
+        // Prefer explicit profile image fields from user, including clinician stored profile
+        const fallbackImage = user?.profile_image || user?.clinician_profile?.profile_image || null;
+        mergedPost.author_image = newPostAnonymous ? null : fallbackImage;
+      }
+      setPosts(prev => [mergedPost, ...prev]);
       setShowCreatePostModal(false);
       setNewPostContent('');
       setNewPostAnonymous(false);
@@ -889,8 +899,14 @@ const Community = () => {
                   <div className="p-4 flex items-center justify-between border-b border-primary-mauve/5">
                     <div className="flex items-center gap-3">
                       {/* Avatar */}
-                      <div className="w-9 h-9 rounded-full bg-primary-mauve/10 flex items-center justify-center text-base border border-primary-mauve/20 select-none shadow-xs font-bold">
-                        {authorIsAnonymous ? '🤰' : '👩‍⚕️'}
+                      <div className="w-9 h-9 rounded-full bg-primary-mauve/10 flex items-center justify-center text-base border border-primary-mauve/20 select-none shadow-xs font-bold overflow-hidden">
+                        {authorIsAnonymous ? (
+                          '🤰'
+                        ) : post.author_image ? (
+                          <img src={post.author_image} alt={post.author_name} className="w-full h-full object-cover" />
+                        ) : (
+                          '👩‍⚕️'
+                        )}
                       </div>
 
                       {/* Author Details */}
@@ -1093,8 +1109,12 @@ const Community = () => {
                     className="flex items-center justify-between p-2 rounded-xl border border-primary-mauve/5 hover:bg-bg-rose-white/50 transition-all"
                   >
                     <div className="flex items-center gap-2.5 overflow-hidden">
-                      <div className="w-7.5 h-7.5 rounded-full bg-primary-mauve/10 flex items-center justify-center text-xs font-bold shrink-0">
-                        {member.role === 'clinician' ? '🩺' : '🤰'}
+                      <div className="w-7.5 h-7.5 rounded-full bg-primary-mauve/10 flex items-center justify-center text-xs font-bold shrink-0 overflow-hidden">
+                        {member.profile_image ? (
+                          <img src={member.profile_image} alt={member.name} className="w-full h-full object-cover" />
+                        ) : (
+                          member.role === 'clinician' ? '🩺' : '🤰'
+                        )}
                       </div>
                       <div className="truncate">
                         <span className="text-[11px] font-black text-text-dark block leading-none truncate">
@@ -1219,8 +1239,12 @@ const Community = () => {
                             className="w-full text-left p-3.5 rounded-xl border border-primary-mauve/5 bg-bg-rose-white/30 hover:bg-bg-rose-white hover:border-primary-mauve/20 transition-all flex justify-between items-start cursor-pointer"
                           >
                             <div className="flex gap-3 overflow-hidden pr-2">
-                              <div className="w-8.5 h-8.5 rounded-full bg-primary-mauve/10 flex items-center justify-center text-sm font-bold shrink-0">
-                                🤰
+                              <div className="w-8.5 h-8.5 rounded-full bg-primary-mauve/10 flex items-center justify-center text-sm font-bold shrink-0 overflow-hidden">
+                                {chat.profile_image ? (
+                                  <img src={chat.profile_image} alt={chat.partner_name} className="w-full h-full object-cover" />
+                                ) : (
+                                  '🤰'
+                                )}
                               </div>
                               <div className="truncate">
                                 <span className="text-[11px] font-black text-text-dark block leading-none">
@@ -1262,8 +1286,12 @@ const Community = () => {
                             className="w-full text-left p-3.5 rounded-xl border border-primary-mauve/5 bg-bg-rose-white/30 hover:bg-bg-rose-white hover:border-primary-mauve/20 transition-all flex justify-between items-start cursor-pointer"
                           >
                             <div className="flex gap-3 overflow-hidden pr-2">
-                              <div className="w-8.5 h-8.5 rounded-full bg-primary-mauve/10 flex items-center justify-center text-sm font-bold shrink-0">
-                                🩺
+                              <div className="w-8.5 h-8.5 rounded-full bg-primary-mauve/10 flex items-center justify-center text-sm font-bold shrink-0 overflow-hidden">
+                                {contact.profile_image ? (
+                                  <img src={contact.profile_image} alt={contact.name} className="w-full h-full object-cover" />
+                                ) : (
+                                  '🩺'
+                                )}
                               </div>
                               <div className="truncate">
                                 <span className="text-[11px] font-black text-text-dark block leading-none">
