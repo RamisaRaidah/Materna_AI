@@ -9,7 +9,7 @@ _pool = None
 def get_pool():
     global _pool
     if _pool is None:
-        _pool = pg_pool.ThreadedConnectionPool(1, 10, DATABASE_URL)
+        _pool = pg_pool.ThreadedConnectionPool(2, 20, DATABASE_URL)
     return _pool
 
 def get_conn():
@@ -94,31 +94,3 @@ def init_db():
         if cur:
             cur.close()
         put_conn(conn)
-
-
-def ensure_user_profile_image_column():
-    """Add the profile_image column for older databases."""
-    query("ALTER TABLE users ADD COLUMN IF NOT EXISTS profile_image TEXT", fetch="none")
-
-
-def ensure_clinician_verification_columns():
-    """Add status and verification_documents columns to users table."""
-    query("ALTER TABLE users ADD COLUMN IF NOT EXISTS status VARCHAR(20) DEFAULT 'approved'", fetch="none")
-    query("ALTER TABLE users ADD COLUMN IF NOT EXISTS verification_documents TEXT", fetch="none")
-
-
-def ensure_user_presence_column():
-    """Add last_seen_at for online presence tracking."""
-    query("ALTER TABLE users ADD COLUMN IF NOT EXISTS last_seen_at TIMESTAMPTZ", fetch="none")
-
-
-def ensure_post_moderation_columns():
-    """Add moderation_status and moderation_reason columns for LLM misinfo checking."""
-    query(
-        "ALTER TABLE posts ADD COLUMN IF NOT EXISTS moderation_status VARCHAR(20) DEFAULT 'approved'",
-        fetch="none"
-    )
-    query(
-        "ALTER TABLE posts ADD COLUMN IF NOT EXISTS moderation_reason TEXT",
-        fetch="none"
-    )

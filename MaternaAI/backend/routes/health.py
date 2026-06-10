@@ -139,7 +139,12 @@ def log_kick_session():
     kick_count   = data.get("kick_count", 0)
     elapsed_secs = data.get("elapsed_secs", 0)
  
-    result = "normal" if kick_count >= 10 and elapsed_secs <= 7200 else "reduced"
+    if kick_count >= 10:
+        result = "normal"
+    elif elapsed_secs >= 7200:
+        result = "reduced"
+    else:
+        result = "inconclusive"          
     ai_feedback = _kick_feedback(kick_count, elapsed_secs)
  
     session = query(
@@ -154,7 +159,7 @@ def log_kick_session():
             """INSERT INTO clinician_alerts (patient_id, alert_type, title, body)
                VALUES (%s,'kick','👶 CRITICAL: Reduced Fetal Movement',%s)""",
             (g.user["id"],
-             f"Cardiff protocol: only {kick_count} kicks in {elapsed_secs//60} min. Emergency SOS active."),
+             f"Cardiff protocol: only {kick_count} kicks after full 2-hour session. Emergency SOS active."),
             fetch="none"
         )
  
@@ -169,10 +174,22 @@ def _kick_feedback(count: int, elapsed_secs: int) -> str:
             return f"✨ Normal pattern. {count} kicks in {mins} min — well within Cardiff protocol parameters."
         else:
             return f"✨ Goal met in {mins} min. Try drinking cold juice and lying on your left side to boost circulation."
-    return (f"⚠️ Cardiff protocol NOT met: only {count} kicks in {mins} min. "
+        
+    elif elapsed_secs >= 7200:
+        return (
+            f"⚠️ Cardiff protocol NOT met: only {count} kicks in {mins} min. "
             f"Fewer than 10 kicks in 2 hours requires immediate obstetric assessment. "
-            f"Lie on your left side and contact your midwife now.")
-
+            f"Lie on your left side and contact your midwife now."
+        )
+    
+    else:
+    # Session still in progress / early submit
+        remaining = max(0, (7200 - elapsed_secs) // 60)
+        return (
+            f"Session in progress — {count} kick{'s' if count != 1 else ''} recorded so far. "
+            f"You have {remaining} min remaining in the 2-hour Cardiff window. Keep monitoring."
+        )
+    
 # Alert helpers
  
 def _create_bp_alert(patient_id, sys_bp, dia_bp):

@@ -1,7 +1,6 @@
 from flask import Flask
 from flask_cors import CORS
 from config import SECRET_KEY, CORS_ORIGINS
-from db import ensure_user_profile_image_column
 
 app = Flask(__name__)
 app.config["SECRET_KEY"] = SECRET_KEY
@@ -9,15 +8,6 @@ CORS(app, resources={
     r"/api/*": {"origins": CORS_ORIGINS},
     r"/auth/*": {"origins": CORS_ORIGINS},
 })
-
-try:
-    ensure_user_profile_image_column()
-    from db import ensure_clinician_verification_columns, ensure_user_presence_column, ensure_post_moderation_columns
-    ensure_clinician_verification_columns()
-    ensure_user_presence_column()
-    ensure_post_moderation_columns()
-except Exception as e:
-    print(f"[DB] Migration note: {e}")
 
 # ─────────────────────────────────────────────
 # Register Blueprints
