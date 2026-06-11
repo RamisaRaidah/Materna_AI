@@ -744,7 +744,7 @@ def rag_query(user_input: str, user_profile: dict, mode: str = "danger", detecte
                 return "Thank you for reaching out. I'm here to support you with any maternal health questions — what would you like to talk about?"
         else:
             if greeting_pattern.search(lower_input):
-                return "আমি ম্যাটারনা এআই, আপনার যত্নশীল স্বাস্থ্য সহায়িকা। আপনার প্রতিটি পদক্ষেপে আমি আপনার পাশে আছি। আজ কেমন অনুভব করছেন?"
+                return "আমি ম্যাটারনা এআই, আপনার যত্নশীল স্বাস্থ্য সহায়ি8কা। আপনার প্রতিটি পদক্ষেপে আমি আপনার পাশে আছি। আজ কেমন অনুভব করছেন?"
             if mode == "danger":
                 return "আমি আপনার কথা শুনছি এবং আপনার সুস্থতার জন্য চিন্তিত। একটু বিশ্রাম নিন, পানি পান করুন — আর যদি অস্বস্তি বাড়ে, তাহলে দ্রুত একজন ডাক্তারের সাথে কথা বলুন।"
             elif mode == "ppd":

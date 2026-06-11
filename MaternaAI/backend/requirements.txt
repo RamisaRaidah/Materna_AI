@@ -6,11 +6,13 @@ python-dotenv
 google-generativeai
 requests
 gunicorn
-cohere
+cohere==7.0.3
 bcrypt
 edge-tts
 openai
 PyJWT
 firebase-admin
-pymupdf4llm
-chonkie[semantic]
+pymupdf4llm==1.27.2.3
+chonkie[semantic]==1.6.8
+numpy==2.4.6
+tokenizers==0.23.1
