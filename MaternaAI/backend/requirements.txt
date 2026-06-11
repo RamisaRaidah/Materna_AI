@@ -13,4 +13,4 @@ openai
 PyJWT
 firebase-admin
 pymupdf4llm
-chonkie
+chonkie[semantic]
