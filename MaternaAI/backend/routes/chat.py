@@ -112,7 +112,7 @@ def _get_alert_state(user_id: int) -> dict:
                       AND is_dismissed = FALSE
                       AND alert_type = 'abuse_alert'
                     LIMIT 1
-                ) AS AS has_open_abuse_alert,,
+                ) AS has_open_abuse_alert,
                 (
                     SELECT created_at FROM clinician_alerts
                     WHERE patient_id = %s
