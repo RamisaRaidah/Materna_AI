@@ -1,7 +1,6 @@
 import os
-import threading
 
-from flask import Flask
+from flask import Flask, jsonify
 from flask_cors import CORS
 from config import SECRET_KEY, CORS_ORIGINS
 
@@ -57,6 +56,9 @@ app.register_blueprint(sms_bp, url_prefix="/api/sms")
 from routes.care_plan import care_plan_bp
 app.register_blueprint(care_plan_bp, url_prefix="/api/care-plan")
 
+from mcp_server import protocol_inventory
+
+
 print("All blueprints have been registered.")
 
 @app.route("/")
@@ -64,9 +66,15 @@ def home():
     return {"status": "MaternaAI backend is running"}
 
 
-@app.route("/api/health")
+@app.route("/api/status")
 def health():
     return {"status": "MaternaAI backend is running", "version": "2.0"}
+
+
+@app.route("/api/mcp/inventory", methods=["GET"])
+def mcp_inventory():
+    return jsonify(protocol_inventory())
+
 
 
 if __name__ == "__main__":

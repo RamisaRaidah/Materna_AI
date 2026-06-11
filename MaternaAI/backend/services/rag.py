@@ -9,13 +9,51 @@ import json
 import re
 
 
-
-
 or_client = openai.OpenAI(
     base_url="https://openrouter.ai/api/v1",
     api_key=OPENROUTER_API_KEY
 )
 co = cohere.Client(api_key=COHERE_API_KEY)
+
+# ---------------------------------------------------------------------------
+# Local LLM client (Ollama — OpenAI-compatible endpoint)
+# ---------------------------------------------------------------------------
+# Ollama exposes an OpenAI-compatible API at http://localhost:11434/v1
+# Run:  ollama pull qwen2.5:7b
+# Docs: https://ollama.com
+#
+# OLLAMA_MODEL can be overridden via environment variable, e.g.:
+#   export OLLAMA_MODEL=qwen2.5:14b
+import os
+OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434/v1")
+OLLAMA_MODEL    = os.getenv("OLLAMA_MODEL",    "qwen2.5:7b")
+
+local_client = openai.OpenAI(
+    base_url=OLLAMA_BASE_URL,
+    api_key="ollama",          # Ollama ignores the key but the client requires a non-empty value
+)
+
+
+def _call_local_llm(messages: list, max_tokens: int = 500) -> str | None:
+    """
+    Attempt a completion against the local Ollama server.
+    Returns the response text, or None if Ollama is unavailable.
+    """
+    try:
+        response = local_client.chat.completions.create(
+            model=OLLAMA_MODEL,
+            messages=messages,
+            max_tokens=max_tokens,
+        )
+        text = response.choices[0].message.content
+        if text:
+            print(f"Local LLM ({OLLAMA_MODEL}) succeeded.")
+            return text
+        return None
+    except Exception as e:
+        print(f"Local LLM ({OLLAMA_MODEL}) unavailable or failed: {e}")
+        return None
+
 
 def get_db():
     conn = psycopg2.connect(DATABASE_URL)
@@ -102,7 +140,6 @@ def get_recent_history(user_id: int, limit: int = 6) -> list:
         """, (user_id, limit))
         rows = cur.fetchall()
         cur.close()
-        # The query returns in reverse order (newest first). Reverse it to chronological.
         rows.reverse()
         return [{"role": r[0], "content": r[1]} for r in rows]
     except Exception as e:
@@ -176,16 +213,6 @@ def build_clinician_prompt(
     patients: list,
     detected_lang: str = "en"
 ) -> str:
-    """
-    Builds a clinician-facing system prompt for one of four clinical modes:
-      - rapid_triage : Identify immediate risks and recommend escalation
-      - vitals_watch : Continuous monitoring and risk surveillance
-      - follow_up    : Ensure continuity of care
-      - community    : Coordinate field operations and referral networks
-
-    `patients` is a list so the clinician can query about multiple patients at once.
-    """
-
     if detected_lang == "bn":
         lang_rule = (
             "LANGUAGE RULE: The clinician is writing in Bengali/Banglish(Banglish is a mixture of english and bangla). "
@@ -198,7 +225,6 @@ def build_clinician_prompt(
             "Use standard clinical terminology. Be structured and precise."
         )
 
-    # ── Patient context block ──────────────────────────────────────────────
     if not patients:
         patient_block = "No specific patient records provided for this query."
     else:
@@ -211,7 +237,6 @@ def build_clinician_prompt(
             patient_entries.append(f"  Patient {i} — {p.get('name', 'Unknown')}:\n{fields}")
         patient_block = "PATIENT RECORDS:\n" + "\n\n".join(patient_entries)
 
-    # ── Mode-specific task and output guidance ─────────────────────────────
     mode_configs = {
         "rapid_triage": {
             "title": "Rapid Triage",
@@ -350,21 +375,6 @@ def clinician_rag_query(
     clinician_id: int = None,
     top_k: int = 6
 ) -> str:
-    """
-    Entry-point RAG query for clinician-facing modes.
-
-    Args:
-        user_input       : The clinician's free-text question or command.
-        clinician_profile: Dict with keys like 'name', 'role', 'facility'.
-        patients         : List of patient profile dicts (1 or many).
-        mode             : One of 'rapid_triage' | 'vitals_watch' | 'follow_up' | 'community'.
-        detected_lang    : 'en' or 'bn'.
-        clinician_id     : Optional DB user_id for conversation history.
-        top_k            : Number of knowledge chunks to retrieve.
-
-    Returns:
-        AI-generated clinical response string.
-    """
     category_map = {
         "rapid_triage": "danger",
         "vitals_watch": "vitals",
@@ -405,7 +415,7 @@ def clinician_rag_query(
 
         messages.append({"role": "user", "content": user_input})
 
-        # ── 4. Call LLM (Gemini primary → OpenRouter fallback) ────────────
+        # ── 4. Gemini primary ──────────────────────────────────────────────
         gemini_contents = [
             {
                 "role": "user" if m["role"] == "user" else "model",
@@ -435,16 +445,17 @@ def clinician_rag_query(
             except Exception as gemini_err:
                 if is_quota_error(gemini_err):
                     mark_exhausted(key)
-                    continue  # try next key
+                    continue
                 print(f"Clinician RAG — Gemini failed: {gemini_err}")
                 break
 
-        # OpenRouter fallback
+        # ── 5. OpenRouter fallback ─────────────────────────────────────────
         model_queue = [
             "google/gemini-2.5-flash",
             "qwen/qwen-2.5-72b-instruct",
             "meta-llama/llama-3.3-70b-instruct",
             "meta-llama/llama-3.1-8b-instruct:free",
+            "mistralai/mistral-small:free",
         ]
         response = None
         last_err = None
@@ -460,10 +471,16 @@ def clinician_rag_query(
                 print(f"Clinician RAG — OpenRouter model {model} failed: {model_err}")
                 last_err = model_err
 
-        if not response:
-            raise last_err
+        if response:
+            return response.choices[0].message.content
 
-        return response.choices[0].message.content
+        # ── 6. Local LLM last resort ───────────────────────────────────────
+        print("Clinician RAG — all remote models failed, trying local LLM.")
+        local_response = _call_local_llm(messages, max_tokens=1500)
+        if local_response:
+            return local_response
+
+        raise last_err
 
     except Exception as e:
         print(f"Clinician RAG query failed ({mode}): {e}")
@@ -502,18 +519,14 @@ def extract_nutrition_metrics(user_input: str, assistant_response: str) -> dict:
         try:
             if value is None:
                 return 0.0
-            
             if isinstance(value, (int, float)):
                 return float(value)
-            
             match = re.search(r"[-+]?\d*\.?\d+", str(value))
             if match:
                 return float(match.group())
-            
             return 0.0
         except Exception:
             return 0.0
-        
 
     # Precise engineering to force the model to calculate values dynamically
     extraction_prompt = f"""
@@ -535,7 +548,7 @@ def extract_nutrition_metrics(user_input: str, assistant_response: str) -> dict:
     CRITICAL: Return your response STRICTLY as a raw JSON object matching the schema below. Do not wrap it in markdown block quotes or backticks. No explanation, no conversational filler.
     {{"iron": 0.0, "folate": 0.0, "calcium": 0.0, "protein": 0.0}}
     """
-    
+     
     model_queue = [
         "qwen/qwen-2.5-72b-instruct",
         "meta-llama/llama-3.3-70b-instruct",
@@ -544,7 +557,7 @@ def extract_nutrition_metrics(user_input: str, assistant_response: str) -> dict:
 
     parsed_data = None
 
-    # Try Gemini first with key rotation
+    # ── Gemini first ───────────────────────────────────────────────────────
     key = None
     while True:
         try:
@@ -574,11 +587,11 @@ def extract_nutrition_metrics(user_input: str, assistant_response: str) -> dict:
         except Exception as e:
             if is_quota_error(e):
                 mark_exhausted(key)
-                continue  # try next key
+                continue
             print(f"Nutrition extraction failed for gemini-2.5-flash: {e}")
             break
 
-    # OpenRouter fallback queue
+    # ── OpenRouter fallback ────────────────────────────────────────────────
     if not parsed_data:
         for model_name in model_queue:
             try:
@@ -606,60 +619,69 @@ def extract_nutrition_metrics(user_input: str, assistant_response: str) -> dict:
             except json.JSONDecodeError as e:
                 print(f"{model_name} returned invalid JSON. Trying next model. Error: {e}")
                 continue
-
             except Exception as e:
                 print(f"Nutrition extraction failed for {model_name}: {e}")
                 continue
 
+    # ── Local LLM last resort ──────────────────────────────────────────────
     if not parsed_data:
-        print("All nutrition extraction models failed.")
+        print("Nutrition extraction — all remote models failed, trying local LLM.")
+        # Local models don't support response_format reliably, so we parse manually
+        local_nutrition_prompt = (
+            extraction_prompt
+            + "\n\nIMPORTANT: Return ONLY the raw JSON object. No markdown, no explanation."
+        )
+        local_text = _call_local_llm(
+            [{"role": "user", "content": local_nutrition_prompt}],
+            max_tokens=200,
+        )
+        if local_text:
+            try:
+                local_text = local_text.strip()
+                if local_text.startswith("```"):
+                    local_text = re.sub(r"^```(?:json)?|```$", "", local_text, flags=re.MULTILINE).strip()
+                parsed_data = json.loads(local_text)
+                print(f"Nutrition extraction succeeded with local LLM ({OLLAMA_MODEL})")
+            except json.JSONDecodeError as e:
+                print(f"Local LLM returned invalid JSON for nutrition extraction: {e}")
+
+    if not parsed_data:
+        print("All nutrition extraction models failed (including local).")
         return default_metrics
-    
     # Ensure values are safely cast to floats and fall back to 0.0 if missing
     return {
-        "iron": safe_float(parsed_data.get("iron", 0.0)),
-        "folate": safe_float(parsed_data.get("folate", 0.0)),
+        "iron":    safe_float(parsed_data.get("iron",    0.0)),
+        "folate":  safe_float(parsed_data.get("folate",  0.0)),
         "calcium": safe_float(parsed_data.get("calcium", 0.0)),
         "protein": safe_float(parsed_data.get("protein", 0.0))
     }
-                
+
 
 def rag_query(user_input: str, user_profile: dict, mode: str = "danger", detected_lang: str = "bn", user_id: int = 1) -> str:
     try:
         chunks = retrieve_context(user_input, category=mode if mode != "general" else None)
         context = format_context(chunks)
-        
+
         system_content = build_system_prompt(user_profile, context, mode, detected_lang)
-        
-        # Build standard messages list incorporating chat history context
+
         messages = [{"role": "system", "content": system_content}]
-        
+
         history = get_recent_history(user_id, limit=6)
-        
-        # Append history messages, omitting duplication of the current input
+
         for msg in history:
             role = "user" if msg["role"] == "user" else "assistant"
             content = msg["content"]
-            
-            # If the current user message is already stored in the DB (which it is, since we save before querying),
-            # skip it from the middle of the loop so we can explicitly handle it at the end.
             if role == "user" and content == user_input:
                 continue
-                
             messages.append({"role": role, "content": content})
-            
-        # Inject a language enforcement tag directly into the current user message.
-        # This is critical when the conversation history is in a different language —
-        # LLMs weight the most recent user turn heavily, so this tag forces compliance.
+
         if detected_lang == 'en':
             tagged_input = f"{user_input}\n\n[LANGUAGE DIRECTIVE: The user just wrote in English. Your entire response MUST be in English only. Do NOT reply in Bengali.]"
         else:
             tagged_input = f"{user_input}\n\n[LANGUAGE DIRECTIVE: The user just wrote in Bengali/Banglish. Your entire response MUST be in Bengali (বাংলা) only.]"
         messages.append({"role": "user", "content": tagged_input})
 
-        # -------------------------------------------------------------
-        # 1. Direct Google Gemini API (Primary — key rotation)
-        # -------------------------------------------------------------
+        # ── 1. Gemini primary ──────────────────────────────────────────────
         gemini_contents = [
             {"role": "user" if msg["role"] == "user" else "model", "parts": [msg["content"]]}
             for msg in messages if msg["role"] != "system"
@@ -679,51 +701,54 @@ def rag_query(user_input: str, user_profile: dict, mode: str = "danger", detecte
                 if response_text:
                     print("Direct Gemini API call succeeded!")
                     return response_text
-                break  # empty response — fall through to OpenRouter
+                break
             except GeminiKeysExhausted:
                 print("RAG — all Gemini keys exhausted, using OpenRouter.")
                 break
             except Exception as gemini_err:
                 if is_quota_error(gemini_err):
                     mark_exhausted(key)
-                    continue  # try next key
+                    continue
                 print(f"Direct Gemini API failed (trying OpenRouter fallback): {str(gemini_err)}")
                 break
 
-        # -------------------------------------------------------------
-        # 2. OpenRouter API Fallback
-        # -------------------------------------------------------------
+        # ── 2. OpenRouter fallback ─────────────────────────────────────────
         response = None
         last_err = None
-        
-        # Cleaned up model queue with valid OpenRouter model IDs and a free active fallback
+
         model_queue = [
             "google/gemini-2.5-flash",
             "qwen/qwen-2.5-72b-instruct",
             "meta-llama/llama-3.3-70b-instruct",
             "meta-llama/llama-3.1-8b-instruct:free"
         ]
-        
+
         for model in model_queue:
             try:
                 response = or_client.chat.completions.create(
                     model=model,
                     messages=messages,
-                    max_tokens=500  # Strictly limit worst-case output to fit free accounts/credits
+                    max_tokens=500
                 )
                 break
             except Exception as model_err:
                 print(f"Model {model} failed on OpenRouter: {str(model_err)}")
                 last_err = model_err
-        
-        if not response:
-            raise last_err
 
-        return response.choices[0].message.content
+        if response:
+            return response.choices[0].message.content
+
+        # ── 3. Local LLM last resort ───────────────────────────────────────
+        print("RAG — all remote models failed, trying local LLM.")
+        local_response = _call_local_llm(messages, max_tokens=500)
+        if local_response:
+            return local_response
+
+        raise last_err
+
     except Exception as e:
         print(f"RAG OpenRouter API failed (applying fallback): {str(e)}")
-        
-        # Resilience fallbacks — match user's language
+
         lower_input = user_input.lower()
         import re as _re
         greeting_pattern = _re.compile(
@@ -744,7 +769,7 @@ def rag_query(user_input: str, user_profile: dict, mode: str = "danger", detecte
                 return "Thank you for reaching out. I'm here to support you with any maternal health questions — what would you like to talk about?"
         else:
             if greeting_pattern.search(lower_input):
-                return "আমি ম্যাটারনা এআই, আপনার যত্নশীল স্বাস্থ্য সহায়ি8কা। আপনার প্রতিটি পদক্ষেপে আমি আপনার পাশে আছি। আজ কেমন অনুভব করছেন?"
+                return "আমি ম্যাটারনা এআই, আপনার যত্নশীল স্বাস্থ্য সহায়িকা। আপনার প্রতিটি পদক্ষেপে আমি আপনার পাশে আছি। আজ কেমন অনুভব করছেন?"
             if mode == "danger":
                 return "আমি আপনার কথা শুনছি এবং আপনার সুস্থতার জন্য চিন্তিত। একটু বিশ্রাম নিন, পানি পান করুন — আর যদি অস্বস্তি বাড়ে, তাহলে দ্রুত একজন ডাক্তারের সাথে কথা বলুন।"
             elif mode == "ppd":
