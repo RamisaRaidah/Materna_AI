@@ -443,7 +443,7 @@ def patient_gemini(state: PatientState) -> PatientState:
             )
             response_text = genai_model.generate_content(
                 state["gemini_contents"],
-                generation_config={"max_output_tokens": 800},
+                generation_config={"max_output_tokens":1400},
             ).text
             if response_text:
                 print("Direct Gemini API call succeeded!")
@@ -477,7 +477,7 @@ def patient_openrouter(state: PatientState) -> PatientState:
             response = or_client.chat.completions.create(
                 model=model,
                 messages=state["messages"],
-                max_tokens=800,
+                max_tokens=1400,
             )
             return {**state, "response": response.choices[0].message.content, "error": None}
         except Exception as e:
@@ -493,7 +493,7 @@ def patient_ollama(state: PatientState) -> PatientState:
         response = ollama_client.chat.completions.create(
             model=OLLAMA_MODEL,
             messages=state["messages"],
-            max_tokens=800,
+            max_tokens=1400,
         )
         text = response.choices[0].message.content
         if text:
