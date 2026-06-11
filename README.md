@@ -55,7 +55,7 @@ The full 10-question Edinburgh Postnatal Depression Scale (EPDS), with clinicall
 <div align="center">
   <table>
     <tr>
-      <td><img src="Docs/screenshots/ppd-screening-1.png" width="260"/></td>
+      <td><img src="Docs/screenshots/ppd-screening-1.png" width="360"/></td>
       <td><img src="Docs/screenshots/ppd-screening-2.png" width="400"/></td>
     </tr>
   </table>
