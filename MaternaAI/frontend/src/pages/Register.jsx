@@ -245,7 +245,7 @@ const Register = () => {
       const response = await authAPI.sendOTP(phone.replace(/\s/g, ''));
       setOtpSent(true);
       setOtpTimer(60);
-      
+
       if (response && response.simulated_code) {
         setTimeout(() => {
           setIncomingSMSCode(response.simulated_code);
@@ -283,8 +283,9 @@ const Register = () => {
 
   const [emergencyContact, setEmergencyContact] = useState('');
   const [weeksPregnant, setWeeksPregnant] = useState('');
-  const [isPostpartum, setIsPostpartum] = useState(false);
-  const [persona, setPersona] = useState(role === 'clinician' ? 'clinician' : 'pregnant');
+  const [mode, setMode] = useState('pregnant'); // 'pregnant' | 'postpartum' | 'clinician'
+  const isPostpartum = mode === 'postpartum';
+  const persona = mode;
   const [touched, setTouched] = useState({});
   const [submitError, setSubmitError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -307,7 +308,7 @@ const Register = () => {
     phone: touched.phone ? validateField('phone', phone) : '',
     password: touched.password ? validateField('password', password) : '',
     age: touched.age ? validateField('age', age) : '',
-    weeks: touched.weeks ? validateField('weeks', weeksPregnant, { isPostpartum }) : '',
+    weeks: touched.weeks && mode === 'pregnant' ? validateField('weeks', weeksPregnant, { isPostpartum: false }) : '',
     emergency: touched.emergency ? validateField('emergency', emergencyContact, { phone }) : '',
     division: touched.location && !division ? 'Division is required' : '',
     district: touched.location && division && !district ? 'District is required' : '',
@@ -318,7 +319,7 @@ const Register = () => {
   const handleFileChange = (e) => {
     const files = Array.from(e.target.files);
     setFileError('');
-    
+
     // Check file size
     const validFiles = files.filter(file => {
       if (file.size > 5 * 1024 * 1024) {
@@ -358,22 +359,14 @@ const Register = () => {
   const touch = (field) => setTouched(p => ({ ...p, [field]: true }));
 
   const handleWeeksChange = (val) => {
-    setWeeksPregnant(val);
+    const sanitized = val === '' ? '' : String(Math.max(1, Math.min(42, parseInt(val) || 1)));
+    setWeeksPregnant(sanitized);
     touch('weeks');
-    if (!isPostpartum) {
-      const w = parseInt(val) || 0;
-      if (w >= 1 && w <= 42) setPersona('pregnant');
-    }
   };
 
   const handlePostpartumToggle = (checked) => {
-    setIsPostpartum(checked);
-    if (checked) {
-      setPersona('postpartum');
-      setWeeksPregnant('');
-    } else {
-      setPersona('pregnant');
-    }
+    setMode(checked ? 'postpartum' : 'pregnant');
+    if (checked) setWeeksPregnant('');
   };
 
   const allValid = () => {
@@ -383,8 +376,8 @@ const Register = () => {
       if (f === 'age') return validateField('age', age);
       return validateField(f, f === 'name' ? name : f === 'phone' ? phone : f === 'password' ? password : '');
     });
-    if (role === 'patient' && !isPostpartum) {
-      fieldErrors.push(validateField('weeks', weeksPregnant, { isPostpartum }));
+    if (mode === 'pregnant') {
+      fieldErrors.push(validateField('weeks', weeksPregnant, { isPostpartum: false }));
     }
     if (role === 'clinician') {
       if (!licenseNumber.trim()) return false;
@@ -397,7 +390,7 @@ const Register = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setTouched({ name: true, phone: true, password: true, age: true, weeks: true, emergency: true, location: true, licenseNumber: true });
+    setTouched({ name: true, phone: true, password: true, age: true, weeks: mode === 'pregnant', emergency: true, location: true, licenseNumber: true });
 
     if (!otpVerified) {
       setSubmitError('Please verify your phone number via OTP first.');
@@ -416,8 +409,8 @@ const Register = () => {
     }
 
     if (!allValid()) {
-      setSubmitError(role === 'clinician' 
-        ? 'Please complete all fields correctly and ensure at least one verification document is uploaded.' 
+      setSubmitError(role === 'clinician'
+        ? 'Please complete all fields correctly and ensure at least one verification document is uploaded.'
         : 'Please complete all fields correctly, including your full location details.'
       );
       return;
@@ -487,7 +480,7 @@ const Register = () => {
                 MaternaAI: Your OTP for registration is <span className="font-black text-primary-mauve">{incomingSMSCode}</span>.
               </p>
               <div className="mt-3 flex items-center gap-2">
-                <button 
+                <button
                   type="button"
                   onClick={() => {
                     setOtpCode(incomingSMSCode);
@@ -499,8 +492,8 @@ const Register = () => {
                 </button>
               </div>
             </div>
-            <button 
-              type="button" 
+            <button
+              type="button"
               onClick={() => setIncomingSMSCode(null)}
               className="text-text-muted hover:text-text-dark p-1 cursor-pointer"
             >
@@ -540,7 +533,7 @@ const Register = () => {
         {/* Role Toggle */}
         <div className="p-1 rounded-xl bg-bg-rose-white border border-primary-mauve/10 flex select-none mb-5">
           {['patient', 'clinician'].map(r => (
-            <button key={r} type="button" onClick={() => { setRole(r); setSubmitError(''); setPersona(r === 'clinician' ? 'clinician' : 'pregnant'); }}
+            <button key={r} type="button" onClick={() => { setRole(r); setSubmitError(''); setMode(r === 'clinician' ? 'clinician' : 'pregnant'); }}
               className={`flex-1 py-2.5 rounded-lg text-xs font-black tracking-wider transition-all cursor-pointer ${role === r ? 'bg-primary-mauve text-white shadow-md' : 'text-text-muted hover:text-text-dark'}`}>
               {r === 'patient' ? 'PATIENT (EXPECTING/NEW MOTHER)' : 'CLINICIAN (DOCTOR/MIDWIFE)'}
             </button>
@@ -745,22 +738,11 @@ const Register = () => {
 
               {!isPostpartum && (
                 <>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
                     {/* Weeks Stepper */}
                     <Field label="Weeks Pregnant *" error={errors.weeks}
                       hint="Use ▲ ▼ or type directly (1–42)">
                       <WeekStepper value={weeksPregnant} onChange={handleWeeksChange} disabled={isSubmitting} />
-                    </Field>
-
-                    {/* Persona */}
-                    <Field label="Care Persona">
-                      <select value={persona} onChange={e => setPersona(e.target.value)}
-                        disabled={isSubmitting}
-                        className={`${inputCls(false)} appearance-none`}>
-                        <option value="pregnant">Expecting Mother (Pregnancy Mode)</option>
-                        <option value="postpartum">New Mother 0–12m (Postpartum)</option>
-                        <option value="recovery">Recovery Mode (SOS + Peer)</option>
-                      </select>
                     </Field>
                   </div>
 
@@ -817,14 +799,14 @@ const Register = () => {
               <Field label="Medical License / Registration ID *" error={errors.licenseNumber} hint="Enter your official medical license number">
                 <div className="relative">
                   <FileText className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-text-muted" />
-                  <input 
-                    type="text" 
-                    placeholder="e.g. BMDC-12345" 
+                  <input
+                    type="text"
+                    placeholder="e.g. BMDC-12345"
                     value={licenseNumber}
-                    onChange={e => setLicenseNumber(e.target.value)} 
+                    onChange={e => setLicenseNumber(e.target.value)}
                     onBlur={() => touch('licenseNumber')}
                     disabled={isSubmitting}
-                    className={`${inputCls(!!errors.licenseNumber)} pl-10`} 
+                    className={`${inputCls(!!errors.licenseNumber)} pl-10`}
                   />
                 </div>
               </Field>
@@ -839,13 +821,13 @@ const Register = () => {
                     <div className="flex text-xs text-text-muted justify-center">
                       <label className="relative cursor-pointer bg-transparent rounded-md font-bold text-primary-mauve hover:text-bg-dark-mauve focus-within:outline-hidden">
                         <span>Upload credentials</span>
-                        <input 
-                          type="file" 
-                          multiple 
+                        <input
+                          type="file"
+                          multiple
                           accept="image/*,application/pdf"
-                          onChange={handleFileChange} 
+                          onChange={handleFileChange}
                           disabled={isSubmitting}
-                          className="sr-only" 
+                          className="sr-only"
                         />
                       </label>
                       <p className="pl-1">or drag and drop</p>
