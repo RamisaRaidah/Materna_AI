@@ -37,6 +37,7 @@ def _row_to_post(row):
         "author_name":        row[8] if len(row) > 8 else None,
         "moderation_status":  row[9] if len(row) > 9 else "approved",
         "moderation_reason":  row[10] if len(row) > 10 else None,
+        "author_image":       row[11] if len(row) > 11 else None,
     }
 
 def _row_to_comment(row):
@@ -369,10 +370,19 @@ def create_post(group_id):
         cur = conn.cursor()
         # Insert the post first
         cur.execute("""
-            INSERT INTO posts (group_id, user_id, content, is_anonymous)
-            VALUES (%s, %s, %s, %s)
-            RETURNING id, group_id, user_id, content, is_anonymous, is_flagged, likes, created_at
-        """, (group_id, user_id, content, data.get("is_anonymous", False)))
+            INSERT INTO posts (group_id, user_id, content, is_anonymous, is_flagged, flag_reason, moderation_status, moderation_reason)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+            RETURNING id, group_id, user_id, content, is_anonymous, is_flagged, likes, created_at, moderation_status, moderation_reason
+        """, (
+            group_id,
+            user_id,
+            content,
+            data.get("is_anonymous", False),
+            misinfo_result["is_misinfo"],
+            misinfo_result.get("reason", ""),
+            moderation_status,
+            moderation_reason
+        ))
         inserted = cur.fetchone()
 
         # Fetch author details separately to avoid long-running joined statements during insert
@@ -396,7 +406,9 @@ def create_post(group_id):
             inserted[6],  # likes
             inserted[7],  # created_at
             (author_name if not inserted[4] else 'Anonymous'),
-            (author_image if not inserted[4] else None)
+            inserted[8],  # moderation_status
+            inserted[9],  # moderation_reason
+            (author_image if not inserted[4] else None)  # author_image
         )
 
         conn.commit()
