@@ -4,13 +4,9 @@ from flask import Blueprint, request, jsonify, g
 from db import query
 from services.auth import require_auth
 from rules.severity import calculate_severity, get_risk_level
- # Real OCR with Gemini
 import google.generativeai as genai
-from config import GEMINI_API_KEY
+from llm_client import get_gemini_model, mark_exhausted, is_quota_error, GeminiKeysExhausted
 import json
-
-if GEMINI_API_KEY:
-    genai.configure(api_key=GEMINI_API_KEY)
 
 health_bp = Blueprint("health", __name__)
 
@@ -234,11 +230,9 @@ def analyze_report():
     file_bytes = uploaded_file.read()
     mime_type = uploaded_file.mimetype or "image/png"
 
-    if not GEMINI_API_KEY:
-        return jsonify({"error": "analysis_failed", "message": "AI service not configured."}), 500
-
+    key = None
     try:
-        model = genai.GenerativeModel("gemini-2.5-flash")
+        model, key = get_gemini_model("gemini-2.5-flash")
 
         val_prompt = """Is this a medical document (prescription, lab report, or ultrasound scan)?
         Reply ONLY with valid JSON, no markdown fences: {"is_medical": true} or {"is_medical": false}"""
@@ -252,20 +246,18 @@ def analyze_report():
         try:
             val_data = json.loads(clean_val)
         except json.JSONDecodeError:
-            # Gemini returned something unparseable — check for a plain-text "false" signal
             lower = clean_val.lower()
             if "false" in lower and "true" not in lower:
                 val_data = {"is_medical": False}
             else:
                 val_data = {"is_medical": True}
 
-
         if val_data.get("is_medical") is False:
             return jsonify({
                 "error": "not_medical",
                 "message": "This doesn't look like a medical document. Please upload a prescription, lab report, or scan."
             }), 400
-        
+
         ext_prompt = """Extract details from this medical document into JSON.
         Return ONLY valid JSON, no markdown, no backticks:
         {"title": "", "date": "", "findings": "", "meds": [{"name": "", "purpose": "", "timing": "", "safety": "", "warning": "", "danger": true}]}"""
@@ -283,7 +275,11 @@ def analyze_report():
 
         return jsonify(result), 200
 
+    except GeminiKeysExhausted:
+        return jsonify({"error": "analysis_failed", "message": "AI service is temporarily at capacity. Please try again later."}), 503
     except Exception as e:
+        if is_quota_error(e) and key:
+            mark_exhausted(key)
         print("CRITICAL ERROR:", e)
         return jsonify({"error": "analysis_failed", "message": "Failed to analyze document. Please try again."}), 500
 
@@ -361,12 +357,11 @@ Rules:
 - Keep language simple and warm, suitable for a rural Bangladeshi patient
 - If language is 'bn', use natural, empathetic, and culturally appropriate Bengali."""
 
-    import json
-
-    # Try Gemini first
-    if GEMINI_API_KEY:
+    # Try Gemini with key rotation
+    key = None
+    while True:
         try:
-            model = genai.GenerativeModel("gemini-2.5-flash")
+            model, key = get_gemini_model("gemini-2.5-flash")
             response = model.generate_content(
                 prompt,
                 generation_config={
@@ -379,8 +374,16 @@ Rules:
                 parsed = json.loads(clean)
                 if isinstance(parsed, list) and len(parsed) > 0:
                     return jsonify(parsed), 200
+            break  # empty response — fall through to static fallback
+        except GeminiKeysExhausted:
+            print("Care plan — all Gemini keys exhausted, using static fallback.")
+            break
         except Exception as e:
+            if is_quota_error(e):
+                mark_exhausted(key)
+                continue  # try next key
             print("Gemini care plan failed:", e)
+            break
 
     # Fallback — static contextual plan based on vitals
     if is_postpartum:

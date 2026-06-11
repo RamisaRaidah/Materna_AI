@@ -1,12 +1,10 @@
 import os
 import json
 import google.generativeai as genai
-from config import GEMINI_API_KEY, OPENROUTER_API_KEY
+from config import OPENROUTER_API_KEY
+from llm_client import get_gemini_model, mark_exhausted, is_quota_error, GeminiKeysExhausted
 from db import query
 import openai
-
-if GEMINI_API_KEY:
-    genai.configure(api_key=GEMINI_API_KEY)
 
 or_client = openai.OpenAI(
     base_url="https://openrouter.ai/api/v1",
@@ -317,9 +315,10 @@ def evaluate_rules(user_id: int) -> dict:
 
         success = False
         dynamic_res = None
-        if GEMINI_API_KEY:
+        key = None
+        while True:
             try:
-                model = genai.GenerativeModel("gemini-2.5-flash")
+                model, key = get_gemini_model("gemini-2.5-flash")
                 response = model.generate_content(
                     dynamic_prompt,
                     generation_config={
@@ -331,8 +330,16 @@ def evaluate_rules(user_id: int) -> dict:
                 if response and response.text:
                     dynamic_res = json.loads(response.text.strip())
                     success = True
+                break
+            except GeminiKeysExhausted:
+                print("Dynamic rules — all Gemini keys exhausted, trying OpenRouter.")
+                break
             except Exception as e:
+                if is_quota_error(e):
+                    mark_exhausted(key)
+                    continue  # try next key
                 print("Gemini dynamic rules failed:", e)
+                break
         if not success and OPENROUTER_API_KEY:
             try:
                 response = or_client.chat.completions.create(
@@ -439,20 +446,30 @@ def enrich_with_llm(user_profile: dict, rule_results: dict, lang: str = "bn") ->
 
     success = False
     data = None
-    try:
-        model = genai.GenerativeModel("gemini-2.5-flash")
-        response = model.generate_content(
-            prompt,
-            generation_config={
-                "response_mime_type": "application/json",
-                "temperature": 0.2
-            }
-        )
-        if response and response.text:
-            data = json.loads(response.text.strip())
-            success = True
-    except Exception as e:
-        print("Gemini bilingual enrichment failed:", e)
+    key = None
+    while True:
+        try:
+            model, key = get_gemini_model("gemini-2.5-flash")
+            response = model.generate_content(
+                prompt,
+                generation_config={
+                    "response_mime_type": "application/json",
+                    "temperature": 0.2
+                }
+            )
+            if response and response.text:
+                data = json.loads(response.text.strip())
+                success = True
+            break
+        except GeminiKeysExhausted:
+            print("Enrichment — all Gemini keys exhausted, trying OpenRouter.")
+            break
+        except Exception as e:
+            if is_quota_error(e):
+                mark_exhausted(key)
+                continue  # try next key
+            print("Gemini bilingual enrichment failed:", e)
+            break
 
     if not success and OPENROUTER_API_KEY:
         try:
@@ -656,10 +673,7 @@ def extract_symptoms_from_text_and_update_risk(user_id: int, message_text: str, 
     Extracts symptoms (both present and resolved) from the chat text using Gemini.
     Saves the symptoms in health_logs and updates the risk profile in the background.
     """
-    import google.generativeai as genai
-    from config import GEMINI_API_KEY
     from rules.severity import SYMPTOM_SEVERITY
-    import json
 
     if not message_text or not user_id:
         return
@@ -696,9 +710,10 @@ def extract_symptoms_from_text_and_update_risk(user_id: int, message_text: str, 
 
     success = False
     data = None
-    if GEMINI_API_KEY:
+    key = None
+    while True:
         try:
-            model = genai.GenerativeModel("gemini-2.5-flash")
+            model, key = get_gemini_model("gemini-2.5-flash")
             response = model.generate_content(
                 extraction_prompt,
                 generation_config={
@@ -711,8 +726,16 @@ def extract_symptoms_from_text_and_update_risk(user_id: int, message_text: str, 
                 cleaned_res = response.text.strip().replace("```json", "").replace("```", "").strip()
                 data = json.loads(cleaned_res)
                 success = True
+            break
+        except GeminiKeysExhausted:
+            print("Symptom extraction — all Gemini keys exhausted, trying OpenRouter.")
+            break
         except Exception as e:
+            if is_quota_error(e):
+                mark_exhausted(key)
+                continue  # try next key
             print("Gemini symptom extraction failed:", e)
+            break
 
     if not success and OPENROUTER_API_KEY:
         try:
@@ -803,4 +826,3 @@ def extract_symptoms_from_text_and_update_risk(user_id: int, message_text: str, 
             compute_user_risk(user_id, lang=profile_lang)
         except Exception as err:
             print("Failed to recompute risk after chat extraction:", err)
-

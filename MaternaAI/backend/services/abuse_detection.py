@@ -6,10 +6,8 @@ from typing import Literal
 import google.generativeai as genai
 import openai
 
-from config import GEMINI_API_KEY, OPENROUTER_API_KEY
-
-if GEMINI_API_KEY:
-    genai.configure(api_key=GEMINI_API_KEY)
+from config import OPENROUTER_API_KEY
+from llm_client import get_gemini_model, mark_exhausted, is_quota_error, GeminiKeysExhausted
 
 _or_client = openai.OpenAI(
     base_url="https://openrouter.ai/api/v1",
@@ -94,17 +92,25 @@ def _ai_analyze(conversation_snippet:str)->dict:
     """Returns {"level": ..., "confidence": ..., "reason": ...} or safe default."""
     prompt = _AI_PROMPT.format(conversation=conversation_snippet)
 
-    if GEMINI_API_KEY:
+    key = None
+    while True:
         try:
-            model = genai.GenerativeModel("gemini-2.5-flash")
+            model, key = get_gemini_model("gemini-2.5-flash")
             res = model.generate_content(
                 prompt,
                 generation_config={"max_output_tokens": 120, "temperature": 0.1}
             )
             raw = res.text.strip().lstrip("```json").rstrip("```").strip()
             return json.loads(raw)
+        except GeminiKeysExhausted:
+            print("[AbuseDetect] All Gemini keys exhausted — falling back to OpenRouter.")
+            break
         except Exception as e:
+            if is_quota_error(e):
+                mark_exhausted(key)
+                continue  # try next key
             print(f"[AbuseDetect] Gemini failed: {e}")
+            break
 
     for model_id in _MODEL_QUEUE[1:]:
         try:
