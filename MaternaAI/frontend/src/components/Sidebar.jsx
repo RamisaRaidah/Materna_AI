@@ -1,6 +1,7 @@
 import React from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { sosAPI } from '../api/index';
 import {
   Home,
   MessageSquare,
@@ -126,24 +127,19 @@ const Sidebar = ({
     if (!confirmSOS) return;
 
     try {
-      const response = await fetch('/api/sos/trigger', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        },
-        body: JSON.stringify({
-          user_id: user?.id,
-          location: user?.location || user?.district || user?.area || user?.division || 'Location not set',
-          symptoms: ["Emergency Triggered by User"]
-        })
+      const result = await sosAPI.triggerSOS({
+        user_id: user?.id,
+        location: user?.location || user?.district || user?.area || user?.division || 'Location not set',
+        symptoms: ["Emergency Triggered by User"]
       });
-      if (response.ok) {
-        alert("🚨 EMERGENCY SOS DISPATCHED SUCCESSFUL. Community healthcare systems notified.");
+
+      if (result?.alert_sent) {
+        alert("🚨 EMERGENCY SOS DISPATCHED SUCCESSFULLY. Community healthcare systems notified.");
       } else {
-        alert("Failed to contact emergency systems directly. Please call the clinician immediately.");
+        alert("🚨 SOS alert recorded. Please also call your clinician directly for fastest response.");
       }
     } catch (e) {
+      console.error("[SOS] Dispatch error:", e);
       alert("🚨 Emergency connection initiated. Directing to primary contact.");
     }
   };
