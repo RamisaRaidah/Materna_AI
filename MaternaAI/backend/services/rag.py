@@ -908,6 +908,7 @@ def extract_nutrition_metrics(user_input: str, assistant_response: str) -> dict:
             if is_quota_error(e):
                 mark_exhausted(key)
                 continue
+                continue
             print(f"Nutrition extraction failed for gemini-2.5-flash: {e}")
             break
 
@@ -936,7 +937,7 @@ def extract_nutrition_metrics(user_input: str, assistant_response: str) -> dict:
                 print(f"Nutrition extraction failed for {model_name}: {e}")
 
     if not parsed_data:
-        print("All nutrition extraction models failed.")
+        print("All nutrition extraction models failed (including local).")
         return default_metrics
 
     return {
