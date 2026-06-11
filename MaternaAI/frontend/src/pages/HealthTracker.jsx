@@ -93,13 +93,13 @@ const HealthTracker = () => {
   // Load history on mount
   useEffect(() => {
     fetchHistory();
-}, []);
+  }, []);
 
-useEffect(() => {
+  useEffect(() => {
     if (user?.is_postpartum) {
-        fetchNewbornToday();
+      fetchNewbornToday();
     }
-}, [user?.is_postpartum]);   // only re-run when this specific field resolves
+  }, [user?.is_postpartum]);   // only re-run when this specific field resolves
 
   // Kick Counter stopwatch ticker
   useEffect(() => {
@@ -183,7 +183,7 @@ useEffect(() => {
   const msSinceFeed = lastFeedTime ? Date.now() - lastFeedTime : 0;
   const feedAlertLevel = msSinceFeed > 4 * 60 * 60 * 1000 ? 'danger'
     : msSinceFeed > 3 * 60 * 60 * 1000 ? 'warning'
-    : 'safe';
+      : 'safe';
 
   const handleVitalsSubmit = async (e) => {
     e.preventDefault();
@@ -578,7 +578,7 @@ useEffect(() => {
           </form>
 
           {/* Danger Symptoms Checklist Card */}
-                  
+
           <div className="bg-white border border-primary-mauve/10 rounded-2xl p-6 shadow-premium space-y-4">
             <div className="flex items-center gap-2 text-danger border-b border-primary-mauve/5 pb-2.5">
               <ShieldAlert className="w-5 h-5 animate-pulse" />
@@ -598,57 +598,56 @@ useEffect(() => {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               {(user?.is_postpartum
                 ? [
-                    {
-                      id: 'bleeding',
-                      title: 'Heavy Postpartum Bleeding',
-                      desc: 'Soaking more than one pad per hour — possible postpartum haemorrhage.'
-                    },
-                    {
-                      id: 'vision',
-                      title: 'Severe Headache / Vision Changes',
-                      desc: 'Possible postpartum pre-eclampsia requiring urgent evaluation.'
-                    },
-                    {
-                      id: 'swelling',
-                      title: 'Extreme Swelling',
-                      desc: 'Sudden swelling of face, hands, or legs after delivery.'
-                    },
-                    {
-                      id: 'fever',
-                      title: 'Fever / Wound Infection',
-                      desc: 'Temperature above 38°C or redness/discharge from incision site.'
-                    }
-                  ]
+                  {
+                    id: 'bleeding',
+                    title: 'Heavy Postpartum Bleeding',
+                    desc: 'Soaking more than one pad per hour — possible postpartum haemorrhage.'
+                  },
+                  {
+                    id: 'vision',
+                    title: 'Severe Headache / Vision Changes',
+                    desc: 'Possible postpartum pre-eclampsia requiring urgent evaluation.'
+                  },
+                  {
+                    id: 'swelling',
+                    title: 'Extreme Swelling',
+                    desc: 'Sudden swelling of face, hands, or legs after delivery.'
+                  },
+                  {
+                    id: 'fever',
+                    title: 'Fever / Wound Infection',
+                    desc: 'Temperature above 38°C or redness/discharge from incision site.'
+                  }
+                ]
                 : [
-                    {
-                      id: 'bleeding',
-                      title: 'Severe Vaginal Bleeding',
-                      desc: 'Critical clinical hemorrhage risk factor.'
-                    },
-                    {
-                      id: 'vision',
-                      title: 'Blurred Vision / Severe Headache',
-                      desc: 'Elevated indicator for Preeclampsia.'
-                    },
-                    {
-                      id: 'swelling',
-                      title: 'Extreme Swelling (Hands/Face)',
-                      desc: 'Water retention check for hypertensive spikes.'
-                    },
-                    {
-                      id: 'fever',
-                      title: 'High Fever & Chills',
-                      desc: 'Possible internal gestational infection warning.'
-                    }
-                  ]
+                  {
+                    id: 'bleeding',
+                    title: 'Severe Vaginal Bleeding',
+                    desc: 'Critical clinical hemorrhage risk factor.'
+                  },
+                  {
+                    id: 'vision',
+                    title: 'Blurred Vision / Severe Headache',
+                    desc: 'Elevated indicator for Preeclampsia.'
+                  },
+                  {
+                    id: 'swelling',
+                    title: 'Extreme Swelling (Hands/Face)',
+                    desc: 'Water retention check for hypertensive spikes.'
+                  },
+                  {
+                    id: 'fever',
+                    title: 'High Fever & Chills',
+                    desc: 'Possible internal gestational infection warning.'
+                  }
+                ]
               ).map((sym) => (
                 <label
                   key={sym.id}
-                  className={`flex items-start gap-3 p-3.5 rounded-xl border transition-all duration-300 cursor-pointer select-none ${
-                    dangerSigns[sym.id]
-                      ? 'bg-danger/10 border-danger/25 text-danger'
-                      : 'border-primary-mauve/5 hover:bg-bg-rose-white'
-                  }`}
+                  className={`flex items-start gap-3 p-3.5 rounded-xl border transition-all duration-300 cursor-pointer select-none ${dangerSigns[sym.id]
+                    ? 'bg-danger/10 border-danger/25 text-danger'
+                    : 'border-primary-mauve/5 hover:bg-bg-rose-white'
+                    }`}
                 >
                   <input
                     type="checkbox"
@@ -677,13 +676,12 @@ useEffect(() => {
 
             {dangerMessage && (
               <div
-                className={`p-4 rounded-xl text-xs font-bold border leading-relaxed animate-fadeIn ${
-                  dangerMessage.type === 'danger'
-                    ? 'bg-danger/10 border-danger/25 text-danger animate-pulse-slow'
-                    : dangerMessage.type === 'warning'
+                className={`p-4 rounded-xl text-xs font-bold border leading-relaxed animate-fadeIn ${dangerMessage.type === 'danger'
+                  ? 'bg-danger/10 border-danger/25 text-danger animate-pulse-slow'
+                  : dangerMessage.type === 'warning'
                     ? 'bg-warning/10 border-warning/25 text-warning'
                     : 'bg-danger/10 border-danger/25 text-danger'
-                }`}
+                  }`}
               >
                 {dangerMessage.text}
               </div>
@@ -692,11 +690,10 @@ useEffect(() => {
             <button
               onClick={handleDangerSignsSubmit}
               disabled={isDangerSubmitting || !Object.values(dangerSigns).some(s => s)}
-              className={`w-full py-3 rounded-xl text-xs font-black uppercase tracking-widest transition-all cursor-pointer select-none flex items-center justify-center gap-2 ${
-                Object.values(dangerSigns).some(s => s)
-                  ? 'bg-danger text-white hover:bg-bg-dark-mauve shadow-glow animate-pulse-slow'
-                  : 'bg-gray-100 text-gray-400 border border-gray-200 cursor-not-allowed'
-              }`}
+              className={`w-full py-3 rounded-xl text-xs font-black uppercase tracking-widest transition-all cursor-pointer select-none flex items-center justify-center gap-2 ${Object.values(dangerSigns).some(s => s)
+                ? 'bg-danger text-white hover:bg-bg-dark-mauve shadow-glow animate-pulse-slow'
+                : 'bg-gray-100 text-gray-400 border border-gray-200 cursor-not-allowed'
+                }`}
             >
               {isDangerSubmitting ? (
                 <>
@@ -713,7 +710,7 @@ useEffect(() => {
             </button>
           </div>
 
-          {/* ─── AI Report Analyzer ─────────────────────────────── */}
+          {/* AI Report Analyzer */}
           <div className="bg-white border border-primary-mauve/10 rounded-2xl p-6 shadow-premium space-y-5">
             <div className="flex items-center justify-between border-b border-primary-mauve/5 pb-3">
               <h3 className="font-sans font-black text-sm uppercase tracking-wider text-text-dark flex items-center gap-2">
@@ -725,7 +722,6 @@ useEffect(() => {
               </span>
             </div>
 
-            {/* File upload */}
             {/* File upload */}
             <div>
               <div className="flex items-center justify-between mb-2">
@@ -839,16 +835,25 @@ useEffect(() => {
                   }}
                   disabled={reportAddedToPlan || isAddingToPlan}
                   className={`w-full py-2.5 rounded-xl text-xs font-black uppercase tracking-wider transition-all flex items-center justify-center gap-2 ${reportAddedToPlan
-                      ? 'bg-success/10 border border-success/25 text-success cursor-default'
+                    ? 'bg-success/10 border border-success/25 text-success cursor-default'
+                    : isAddingToPlan
+                      ? 'bg-primary-mauve/10 border border-primary-mauve/25 text-primary-mauve cursor-not-allowed'
                       : 'bg-primary-mauve text-white hover:bg-bg-dark-mauve cursor-pointer shadow-glow'
                     }`}
                 >
-                  {isAddingToPlan
-                    ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Saving...</>
-                    : reportAddedToPlan
-                      ? '✅ Added to AI Pregnancy Care Advisor'
-                      : '+ Add Instructions to Care Plan'
-                  }
+                  {isAddingToPlan ? (
+                    <>
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      <span>Importing {reportResult.meds.length} medication{reportResult.meds.length !== 1 ? 's' : ''} to Care Plan...</span>
+                    </>
+                  ) : reportAddedToPlan ? (
+                    <>
+                      <CheckCircle className="w-3.5 h-3.5" />
+                      <span>✅ Added to AI Pregnancy Care Advisor</span>
+                    </>
+                  ) : (
+                    <span>+ Add Instructions to Care Plan</span>
+                  )}
                 </button>
               </div>
             )}
@@ -860,8 +865,8 @@ useEffect(() => {
         <div className="lg:col-span-5 flex flex-col gap-6">
 
           {/* Cardiff Kick Counter Dashboard */}
-          
-           {!user?.is_postpartum ?(<div className="bg-white border border-primary-mauve/10 rounded-2xl p-6 shadow-premium space-y-5">
+
+          {!user?.is_postpartum ? (<div className="bg-white border border-primary-mauve/10 rounded-2xl p-6 shadow-premium space-y-5">
             <div className="flex items-center justify-between border-b border-primary-mauve/5 pb-2.5">
               <div className="flex items-center gap-2 text-primary-mauve">
                 <Baby className="w-5 h-5" />
@@ -1012,113 +1017,112 @@ useEffect(() => {
               </div>
             )}
           </div>
-            ):(
-          <div className="bg-white border border-primary-mauve/10 rounded-2xl p-5 shadow-premium space-y-4">
-            <div className="flex items-center gap-2 border-b border-primary-mauve/5 pb-2.5">
-              <Baby className="w-5 h-5 text-primary-mauve" />
-              <h3 className="font-black text-sm uppercase tracking-wider text-text-dark flex-1">
-                Newborn Feeding Tracker
-              </h3>
-              <span className="text-[9px] font-extrabold tracking-wider bg-primary-mauve/15 text-primary-mauve px-2.5 py-0.5 rounded-full uppercase">
-                Postnatal
-              </span>
-            </div>
-
-            <p className="text-[11px] font-medium text-text-muted leading-relaxed">
-              Track breastfeeding, formula feeds, your baby's sleep, and wet diapers.
-            </p>
-
-            {/* Feed type toggle */}
-            <div className="flex items-center gap-2">
-              <span className="text-[10px] font-black text-text-muted uppercase tracking-wider">Feed Type:</span>
-              <div className="flex bg-primary-mauve/10 p-0.5 rounded-lg border border-primary-mauve/10">
-                <button
-                  type="button"
-                  onClick={() => setFeedType('breast')}
-                  className={`px-3 py-1 text-[10px] font-black uppercase tracking-wider rounded-md transition-all cursor-pointer ${feedType === 'breast' ? 'bg-primary-mauve text-white shadow-xs' : 'text-text-muted hover:text-text-dark'}`}
-                >
-                  🤱 Breast
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setFeedType('formula')}
-                  className={`px-3 py-1 text-[10px] font-black uppercase tracking-wider rounded-md transition-all cursor-pointer ${feedType === 'formula' ? 'bg-primary-mauve text-white shadow-xs' : 'text-text-muted hover:text-text-dark'}`}
-                >
-                  🍼 Formula
-                </button>
-              </div>
-            </div>
-
-            {/* Stats grid */}
-            <div className="grid grid-cols-3 gap-3">
-              <div className="p-3 rounded-xl bg-bg-rose-white border border-primary-mauve/5 text-center">
-                <p className="text-[10px] font-black uppercase text-text-muted">Feeds</p>
-                <h4 className="text-xl font-black text-primary-mauve mt-1">{feedsToday}</h4>
-                <p className="text-[9px] text-text-muted mt-0.5">Today</p>
-              </div>
-              <div className="p-3 rounded-xl bg-bg-rose-white border border-primary-mauve/5 text-center">
-                <p className="text-[10px] font-black uppercase text-text-muted">Sleep</p>
-                <h4 className="text-xl font-black text-primary-mauve mt-1">{sleepSessions}</h4>
-                <p className="text-[9px] text-text-muted mt-0.5">Sessions</p>
-              </div>
-              <div className={`p-3 rounded-xl border text-center ${diapersToday < 6 && diapersToday > 0 ? 'bg-warning/10 border-warning/25' : 'bg-bg-rose-white border-primary-mauve/5'}`}>
-                <p className="text-[10px] font-black uppercase text-text-muted">Diapers</p>
-                <h4 className={`text-xl font-black mt-1 ${diapersToday < 6 && diapersToday > 0 ? 'text-warning' : 'text-primary-mauve'}`}>{diapersToday}</h4>
-                <p className="text-[9px] text-text-muted mt-0.5">Wet today</p>
-              </div>
-            </div>
-
-            {/* Time since last feed badge */}
-            {timeSinceFeed && (
-              <div className={`flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-bold border ${
-                feedAlertLevel === 'danger' ? 'bg-danger/10 border-danger/25 text-danger animate-pulse-slow'
-                : feedAlertLevel === 'warning' ? 'bg-warning/10 border-warning/25 text-warning'
-                : 'bg-success/10 border-success/20 text-success'
-              }`}>
-                <Clock className="w-3.5 h-3.5 shrink-0" />
-                <span>Last feed: {timeSinceFeed}
-                  {feedAlertLevel === 'danger' && ' — Feed overdue, check on baby'}
-                  {feedAlertLevel === 'warning' && ' — Consider feeding soon'}
+          ) : (
+            <div className="bg-white border border-primary-mauve/10 rounded-2xl p-5 shadow-premium space-y-4">
+              <div className="flex items-center gap-2 border-b border-primary-mauve/5 pb-2.5">
+                <Baby className="w-5 h-5 text-primary-mauve" />
+                <h3 className="font-black text-sm uppercase tracking-wider text-text-dark flex-1">
+                  Newborn Feeding Tracker
+                </h3>
+                <span className="text-[9px] font-extrabold tracking-wider bg-primary-mauve/15 text-primary-mauve px-2.5 py-0.5 rounded-full uppercase">
+                  Postnatal
                 </span>
               </div>
-            )}
 
-            {/* Action buttons */}
-            <div className="flex gap-2">
-              <button
-                onClick={handleLogFeed}
-                className="flex-1 py-2.5 bg-primary-mauve text-white rounded-xl text-xs font-black uppercase tracking-wider hover:bg-bg-dark-mauve transition-all cursor-pointer shadow-glow"
-              >
-                + Feed
-              </button>
-              <button
-                onClick={handleLogSleep}
-                className="flex-1 py-2.5 border border-primary-mauve/20 text-primary-mauve rounded-xl text-xs font-black uppercase tracking-wider hover:bg-bg-rose-white transition-all cursor-pointer"
-              >
-                + Sleep
-              </button>
-              <button
-                onClick={handleLogDiaper}
-                className="flex-1 py-2.5 border border-primary-mauve/20 text-primary-mauve rounded-xl text-xs font-black uppercase tracking-wider hover:bg-bg-rose-white transition-all cursor-pointer"
-              >
-                + Diaper
-              </button>
-            </div>
+              <p className="text-[11px] font-medium text-text-muted leading-relaxed">
+                Track breastfeeding, formula feeds, your baby's sleep, and wet diapers.
+              </p>
 
-            {/* Wet diaper warning */}
-            {diapersToday < 6 && diapersToday > 0 && (
-              <div className="flex items-start gap-2 p-3 rounded-xl bg-warning/10 border border-warning/25 text-warning text-[11px] font-bold">
-                <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5 animate-pulse" />
-                <span>Only {diapersToday} wet diaper{diapersToday !== 1 ? 's' : ''} today — 6+ expected. Low count may indicate insufficient milk intake. Monitor closely.</span>
+              {/* Feed type toggle */}
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] font-black text-text-muted uppercase tracking-wider">Feed Type:</span>
+                <div className="flex bg-primary-mauve/10 p-0.5 rounded-lg border border-primary-mauve/10">
+                  <button
+                    type="button"
+                    onClick={() => setFeedType('breast')}
+                    className={`px-3 py-1 text-[10px] font-black uppercase tracking-wider rounded-md transition-all cursor-pointer ${feedType === 'breast' ? 'bg-primary-mauve text-white shadow-xs' : 'text-text-muted hover:text-text-dark'}`}
+                  >
+                    🤱 Breast
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setFeedType('formula')}
+                    className={`px-3 py-1 text-[10px] font-black uppercase tracking-wider rounded-md transition-all cursor-pointer ${feedType === 'formula' ? 'bg-primary-mauve text-white shadow-xs' : 'text-text-muted hover:text-text-dark'}`}
+                  >
+                    🍼 Formula
+                  </button>
+                </div>
               </div>
-            )}
 
-            <p className="text-[10px] text-text-muted">
-              WHO guideline: feed every 2–3 hours · 6+ wet diapers/day indicates adequate hydration.
-            </p>
-          </div>
-        )
-            }
+              {/* Stats grid */}
+              <div className="grid grid-cols-3 gap-3">
+                <div className="p-3 rounded-xl bg-bg-rose-white border border-primary-mauve/5 text-center">
+                  <p className="text-[10px] font-black uppercase text-text-muted">Feeds</p>
+                  <h4 className="text-xl font-black text-primary-mauve mt-1">{feedsToday}</h4>
+                  <p className="text-[9px] text-text-muted mt-0.5">Today</p>
+                </div>
+                <div className="p-3 rounded-xl bg-bg-rose-white border border-primary-mauve/5 text-center">
+                  <p className="text-[10px] font-black uppercase text-text-muted">Sleep</p>
+                  <h4 className="text-xl font-black text-primary-mauve mt-1">{sleepSessions}</h4>
+                  <p className="text-[9px] text-text-muted mt-0.5">Sessions</p>
+                </div>
+                <div className={`p-3 rounded-xl border text-center ${diapersToday < 6 && diapersToday > 0 ? 'bg-warning/10 border-warning/25' : 'bg-bg-rose-white border-primary-mauve/5'}`}>
+                  <p className="text-[10px] font-black uppercase text-text-muted">Diapers</p>
+                  <h4 className={`text-xl font-black mt-1 ${diapersToday < 6 && diapersToday > 0 ? 'text-warning' : 'text-primary-mauve'}`}>{diapersToday}</h4>
+                  <p className="text-[9px] text-text-muted mt-0.5">Wet today</p>
+                </div>
+              </div>
+
+              {/* Time since last feed badge */}
+              {timeSinceFeed && (
+                <div className={`flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-bold border ${feedAlertLevel === 'danger' ? 'bg-danger/10 border-danger/25 text-danger animate-pulse-slow'
+                  : feedAlertLevel === 'warning' ? 'bg-warning/10 border-warning/25 text-warning'
+                    : 'bg-success/10 border-success/20 text-success'
+                  }`}>
+                  <Clock className="w-3.5 h-3.5 shrink-0" />
+                  <span>Last feed: {timeSinceFeed}
+                    {feedAlertLevel === 'danger' && ' — Feed overdue, check on baby'}
+                    {feedAlertLevel === 'warning' && ' — Consider feeding soon'}
+                  </span>
+                </div>
+              )}
+
+              {/* Action buttons */}
+              <div className="flex gap-2">
+                <button
+                  onClick={handleLogFeed}
+                  className="flex-1 py-2.5 bg-primary-mauve text-white rounded-xl text-xs font-black uppercase tracking-wider hover:bg-bg-dark-mauve transition-all cursor-pointer shadow-glow"
+                >
+                  + Feed
+                </button>
+                <button
+                  onClick={handleLogSleep}
+                  className="flex-1 py-2.5 border border-primary-mauve/20 text-primary-mauve rounded-xl text-xs font-black uppercase tracking-wider hover:bg-bg-rose-white transition-all cursor-pointer"
+                >
+                  + Sleep
+                </button>
+                <button
+                  onClick={handleLogDiaper}
+                  className="flex-1 py-2.5 border border-primary-mauve/20 text-primary-mauve rounded-xl text-xs font-black uppercase tracking-wider hover:bg-bg-rose-white transition-all cursor-pointer"
+                >
+                  + Diaper
+                </button>
+              </div>
+
+              {/* Wet diaper warning */}
+              {diapersToday < 6 && diapersToday > 0 && (
+                <div className="flex items-start gap-2 p-3 rounded-xl bg-warning/10 border border-warning/25 text-warning text-[11px] font-bold">
+                  <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5 animate-pulse" />
+                  <span>Only {diapersToday} wet diaper{diapersToday !== 1 ? 's' : ''} today — 6+ expected. Low count may indicate insufficient milk intake. Monitor closely.</span>
+                </div>
+              )}
+
+              <p className="text-[10px] text-text-muted">
+                WHO guideline: feed every 2–3 hours · 6+ wet diapers/day indicates adequate hydration.
+              </p>
+            </div>
+          )
+          }
           {/* Vitals History Timeline & Trend Charts */}
           <div className="bg-white border border-primary-mauve/10 rounded-2xl p-5 shadow-premium space-y-4 flex-1 flex flex-col min-h-[380px]">
             <div className="flex items-center justify-between border-b border-primary-mauve/5 pb-2.5 shrink-0 flex-wrap gap-2">

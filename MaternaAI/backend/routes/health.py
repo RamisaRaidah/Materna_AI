@@ -7,6 +7,10 @@ from rules.severity import calculate_severity, get_risk_level
 import google.generativeai as genai
 from llm_client import get_gemini_model, mark_exhausted, is_quota_error, GeminiKeysExhausted
 import json
+import re
+import base64
+import requests as http_requests
+from config import OPENROUTER_API_KEY
 
 health_bp = Blueprint("health", __name__)
 
@@ -218,71 +222,121 @@ def _create_glucose_alert(patient_id, glucose):
 
 
 # AI Medical Report & Prescription Analyzer OCR Route
-
 @health_bp.route("/analyze-report", methods=["POST"])
 @require_auth
 def analyze_report():
-    import re
     if "file" not in request.files:
         return jsonify({"error": "No file uploaded"}), 400
-    
+
     uploaded_file = request.files["file"]
     file_bytes = uploaded_file.read()
     mime_type = uploaded_file.mimetype or "image/png"
 
-    key = None
-    try:
-        model, key = get_gemini_model("gemini-2.5-flash")
+    filename = uploaded_file.filename or ""
+    if filename.lower().endswith(".pdf"):
+        mime_type = "application/pdf"
 
-        val_prompt = """Is this a medical document (prescription, lab report, or ultrasound scan)?
-        Reply ONLY with valid JSON, no markdown fences: {"is_medical": true} or {"is_medical": false}"""
+    VAL_PROMPT = (
+        "Is this a medical document (prescription, lab report, or ultrasound scan)? "
+        'Reply ONLY with valid JSON, no markdown fences: {"is_medical": true} or {"is_medical": false}'
+    )
+    EXT_PROMPT = (
+        "Extract details from this medical document into JSON. "
+        "Return ONLY valid JSON, no markdown, no backticks: "
+        '{"title": "", "date": "", "findings": "", "meds": [{"name": "", "purpose": "", '
+        '"timing": "", "safety": "", "warning": "", "danger": true}]}'
+    )
 
-        val_response = model.generate_content(
-            [{"mime_type": mime_type, "data": file_bytes}, val_prompt]
-        )
-
-        clean_val = re.sub(r"```[a-zA-Z]*", "", val_response.text, flags=re.IGNORECASE).strip().strip("`").strip()
-
+    def parse_is_medical(text: str) -> bool:
+        clean = re.sub(r"```[a-zA-Z]*", "", text, flags=re.IGNORECASE).strip().strip("`").strip()
         try:
-            val_data = json.loads(clean_val)
+            return json.loads(clean).get("is_medical", True)
         except json.JSONDecodeError:
-            lower = clean_val.lower()
-            if "false" in lower and "true" not in lower:
-                val_data = {"is_medical": False}
-            else:
-                val_data = {"is_medical": True}
+            lower = clean.lower()
+            return not ("false" in lower and "true" not in lower)
 
-        if val_data.get("is_medical") is False:
+    def parse_extraction(text: str):
+        clean = re.sub(r"```(?:json)?", "", text, flags=re.IGNORECASE).strip().rstrip("`").strip()
+        return json.loads(clean)
+
+    # PATH A — Gemini SDK with key rotation
+    key = None
+    while True:
+        try:
+            model, key = get_gemini_model("gemini-2.5-flash")
+
+            val_response = model.generate_content(
+                [{"mime_type": mime_type, "data": file_bytes}, VAL_PROMPT]
+            )
+            if not parse_is_medical(val_response.text):
+                return jsonify({
+                    "error": "not_medical",
+                    "message": "This doesn't look like a medical document. Please upload a prescription, lab report, or scan."
+                }), 400
+
+            ext_response = model.generate_content(
+                [{"mime_type": mime_type, "data": file_bytes}, EXT_PROMPT],
+                generation_config={"response_mime_type": "application/json"}
+            )
+            return jsonify(parse_extraction(ext_response.text)), 200
+
+        except GeminiKeysExhausted:
+            print("[analyze_report] All Gemini keys exhausted, trying OpenRouter.")
+            break
+        except (json.JSONDecodeError, AttributeError):
+            return jsonify({"error": "analysis_failed", "message": "Could not parse document data. Please try again."}), 500
+        except Exception as e:
+            if is_quota_error(e):
+                mark_exhausted(key)
+                continue
+            print(f"[analyze_report] Gemini failed, trying OpenRouter: {e}")
+            break
+
+    # PATH B — OpenRouter fallback (google/gemini-2.5-flash via REST)
+    if not OPENROUTER_API_KEY:
+        return jsonify({"error": "analysis_failed", "message": "AI service is temporarily at capacity. Please try again later."}), 503
+
+    try:
+        b64_image = base64.b64encode(file_bytes).decode("utf-8")
+
+        def openrouter_vision(prompt_text: str) -> str:
+            resp = http_requests.post(
+                "https://openrouter.ai/api/v1/chat/completions",
+                headers={
+                    "Authorization": f"Bearer {OPENROUTER_API_KEY}",
+                    "Content-Type": "application/json",
+                    "HTTP-Referer": "https://materna-ai-eta.vercel.app",
+                    "X-Title": "MaternaAI-OCR"
+                },
+                json={
+                    "model": "google/gemini-2.5-flash",
+                    "messages": [{
+                        "role": "user",
+                        "content": [
+                            {"type": "image_url", "image_url": {"url": f"data:{mime_type};base64,{b64_image}"}},
+                            {"type": "text", "text": prompt_text}
+                        ]
+                    }]
+                },
+                timeout=30
+            )
+            resp.raise_for_status()
+            return resp.json()["choices"][0]["message"]["content"]
+
+        if not parse_is_medical(openrouter_vision(VAL_PROMPT)):
             return jsonify({
                 "error": "not_medical",
                 "message": "This doesn't look like a medical document. Please upload a prescription, lab report, or scan."
             }), 400
 
-        ext_prompt = """Extract details from this medical document into JSON.
-        Return ONLY valid JSON, no markdown, no backticks:
-        {"title": "", "date": "", "findings": "", "meds": [{"name": "", "purpose": "", "timing": "", "safety": "", "warning": "", "danger": true}]}"""
+        return jsonify(parse_extraction(openrouter_vision(EXT_PROMPT))), 200
 
-        ext_response = model.generate_content(
-            [{"mime_type": mime_type, "data": file_bytes}, ext_prompt],
-            generation_config={"response_mime_type": "application/json"}
-        )
-
-        try:
-            clean_ext = re.sub(r"```(?:json)?", "", ext_response.text, flags=re.IGNORECASE).strip().rstrip("```").strip()
-            result = json.loads(clean_ext)
-        except (json.JSONDecodeError, AttributeError):
-            return jsonify({"error": "analysis_failed", "message": "Could not parse document data. Please try again."}), 500
-
-        return jsonify(result), 200
-
-    except GeminiKeysExhausted:
-        return jsonify({"error": "analysis_failed", "message": "AI service is temporarily at capacity. Please try again later."}), 503
+    except (json.JSONDecodeError, AttributeError):
+        return jsonify({"error": "analysis_failed", "message": "Could not parse document data. Please try again."}), 500
     except Exception as e:
-        if is_quota_error(e) and key:
-            mark_exhausted(key)
-        print("CRITICAL ERROR:", e)
+        print(f"[analyze_report] OpenRouter fallback failed: {e}")
         return jsonify({"error": "analysis_failed", "message": "Failed to analyze document. Please try again."}), 500
-
+    
 
 @health_bp.route("/care-plan", methods=["POST"])
 @require_auth
