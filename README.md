@@ -53,7 +53,9 @@ An implementation of the Cardiff protocol. If fewer than 10 kicks are recorded i
 The full 10-question Edinburgh Postnatal Depression Scale (EPDS), with clinically validated scoring. High-risk scores automatically alert clinicians and provide the mother with empathetic AI-generated guidance.
 
 <div align="center">
-  <img src="Docs/screenshots/ppd-screening-1.png" width="600"/>
+  <img src="Docs/screenshots/ppd-screening-1.PNG" width="600"/>
+  <br/>
+  <img src="Docs/screenshots/ppd-screening-2.png" width="600"/>
 </div>
 
 ---
