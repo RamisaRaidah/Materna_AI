@@ -1,9 +1,10 @@
 import os
-
+import logging
 from flask import Flask, jsonify
 from flask_cors import CORS
 from config import SECRET_KEY, CORS_ORIGINS
 
+logging.basicConfig(level=logging.INFO)
 app = Flask(__name__)
 app.config["SECRET_KEY"] = SECRET_KEY
 CORS(app, resources={

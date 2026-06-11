@@ -7,7 +7,7 @@ import google.generativeai as genai
 import openai
 
 from config import OPENROUTER_API_KEY
-from llm_client import get_gemini_model, mark_exhausted, is_quota_error, GeminiKeysExhausted
+from llm_client import get_gemini_model, mark_exhausted, mark_invalid, is_quota_error, is_invalid_key_error, GeminiKeysExhausted
 
 _or_client = openai.OpenAI(
     base_url="https://openrouter.ai/api/v1",
@@ -103,12 +103,15 @@ def _ai_analyze(conversation_snippet:str)->dict:
             raw = res.text.strip().lstrip("```json").rstrip("```").strip()
             return json.loads(raw)
         except GeminiKeysExhausted:
-            print("[AbuseDetect] All Gemini keys exhausted — falling back to OpenRouter.")
+            print("[AbuseDetect] All Gemini keys exhausted/invalid — falling back to OpenRouter.")
             break
         except Exception as e:
+            if is_invalid_key_error(e):
+                mark_invalid(key)
+                continue
             if is_quota_error(e):
                 mark_exhausted(key)
-                continue  # try next key
+                continue
             print(f"[AbuseDetect] Gemini failed: {e}")
             break
 

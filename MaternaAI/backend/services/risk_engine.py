@@ -2,7 +2,7 @@ import os
 import json
 import google.generativeai as genai
 from config import OPENROUTER_API_KEY
-from llm_client import get_gemini_model, mark_exhausted, is_quota_error, GeminiKeysExhausted
+from llm_client import get_gemini_model, mark_exhausted, mark_invalid, is_quota_error, is_invalid_key_error, GeminiKeysExhausted
 from db import query
 import openai
 
@@ -332,12 +332,15 @@ def evaluate_rules(user_id: int) -> dict:
                     success = True
                 break
             except GeminiKeysExhausted:
-                print("Dynamic rules — all Gemini keys exhausted, trying OpenRouter.")
+                print("Dynamic rules — all Gemini keys exhausted/invalid, trying OpenRouter.")
                 break
             except Exception as e:
+                if is_invalid_key_error(e):
+                    mark_invalid(key)
+                    continue
                 if is_quota_error(e):
                     mark_exhausted(key)
-                    continue  # try next key
+                    continue
                 print("Gemini dynamic rules failed:", e)
                 break
         if not success and OPENROUTER_API_KEY:
@@ -462,12 +465,15 @@ def enrich_with_llm(user_profile: dict, rule_results: dict, lang: str = "bn") ->
                 success = True
             break
         except GeminiKeysExhausted:
-            print("Enrichment — all Gemini keys exhausted, trying OpenRouter.")
+            print("Enrichment — all Gemini keys exhausted/invalid, trying OpenRouter.")
             break
         except Exception as e:
+            if is_invalid_key_error(e):
+                mark_invalid(key)
+                continue
             if is_quota_error(e):
                 mark_exhausted(key)
-                continue  # try next key
+                continue
             print("Gemini bilingual enrichment failed:", e)
             break
 
@@ -728,12 +734,15 @@ def extract_symptoms_from_text_and_update_risk(user_id: int, message_text: str, 
                 success = True
             break
         except GeminiKeysExhausted:
-            print("Symptom extraction — all Gemini keys exhausted, trying OpenRouter.")
+            print("Symptom extraction — all Gemini keys exhausted/invalid, trying OpenRouter.")
             break
         except Exception as e:
+            if is_invalid_key_error(e):
+                mark_invalid(key)
+                continue
             if is_quota_error(e):
                 mark_exhausted(key)
-                continue  # try next key
+                continue
             print("Gemini symptom extraction failed:", e)
             break
 
