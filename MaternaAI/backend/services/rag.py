@@ -1,22 +1,14 @@
 """
-rag_langgraph.py
-----------------
-LangGraph refactor of rag.py.
+rag.py
+------
+LangGraph-powered RAG layer for MaternaAI.
 
-Two compiled graphs are exported:
-  - patient_graph   : replaces rag_query()
-  - clinician_graph : replaces clinician_rag_query()
+Two compiled graphs:
+  - patient_graph   : powers rag_query()
+  - clinician_graph : powers clinician_rag_query()
 
-All original logic (Gemini key rotation via llm_client, Cohere embed +
-rerank, OpenRouter fallback queue, hardcoded last-resort strings) is
-preserved exactly — just restructured as graph nodes and conditional edges.
-
-PUBLIC API  (drop-in replacements)
------------------------------------
-    from rag_langgraph import rag_query, clinician_rag_query, extract_nutrition_metrics
-
-Both functions have identical signatures and return types to the originals.
-extract_nutrition_metrics() is unchanged and re-exported for convenience.
+Gemini key rotation via llm_client, Cohere embed + rerank,
+OpenRouter fallback queue, hardcoded last-resort strings — all preserved.
 """
 
 import json
@@ -37,13 +29,15 @@ from llm_client import (
     GeminiKeysExhausted,
     get_gemini_model,
     is_quota_error,
+    is_invalid_key_error,
     mark_exhausted,
+    mark_invalid,
 )
 
 logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
-# Shared clients (unchanged from original)
+# Shared clients
 # ---------------------------------------------------------------------------
 
 or_client = openai.OpenAI(
@@ -53,7 +47,7 @@ or_client = openai.OpenAI(
 co = cohere.Client(api_key=COHERE_API_KEY)
 
 # ---------------------------------------------------------------------------
-# DB / embed / rerank helpers (unchanged from original)
+# DB / embed / rerank helpers
 # ---------------------------------------------------------------------------
 
 def get_db():
@@ -163,7 +157,7 @@ def get_recent_history(user_id: int, limit: int = 6) -> list:
 
 
 # ---------------------------------------------------------------------------
-# Prompt builders (unchanged from original)
+# Prompt builders
 # ---------------------------------------------------------------------------
 
 def build_system_prompt(
@@ -385,13 +379,11 @@ TASK:
 # ===========================================================================
 
 class PatientState(TypedDict):
-    # Inputs
     user_input: str
     user_profile: dict
     mode: str
     detected_lang: str
     user_id: int
-    # Populated by nodes
     context: str
     system_content: str
     messages: list
@@ -400,8 +392,6 @@ class PatientState(TypedDict):
     error: Optional[str]
 
 
-# ── Node 1: retrieve ────────────────────────────────────────────────────────
-
 def patient_retrieve(state: PatientState) -> PatientState:
     chunks = retrieve_context(
         state["user_input"],
@@ -409,8 +399,6 @@ def patient_retrieve(state: PatientState) -> PatientState:
     )
     return {**state, "context": format_context(chunks)}
 
-
-# ── Node 2: build_prompt ────────────────────────────────────────────────────
 
 def patient_build_prompt(state: PatientState) -> PatientState:
     system_content = build_system_prompt(
@@ -451,38 +439,37 @@ def patient_build_prompt(state: PatientState) -> PatientState:
     return {**state, "system_content": system_content, "messages": messages, "gemini_contents": gemini_contents}
 
 
-# ── Node 3: gemini ──────────────────────────────────────────────────────────
-
 def patient_gemini(state: PatientState) -> PatientState:
-    key = None
+    # FIX: key is assigned inside the try block alongside get_gemini_model()
+    # so it is always valid when mark_exhausted(key) is called.
     while True:
         try:
-            _, key = get_gemini_model("gemini-2.5-flash")
+            genai_model, key = get_gemini_model("gemini-2.5-flash")
             genai_model = genai.GenerativeModel(
                 model_name="gemini-2.5-flash",
                 system_instruction=state["system_content"],
             )
             response_text = genai_model.generate_content(
                 state["gemini_contents"],
-                generation_config={"max_output_tokens": 500},
+                generation_config={"max_output_tokens": 800},
             ).text
             if response_text:
                 print("Direct Gemini API call succeeded!")
                 return {**state, "response": response_text, "error": None}
-            # Empty response → fall through to OpenRouter
             return {**state, "response": None, "error": "empty_response"}
         except GeminiKeysExhausted:
-            print("RAG — all Gemini keys exhausted, using OpenRouter.")
+            print("RAG — all Gemini keys exhausted/invalid, using OpenRouter.")
             return {**state, "response": None, "error": "keys_exhausted"}
         except Exception as e:
+            if is_invalid_key_error(e):
+                mark_invalid(key)   # permanent — drop from pool, try next
+                continue
             if is_quota_error(e):
-                mark_exhausted(key)
-                continue  # rotate to next key
+                mark_exhausted(key) # transient — retry after 1 h
+                continue
             print(f"Direct Gemini API failed: {e}")
             return {**state, "response": None, "error": str(e)}
 
-
-# ── Node 4: openrouter ──────────────────────────────────────────────────────
 
 def patient_openrouter(state: PatientState) -> PatientState:
     model_queue = [
@@ -497,17 +484,14 @@ def patient_openrouter(state: PatientState) -> PatientState:
             response = or_client.chat.completions.create(
                 model=model,
                 messages=state["messages"],
-                max_tokens=500,
+                max_tokens=800,
             )
             return {**state, "response": response.choices[0].message.content, "error": None}
         except Exception as e:
             print(f"Model {model} failed on OpenRouter: {e}")
             last_err = e
-
     return {**state, "response": None, "error": str(last_err)}
 
-
-# ── Node 5: fallback ────────────────────────────────────────────────────────
 
 def patient_fallback(state: PatientState) -> PatientState:
     lower_input = state["user_input"].lower()
@@ -544,33 +528,24 @@ def patient_fallback(state: PatientState) -> PatientState:
     return {**state, "response": msg, "error": None}
 
 
-# ── Routing functions ───────────────────────────────────────────────────────
-
-def route_after_gemini(state: PatientState) -> str:
+def route_after_gemini(state: dict) -> str:
     return "success" if state.get("response") else "openrouter"
 
 
-def route_after_openrouter(state: PatientState) -> str:
+def route_after_openrouter(state: dict) -> str:
     return "success" if state.get("response") else "fallback"
 
 
-def route_after_fallback(state: PatientState) -> str:
-    return "success"
-
-
-# ── Build patient graph ─────────────────────────────────────────────────────
-
 _patient_builder = StateGraph(PatientState)
-_patient_builder.add_node("retrieve",      patient_retrieve)
-_patient_builder.add_node("build_prompt",  patient_build_prompt)
-_patient_builder.add_node("gemini",        patient_gemini)
-_patient_builder.add_node("openrouter",    patient_openrouter)
-_patient_builder.add_node("fallback",      patient_fallback)
+_patient_builder.add_node("retrieve",     patient_retrieve)
+_patient_builder.add_node("build_prompt", patient_build_prompt)
+_patient_builder.add_node("gemini",       patient_gemini)
+_patient_builder.add_node("openrouter",   patient_openrouter)
+_patient_builder.add_node("fallback",     patient_fallback)
 
 _patient_builder.set_entry_point("retrieve")
 _patient_builder.add_edge("retrieve",     "build_prompt")
 _patient_builder.add_edge("build_prompt", "gemini")
-
 _patient_builder.add_conditional_edges(
     "gemini",
     route_after_gemini,
@@ -591,7 +566,6 @@ patient_graph = _patient_builder.compile()
 # ===========================================================================
 
 class ClinicianState(TypedDict):
-    # Inputs
     user_input: str
     clinician_profile: dict
     patients: list
@@ -599,7 +573,6 @@ class ClinicianState(TypedDict):
     detected_lang: str
     clinician_id: Optional[int]
     top_k: int
-    # Populated by nodes
     context: str
     system_content: str
     messages: list
@@ -607,8 +580,6 @@ class ClinicianState(TypedDict):
     response: Optional[str]
     error: Optional[str]
 
-
-# ── Node 1: retrieve ────────────────────────────────────────────────────────
 
 def clinician_retrieve(state: ClinicianState) -> ClinicianState:
     category_map = {
@@ -627,8 +598,6 @@ def clinician_retrieve(state: ClinicianState) -> ClinicianState:
     chunks = retrieve_context(enriched_query, category=category, top_k=state["top_k"])
     return {**state, "context": format_context(chunks)}
 
-
-# ── Node 2: build_prompt ────────────────────────────────────────────────────
 
 def clinician_build_prompt(state: ClinicianState) -> ClinicianState:
     system_content = build_clinician_prompt(
@@ -662,13 +631,12 @@ def clinician_build_prompt(state: ClinicianState) -> ClinicianState:
     return {**state, "system_content": system_content, "messages": messages, "gemini_contents": gemini_contents}
 
 
-# ── Node 3: gemini ──────────────────────────────────────────────────────────
-
 def clinician_gemini(state: ClinicianState) -> ClinicianState:
-    key = None
+    # FIX: key is assigned inside the try block alongside get_gemini_model()
+    # so it is always valid when mark_exhausted(key) is called.
     while True:
         try:
-            _, key = get_gemini_model("gemini-2.5-flash")
+            genai_model, key = get_gemini_model("gemini-2.5-flash")
             genai_model = genai.GenerativeModel(
                 model_name="gemini-2.5-flash",
                 system_instruction=state["system_content"],
@@ -682,17 +650,18 @@ def clinician_gemini(state: ClinicianState) -> ClinicianState:
                 return {**state, "response": response_text, "error": None}
             return {**state, "response": None, "error": "empty_response"}
         except GeminiKeysExhausted:
-            print("Clinician RAG — all Gemini keys exhausted, using OpenRouter.")
+            print("Clinician RAG — all Gemini keys exhausted/invalid, using OpenRouter.")
             return {**state, "response": None, "error": "keys_exhausted"}
         except Exception as e:
+            if is_invalid_key_error(e):
+                mark_invalid(key)   # permanent — drop from pool, try next
+                continue
             if is_quota_error(e):
-                mark_exhausted(key)
+                mark_exhausted(key) # transient — retry after 1 h
                 continue
             print(f"Clinician RAG — Gemini failed: {e}")
             return {**state, "response": None, "error": str(e)}
 
-
-# ── Node 4: openrouter ──────────────────────────────────────────────────────
 
 def clinician_openrouter(state: ClinicianState) -> ClinicianState:
     model_queue = [
@@ -713,11 +682,8 @@ def clinician_openrouter(state: ClinicianState) -> ClinicianState:
         except Exception as e:
             print(f"Clinician RAG — OpenRouter model {model} failed: {e}")
             last_err = e
-
     return {**state, "response": None, "error": str(last_err)}
 
-
-# ── Node 5: fallback ────────────────────────────────────────────────────────
 
 def clinician_fallback(state: ClinicianState) -> ClinicianState:
     fallbacks = {
@@ -748,8 +714,6 @@ def clinician_fallback(state: ClinicianState) -> ClinicianState:
     return {**state, "response": msg, "error": None}
 
 
-# ── Build clinician graph ───────────────────────────────────────────────────
-
 _clinician_builder = StateGraph(ClinicianState)
 _clinician_builder.add_node("retrieve",     clinician_retrieve)
 _clinician_builder.add_node("build_prompt", clinician_build_prompt)
@@ -760,10 +724,9 @@ _clinician_builder.add_node("fallback",     clinician_fallback)
 _clinician_builder.set_entry_point("retrieve")
 _clinician_builder.add_edge("retrieve",     "build_prompt")
 _clinician_builder.add_edge("build_prompt", "gemini")
-
 _clinician_builder.add_conditional_edges(
     "gemini",
-    route_after_gemini,      # same routing logic — checks state["response"]
+    route_after_gemini,
     {"success": END, "openrouter": "openrouter"},
 )
 _clinician_builder.add_conditional_edges(
@@ -777,7 +740,7 @@ clinician_graph = _clinician_builder.compile()
 
 
 # ===========================================================================
-# Drop-in replacement public functions
+# Public drop-in functions
 # ===========================================================================
 
 def rag_query(
@@ -787,20 +750,19 @@ def rag_query(
     detected_lang: str = "bn",
     user_id: int = 1,
 ) -> str:
-    """Drop-in replacement for the original rag_query()."""
     result = patient_graph.invoke(
         {
-            "user_input":    user_input,
-            "user_profile":  user_profile,
-            "mode":          mode,
-            "detected_lang": detected_lang,
-            "user_id":       user_id,
-            "context":       "",
-            "system_content": "",
-            "messages":      [],
+            "user_input":      user_input,
+            "user_profile":    user_profile,
+            "mode":            mode,
+            "detected_lang":   detected_lang,
+            "user_id":         user_id,
+            "context":         "",
+            "system_content":  "",
+            "messages":        [],
             "gemini_contents": [],
-            "response":      None,
-            "error":         None,
+            "response":        None,
+            "error":           None,
         }
     )
     return result["response"]
@@ -815,33 +777,31 @@ def clinician_rag_query(
     clinician_id: int = None,
     top_k: int = 6,
 ) -> str:
-    """Drop-in replacement for the original clinician_rag_query()."""
     result = clinician_graph.invoke(
         {
-            "user_input":       user_input,
+            "user_input":        user_input,
             "clinician_profile": clinician_profile,
-            "patients":         patients,
-            "mode":             mode,
-            "detected_lang":    detected_lang,
-            "clinician_id":     clinician_id,
-            "top_k":            top_k,
-            "context":          "",
-            "system_content":   "",
-            "messages":         [],
-            "gemini_contents":  [],
-            "response":         None,
-            "error":            None,
+            "patients":          patients,
+            "mode":              mode,
+            "detected_lang":     detected_lang,
+            "clinician_id":      clinician_id,
+            "top_k":             top_k,
+            "context":           "",
+            "system_content":    "",
+            "messages":          [],
+            "gemini_contents":   [],
+            "response":          None,
+            "error":             None,
         }
     )
     return result["response"]
 
 
 # ===========================================================================
-# extract_nutrition_metrics — unchanged, re-exported here for convenience
+# extract_nutrition_metrics
 # ===========================================================================
 
 def extract_nutrition_metrics(user_input: str, assistant_response: str) -> dict:
-    """Unchanged from original rag.py — estimates iron/folate/calcium/protein from a meal log."""
     default_metrics = {"iron": 0.0, "folate": 0.0, "calcium": 0.0, "protein": 0.0}
 
     def safe_float(value):
@@ -880,8 +840,8 @@ def extract_nutrition_metrics(user_input: str, assistant_response: str) -> dict:
     ]
 
     parsed_data = None
-    key = None
 
+    # FIX: key assigned inside try block, same as gemini nodes above
     while True:
         try:
             print("Trying nutrition extraction with: gemini-2.5-flash")
@@ -899,15 +859,17 @@ def extract_nutrition_metrics(user_input: str, assistant_response: str) -> dict:
                 print("Nutrition extraction succeeded with gemini-2.5-flash")
             break
         except GeminiKeysExhausted:
-            print("Nutrition extraction — all Gemini keys exhausted, trying OpenRouter.")
+            print("Nutrition extraction — all Gemini keys exhausted/invalid, trying OpenRouter.")
             break
         except json.JSONDecodeError as e:
             print(f"Gemini returned invalid JSON for nutrition extraction: {e}")
             break
         except Exception as e:
-            if is_quota_error(e):
-                mark_exhausted(key)
+            if is_invalid_key_error(e):
+                mark_invalid(key)   # permanent — drop from pool, try next
                 continue
+            if is_quota_error(e):
+                mark_exhausted(key) # transient — retry after 1 h
                 continue
             print(f"Nutrition extraction failed for gemini-2.5-flash: {e}")
             break
@@ -937,12 +899,12 @@ def extract_nutrition_metrics(user_input: str, assistant_response: str) -> dict:
                 print(f"Nutrition extraction failed for {model_name}: {e}")
 
     if not parsed_data:
-        print("All nutrition extraction models failed (including local).")
+        print("All nutrition extraction models failed.")
         return default_metrics
 
     return {
-        "iron":     safe_float(parsed_data.get("iron",    0.0)),
-        "folate":   safe_float(parsed_data.get("folate",  0.0)),
-        "calcium":  safe_float(parsed_data.get("calcium", 0.0)),
-        "protein":  safe_float(parsed_data.get("protein", 0.0)),
+        "iron":    safe_float(parsed_data.get("iron",    0.0)),
+        "folate":  safe_float(parsed_data.get("folate",  0.0)),
+        "calcium": safe_float(parsed_data.get("calcium", 0.0)),
+        "protein": safe_float(parsed_data.get("protein", 0.0)),
     }
