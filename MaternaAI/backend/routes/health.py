@@ -5,7 +5,7 @@ from db import query
 from services.auth import require_auth
 from rules.severity import calculate_severity, get_risk_level
 import google.generativeai as genai
-from llm_client import get_gemini_model, mark_exhausted, is_quota_error, GeminiKeysExhausted
+from llm_client import get_gemini_model, mark_exhausted, mark_invalid, is_quota_error, is_invalid_key_error, GeminiKeysExhausted
 import json
 import re
 import base64
@@ -281,11 +281,14 @@ def analyze_report():
             return jsonify(parse_extraction(ext_response.text)), 200
 
         except GeminiKeysExhausted:
-            print("[analyze_report] All Gemini keys exhausted, trying OpenRouter.")
+            print("[analyze_report] All Gemini keys exhausted/invalid, trying OpenRouter.")
             break
         except (json.JSONDecodeError, AttributeError):
             return jsonify({"error": "analysis_failed", "message": "Could not parse document data. Please try again."}), 500
         except Exception as e:
+            if is_invalid_key_error(e):
+                mark_invalid(key)
+                continue
             if is_quota_error(e):
                 mark_exhausted(key)
                 continue
@@ -430,12 +433,15 @@ Rules:
                     return jsonify(parsed), 200
             break  # empty response — fall through to static fallback
         except GeminiKeysExhausted:
-            print("Care plan — all Gemini keys exhausted, using static fallback.")
+            print("Care plan — all Gemini keys exhausted/invalid, using static fallback.")
             break
         except Exception as e:
+            if is_invalid_key_error(e):
+                mark_invalid(key)
+                continue
             if is_quota_error(e):
                 mark_exhausted(key)
-                continue  # try next key
+                continue
             print("Gemini care plan failed:", e)
             break
 

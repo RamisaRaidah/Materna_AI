@@ -16,3 +16,4 @@ pymupdf4llm==1.27.2.3
 chonkie[semantic]==1.6.8
 numpy==2.4.6
 tokenizers==0.23.1
+langgraph

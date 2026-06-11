@@ -3,7 +3,7 @@ from db import query
 from services.auth import require_auth
 
 import google.generativeai as genai
-from llm_client import get_gemini_model, mark_exhausted, is_quota_error, GeminiKeysExhausted
+from llm_client import get_gemini_model, mark_exhausted, mark_invalid, is_quota_error, is_invalid_key_error, GeminiKeysExhausted
 import json as _json
 
 care_plan_bp = Blueprint("care_plan", __name__)
@@ -95,12 +95,15 @@ Return ONLY a valid JSON array in the same order, no markdown, no backticks:
                             item["desc_bn"]  = translations[i].get("desc_bn",  item["desc"])
                     break
                 except GeminiKeysExhausted:
-                    print("Care plan translation — all Gemini keys exhausted, using English fallback.")
+                    print("Care plan translation — all Gemini keys exhausted/invalid, using English fallback.")
                     break
                 except Exception as e:
+                    if is_invalid_key_error(e):
+                        mark_invalid(key)
+                        continue
                     if is_quota_error(e):
                         mark_exhausted(key)
-                        continue  # try next key
+                        continue
                     print("Bengali translation failed, using English fallback:", e)
                     break
         except Exception as e:

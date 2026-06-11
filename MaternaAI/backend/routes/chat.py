@@ -294,7 +294,7 @@ def analyze():
     if mode == "nutrition":
         from services.rag import extract_nutrition_metrics
         extracted_nutrients = extract_nutrition_metrics(user_input, response)
-
+    print(f"FULL RESPONSE: {repr(response)}")
     return jsonify({
         "response": response,
         "extractedNutrients": extracted_nutrients,
@@ -406,7 +406,7 @@ def speak():
 
     # 2. Server-side Gemini transcription as fallback
     if not transcribed_text:
-        from llm_client import get_gemini_model, mark_exhausted, is_quota_error, GeminiKeysExhausted
+        from llm_client import get_gemini_model, mark_exhausted, mark_invalid, is_quota_error, is_invalid_key_error, GeminiKeysExhausted
         import google.generativeai as genai
         prompt = (
             "You are an expert audio transcriber. Transcribe this audio recording precisely. "
@@ -428,12 +428,15 @@ def speak():
                     transcribed_text = response.text.strip()
                 break
             except GeminiKeysExhausted:
-                print("Gemini transcription — all keys exhausted.")
+                print("Gemini transcription — all keys exhausted/invalid.")
                 break
             except Exception as e:
+                if is_invalid_key_error(e):
+                    mark_invalid(key)
+                    continue
                 if is_quota_error(e):
                     mark_exhausted(key)
-                    continue  # try next key
+                    continue
                 print(f"Server-side Gemini transcription failed: {str(e)}")
                 break
 
