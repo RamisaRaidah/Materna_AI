@@ -3,11 +3,8 @@ from db import query
 from services.auth import require_auth
 
 import google.generativeai as genai
-from config import GEMINI_API_KEY
+from llm_client import get_gemini_model, mark_exhausted, is_quota_error, GeminiKeysExhausted
 import json as _json
-
-if GEMINI_API_KEY:
-    genai.configure(api_key=GEMINI_API_KEY)
 
 care_plan_bp = Blueprint("care_plan", __name__)
 
@@ -72,8 +69,8 @@ def save_care_plan_items():
 
     user_id = g.user["id"]
 
-    # Translate imported items to Bengali if Gemini is available
-    if source == "imported" and GEMINI_API_KEY:
+    # Translate imported items to Bengali if Gemini keys are available
+    if source == "imported":
         try:
             items_for_translation = [{"title": i["title"], "desc": i["desc"]} for i in items]
             translate_prompt = f"""Translate these medication/care instruction items into simple, warm Bengali suitable for a rural Bangladeshi pregnant woman.
@@ -83,18 +80,31 @@ Return ONLY a valid JSON array in the same order, no markdown, no backticks:
     Items:
     {_json.dumps(items_for_translation, ensure_ascii=False)}"""
 
-            model = genai.GenerativeModel("gemini-2.5-flash")
-            resp = model.generate_content(
-                translate_prompt,
-                generation_config={"response_mime_type": "application/json", "temperature": 0.2}
-            )
-            translations = _json.loads(resp.text.strip())
-            for i, item in enumerate(items):
-                if i < len(translations):
-                    item["title_bn"] = translations[i].get("title_bn", item["title"])
-                    item["desc_bn"]  = translations[i].get("desc_bn",  item["desc"])
+            key = None
+            while True:
+                try:
+                    model, key = get_gemini_model("gemini-2.5-flash")
+                    resp = model.generate_content(
+                        translate_prompt,
+                        generation_config={"response_mime_type": "application/json", "temperature": 0.2}
+                    )
+                    translations = _json.loads(resp.text.strip())
+                    for i, item in enumerate(items):
+                        if i < len(translations):
+                            item["title_bn"] = translations[i].get("title_bn", item["title"])
+                            item["desc_bn"]  = translations[i].get("desc_bn",  item["desc"])
+                    break
+                except GeminiKeysExhausted:
+                    print("Care plan translation — all Gemini keys exhausted, using English fallback.")
+                    break
+                except Exception as e:
+                    if is_quota_error(e):
+                        mark_exhausted(key)
+                        continue  # try next key
+                    print("Bengali translation failed, using English fallback:", e)
+                    break
         except Exception as e:
-            print("Bengali translation failed, using English fallback:", e)
+            print("Bengali translation setup failed:", e)
             for item in items:
                 item["title_bn"] = item.get("title_bn", item["title"])
                 item["desc_bn"]  = item.get("desc_bn",  item["desc"])

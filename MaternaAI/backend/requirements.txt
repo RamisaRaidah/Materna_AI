@@ -12,3 +12,5 @@ edge-tts
 openai
 PyJWT
 firebase-admin
+pymupdf4llm
+chonkie[semantic]
