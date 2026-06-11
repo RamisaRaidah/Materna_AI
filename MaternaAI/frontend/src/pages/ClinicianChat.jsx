@@ -35,15 +35,49 @@ const ClinicianChat = () => {
 
   const threadUnsubscribeRef = useRef(null);
   const inboxUnsubscribeRef = useRef(null);
+  const threadPollIntervalRef = useRef(null);
   const messageInputRef = useRef(null);
 
   useEffect(() => {
     return () => {
       if (threadUnsubscribeRef.current) threadUnsubscribeRef.current();
       if (inboxUnsubscribeRef.current) inboxUnsubscribeRef.current();
+      if (threadPollIntervalRef.current) clearInterval(threadPollIntervalRef.current);
     };
   }, []);
 
+  // Load and poll inbox
+  useEffect(() => {
+    if (!user?.id) return;
+
+    const fetchInbox = () => {
+      communityAPI.getInbox(user.id)
+        .then(data => {
+          if (Array.isArray(data)) {
+            setInbox(data.map(item => ({
+              partner_id: item.partner_id,
+              last_message: item.last_message,
+              last_sent_at: item.last_sent_at,
+              unread_count: item.unread_count || 0
+            })));
+          }
+        })
+        .catch(err => console.warn("Could not load legacy inbox:", err));
+    };
+
+    fetchInbox();
+
+    let pollInbox = null;
+    if (!db) {
+      pollInbox = setInterval(fetchInbox, 10000);
+    }
+
+    return () => {
+      if (pollInbox) clearInterval(pollInbox);
+    };
+  }, [user?.id, db]);
+
+  // Firestore inbox listener
   useEffect(() => {
     if (!user?.id || !db) return;
 
@@ -113,7 +147,7 @@ const ClinicianChat = () => {
   }, []);
 
   useEffect(() => {
-    if (!activeContact || !user?.id || !db) {
+    if (!activeContact || !user?.id) {
       setThread([]);
       setMysqlThread([]);
       return;
@@ -123,10 +157,34 @@ const ClinicianChat = () => {
     setThread([]);
     setMysqlThread([]);
 
-    // Load legacy MySQL messages
-    communityAPI.getDMThread(user.id, activeContact.id)
-      .then(data => setMysqlThread(Array.isArray(data) ? data : []))
-      .catch(err => console.warn("Could not load legacy thread:", err));
+    const fetchThread = () => {
+      communityAPI.getDMThread(user.id, activeContact.id)
+        .then(data => {
+          setMysqlThread(Array.isArray(data) ? data : []);
+          setLoadingThread(false);
+        })
+        .catch(err => {
+          console.warn("Could not load legacy thread:", err);
+          setLoadingThread(false);
+        });
+    };
+
+    fetchThread();
+
+    if (threadUnsubscribeRef.current) {
+      threadUnsubscribeRef.current();
+      threadUnsubscribeRef.current = null;
+    }
+
+    if (threadPollIntervalRef.current) {
+      clearInterval(threadPollIntervalRef.current);
+      threadPollIntervalRef.current = null;
+    }
+
+    if (!db) {
+      threadPollIntervalRef.current = setInterval(fetchThread, 4000);
+      return;
+    }
 
     const roomId = getRoomId(user.id, activeContact.id);
 
@@ -142,10 +200,6 @@ const ClinicianChat = () => {
       collection(db, 'rooms', roomId, 'messages'),
       orderBy('createdAt', 'asc')
     );
-
-    if (threadUnsubscribeRef.current) {
-      threadUnsubscribeRef.current();
-    }
 
     threadUnsubscribeRef.current = onSnapshot(q, { includeMetadataChanges: true }, (snapshot) => {
       const msgs = [];
@@ -189,9 +243,16 @@ const ClinicianChat = () => {
     });
 
     return () => {
-      if (threadUnsubscribeRef.current) threadUnsubscribeRef.current();
+      if (threadUnsubscribeRef.current) {
+        threadUnsubscribeRef.current();
+        threadUnsubscribeRef.current = null;
+      }
+      if (threadPollIntervalRef.current) {
+        clearInterval(threadPollIntervalRef.current);
+        threadPollIntervalRef.current = null;
+      }
     };
-  }, [activeContact, user]);
+  }, [activeContact, user, db]);
 
   const combinedThread = useMemo(() => {
     const earliestFirebaseTime = thread.reduce((min, m) => {
@@ -307,7 +368,7 @@ const ClinicianChat = () => {
   const handleSend = (event) => {
     event?.preventDefault();
     const text = message.trim();
-    if (!text || !activeContact || !user?.id || !db) {
+    if (!text || !activeContact || !user?.id) {
       return;
     }
 
@@ -315,46 +376,53 @@ const ClinicianChat = () => {
     setMessage('');
     refocusComposer();
 
-    const roomId = getRoomId(user.id, contact.id);
-
     void (async () => {
     try {
       const timestamp = new Date().toISOString();
-      const messagesRef = collection(db, 'rooms', roomId, 'messages');
 
-      await addDoc(messagesRef, {
-        senderId: user.id,
-        receiverId: contact.id,
-        content: text,
-        createdAt: timestamp,
-        status: 'sent'
-      });
+      if (db) {
+        const roomId = getRoomId(user.id, contact.id);
+        const messagesRef = collection(db, 'rooms', roomId, 'messages');
 
-      const roomRef = doc(db, 'rooms', roomId);
+        await addDoc(messagesRef, {
+          senderId: user.id,
+          receiverId: contact.id,
+          content: text,
+          createdAt: timestamp,
+          status: 'sent'
+        });
 
-      let partnerUnread = 0;
-      const roomSnapData = await getDoc(roomRef);
-      if (roomSnapData.exists()) {
-        const roomData = roomSnapData.data();
-        partnerUnread = roomData.unreadCount?.[String(contact.id)] || 0;
-      }
+        const roomRef = doc(db, 'rooms', roomId);
 
-      await setDoc(roomRef, {
-        participants: [user.id, contact.id],
-        lastMessage: text,
-        lastSentAt: timestamp,
-        partnerNames: {
-          [String(user.id)]: user.name,
-          [String(contact.id)]: contact.name || 'Clinician'
-        },
-        unreadCount: {
-          [String(contact.id)]: partnerUnread + 1,
-          [String(user.id)]: 0
+        let partnerUnread = 0;
+        const roomSnapData = await getDoc(roomRef);
+        if (roomSnapData.exists()) {
+          const roomData = roomSnapData.data();
+          partnerUnread = roomData.unreadCount?.[String(contact.id)] || 0;
         }
-      }, { merge: true });
+
+        await setDoc(roomRef, {
+          participants: [user.id, contact.id],
+          lastMessage: text,
+          lastSentAt: timestamp,
+          partnerNames: {
+            [String(user.id)]: user.name,
+            [String(contact.id)]: contact.name || 'Clinician'
+          },
+          unreadCount: {
+            [String(contact.id)]: partnerUnread + 1,
+            [String(user.id)]: 0
+          }
+        }, { merge: true });
+      }
 
       try {
         await communityAPI.sendDM(contact.id, { sender_id: user.id, content: text });
+        if (!db) {
+          // Fetch thread manually to update locally
+          const legacyMsgs = await communityAPI.getDMThread(user.id, contact.id);
+          setMysqlThread(legacyMsgs || []);
+        }
       } catch (sqlErr) {
         console.warn("Failed to sync message to MySQL:", sqlErr);
       }
@@ -507,10 +575,18 @@ const ClinicianChat = () => {
                   <div key={msg.id} className={`flex items-start gap-3 ${isSelf ? 'flex-row-reverse' : 'flex-row'}`}>
                     <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 text-sm font-bold shadow-xs overflow-hidden ${isSelf ? 'bg-primary-mauve text-white' : 'bg-bg-rose-white text-text-dark border border-primary-mauve/10'
                       }`}>
-                      {isSelf && user?.profile_image ? (
-                        <img src={user.profile_image} alt={user?.name || 'You'} className="w-full h-full object-cover" />
+                      {isSelf ? (
+                        user?.profile_image ? (
+                          <img src={user.profile_image} alt={user?.name || 'You'} className="w-full h-full object-cover" />
+                        ) : (
+                          '🤰'
+                        )
                       ) : (
-                        <span>{isSelf ? '🤰' : '🩺'}</span>
+                        activeContact?.profile_image ? (
+                          <img src={activeContact.profile_image} alt={activeContact.name || 'Clinician'} className="w-full h-full object-cover" />
+                        ) : (
+                          '🩺'
+                        )
                       )}
                     </div>
                     <div className="flex flex-col max-w-[80%] space-y-1">

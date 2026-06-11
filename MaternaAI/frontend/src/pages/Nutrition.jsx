@@ -37,6 +37,28 @@ const QUICK_PROMPTS = [
   { label: 'Avoid foods', query: 'গর্ভাবস্থায় কোন কোন খাবার এড়িয়ে চলব?' },
 ];
 
+const POSTPARTUM_QUICK_PROMPTS = [
+  { label: 'Breastfeeding foods', query: 'বুকের দুধ বাড়ানোর জন্য কোন খাবার খাব?' },
+  { label: 'Recovery nutrition', query: 'প্রসবের পর দ্রুত সুস্থ হতে কী খাব?' },
+  { label: 'Get a recipe', query: 'নতুন মায়ের জন্য একটি সহজ পুষ্টিকর রেসিপি দিন' },
+  { label: 'Foods to avoid', query: 'বুকের দুধ খাওয়ানোর সময় কোন খাবার এড়াব?' },
+];
+
+const POSTPARTUM_LOCAL_FOODS = {
+  lactation: {
+    label: 'Lactation Boosters (দুধ বৃদ্ধিকারী)', bg: 'bg-rose-50/40', border: 'border-rose-100', title: 'text-rose-700',
+    items: ['Bottle gourd / Lau (লাউ)', 'Fenugreek seeds (মেথি)', 'Moringa leaves (সজনে পাতা)', 'Oats (ওটস)', 'Hilsa fish (ইলিশ মাছ)'],
+  },
+  recovery: {
+    label: 'Recovery Foods (সুস্থতার খাবার)', bg: 'bg-emerald-50/40', border: 'border-emerald-100', title: 'text-emerald-700',
+    items: ['Red lentil soup (মসুর ডালের সুপ)', 'Banana (কলা)', 'Eggs (ডিম)', 'Bone broth / Chicken soup', 'Spinach (পালং শাক)'],
+  },
+  nutrition: {
+    label: 'Postnatal Nutrition (প্রসবোত্তর পুষ্টি)', bg: 'bg-purple-50/40', border: 'border-purple-100', title: 'text-bg-dark-mauve',
+    items: ['Plain yogurt (টক দই)', 'Small fish with bones (ছোট মাছ)', 'Jaggery / Gur (গুড়)', 'Sweet potato (মিষ্টি আলু)', 'Milk (দুধ)'],
+  },
+};
+
 // Shared Sub-Layout Elements
 const SectionLabel = ({ icon: Icon, children, extra, isDark }) => (
   <div className="flex items-center justify-between mb-4 relative z-10">
@@ -202,7 +224,10 @@ function DietaryComplianceTracker({ onMetricsUpdate, onNewAssistantMessage, user
 // Main Component Declaration
 const Nutrition = () => {
   const { user } = useAuth();
-  const trimester = user?.weeks_pregnant ? (user.weeks_pregnant < 13 ? 1 : user.weeks_pregnant < 28 ? 2 : 3) : 2;
+  const isPostpartum = user?.is_postpartum ?? false;
+  const trimester = isPostpartum ? null
+    : user?.weeks_pregnant ? (user.weeks_pregnant < 13 ? 1 : user.weeks_pregnant < 28 ? 2 : 3)
+    : 2;
 
   const [cleanTextPlan, setCleanTextPlan] = useState('');
   
@@ -382,10 +407,7 @@ const Nutrition = () => {
     stopTTS();
 
     try {
-      const profile = { name: user?.name || '', weeks_pregnant: user?.weeks_pregnant || trimester * 13 };
-      const userId = user?.id || 1;
-
-      // chatAPI.speak already uses the axios instance — no change needed here
+      const profile = { name: user?.name || '', weeks_pregnant: isPostpartum ? null : (user?.weeks_pregnant || (trimester ?? 2) * 13), is_postpartum: isPostpartum };
       const data = await chatAPI.speak(audioBlob, profile, 'nutrition', userId, clientTranscriptionText);
 
       const userText = data.transcribed_text || "[অডিও বার্তা]";
@@ -447,10 +469,10 @@ const Nutrition = () => {
     let nutrientMatch;
 
     const freshlyParsedNutrients = cachedData ? JSON.parse(cachedData) : {
-      iron: { current: 0, goal: 27, unit: 'mg' },
-      folate: { current: 0, goal: 600, unit: 'mcg' },
-      calcium: { current: 0, goal: 1000, unit: 'mg' },
-      protein: { current: 0, goal: 71, unit: 'g' },
+      iron:    { current: 0, goal: isPostpartum ? 9  : 27,  unit: 'mg'  },
+      folate:  { current: 0, goal: isPostpartum ? 500 : 600, unit: 'mcg' },
+      calcium: { current: 0, goal: 1000,                     unit: 'mg'  },
+      protein: { current: 0, goal: isPostpartum ? 75 : 71,  unit: 'g'   },
     };
 
     while ((nutrientMatch = nutrientRegex.exec(rawText)) !== null) {
@@ -513,15 +535,21 @@ const Nutrition = () => {
     try {
       const { data } = await api.post('/api/nutrition/plans', {
         user_id: user?.id || 1,
-        trimester,
+        trimester: isPostpartum ? null : (trimester ?? 2),
+        is_postpartum: isPostpartum,
         conditions: user?.conditions || [],
         profile: {
           name: user?.name || 'Patient',
-          weeks_pregnant: user?.weeks_pregnant || trimester * 13,
+          weeks_pregnant: isPostpartum ? null : (user?.weeks_pregnant || (trimester ?? 2) * 13),
+          is_postpartum: isPostpartum,
           location: 'Bangladesh',
         },
       });
       parseRAGTextResponse(data.generated_plan);
+      // data.id === null means the backend returned the static fallback (quota exhausted)
+      if (data.id === null) {
+        setPlanError('⚠️ AI সেবা সাময়িকভাবে অনুপলব্ধ। নিচে একটি সাধারণ পরিকল্পনা দেখানো হচ্ছে।');
+      }
     } catch (e) {
       console.error("Nutrition plan fetch failed:", e);
       setPlanError('আপনার জন্য নির্দিষ্ট পরিকল্পনা তৈরি করা যায়নি। পুনরায় চেষ্টা করুন।');
@@ -552,7 +580,7 @@ const Nutrition = () => {
     setChatLoading(true);
 
     try {
-      const profile = { name: user?.name || '', weeks_pregnant: user?.weeks_pregnant || trimester * 13 };
+      const profile = { name: user?.name || '', weeks_pregnant: isPostpartum ? null : (user?.weeks_pregnant || (trimester ?? 2) * 13), is_postpartum: isPostpartum };
       const data = await chatAPI.analyze(text, profile, 'nutrition', user?.id || 1);
       const responseText = data.response || 'কোন উত্তর পাওয়া যায়নি।';
       setMessages(prev => {
@@ -593,7 +621,9 @@ const Nutrition = () => {
             <Sparkles className="w-3 h-3 text-purple-200" /> Live RAG Pipeline Active
           </span>
           <span className="text-[10px] font-black bg-white text-bg-dark-mauve px-3 py-1 rounded-full uppercase tracking-wider shadow-sm">
-            Trimester {trimester} ({user?.weeks_pregnant || trimester * 13} Weeks)
+            {isPostpartum
+              ? '🤱 Postnatal Recovery Mode'
+              : `Trimester ${trimester} (${user?.weeks_pregnant || (trimester ?? 2) * 13} Weeks)`}
           </span>
         </div>
       </div>
@@ -687,7 +717,8 @@ const Nutrition = () => {
               onNewAssistantMessage={handleAppendAssistantChatBubble}
               userProfile={{
                 name: user?.name || "Patient",
-                weeks_pregnant: user?.weeks_pregnant || trimester * 13
+                weeks_pregnant: isPostpartum ? null : (user?.weeks_pregnant || (trimester ?? 2) * 13),
+                is_postpartum: isPostpartum,
               }}
               userId={user?.id || 1}
             />
@@ -719,7 +750,9 @@ const Nutrition = () => {
                     <div className={`w-5 h-5 rounded-full border flex items-center justify-center shrink-0 transition-all ${supplementDone ? 'bg-bg-dark-mauve border-bg-dark-mauve text-white' : 'border-purple-200 bg-white hover:border-primary-mauve'}`}>
                       {supplementDone && <CheckCircle2 className="w-3.5 h-3.5" />}
                     </div>
-                    <span className={supplementDone ? 'line-through text-gray-400 font-medium' : 'text-gray-700'}>Prenatal Supplement (Iron / Folic Acid)</span>
+                    <span className={supplementDone ? 'line-through text-gray-400 font-medium' : 'text-gray-700'}>
+                      {isPostpartum ? 'Postnatal Supplement (Iron / Calcium / Vitamin D)' : 'Prenatal Supplement (Iron / Folic Acid)'}
+                    </span>
                   </div>
                   <span className="text-[9px] font-black px-2 py-0.5 rounded-full bg-rose-50 text-rose-600 uppercase">Daily Essential</span>
                 </div>
@@ -793,7 +826,7 @@ const Nutrition = () => {
           </div>
           <div>
             <div className="flex flex-wrap gap-1 mb-2.5">
-              {QUICK_PROMPTS.map(p => (
+              {(isPostpartum ? POSTPARTUM_QUICK_PROMPTS : QUICK_PROMPTS).map(p => (
                 <button key={p.label} onClick={() => sendChat(p.query)} className="text-[9px] font-bold text-white bg-bg-dark-mauve px-2.5 py-1 rounded-full hover:bg-primary-mauve transition-all shadow-sm cursor-pointer">
                   {p.label}
                 </button>
@@ -818,7 +851,7 @@ const Nutrition = () => {
                 value={chatInput} 
                 onChange={e => setChatInput(e.target.value)} 
                 onKeyDown={e => e.key === 'Enter' && sendChat()} 
-                placeholder={isRecording ? "শুনছি... কথা বলুন..." : "খাদ্য বা পুষ্টি নিয়ে প্রশ্ন লিখুন..."} 
+                placeholder={isRecording ? "শুনছি... কথা বলুন..." : isPostpartum ? "বুকের দুধ, খাবার বা পুষ্টি নিয়ে প্রশ্ন লিখুন..." : "খাদ্য বা পুষ্টি নিয়ে প্রশ্ন লিখুন..."} 
                 disabled={chatLoading || isRecording}
                 className="flex-1 px-3 py-2 text-[11px] bg-purple-50/20 border border-purple-100/60 rounded-xl outline-none focus:border-primary-mauve transition-all font-medium text-gray-800" 
               />
@@ -839,9 +872,11 @@ const Nutrition = () => {
 
       {/* Geolocation/Regional Sourced Matrix Block */}
       <div className="bg-white rounded-2xl p-5 border border-purple-100/40 shadow-sm">
-        <SectionLabel icon={MapPin}>Locally Procured Food Procurement (বাংলাদেশ)</SectionLabel>
+        <SectionLabel icon={MapPin}>
+          {isPostpartum ? 'Postnatal Foods — Bangladesh (প্রসবোত্তর খাবার)' : 'Locally Procured Food Procurement (বাংলাদেশ)'}
+        </SectionLabel>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-          {Object.entries(LOCAL_FOODS).map(([key, { label, bg, border, title, items }]) => (
+          {Object.entries(isPostpartum ? POSTPARTUM_LOCAL_FOODS : LOCAL_FOODS).map(([key, { label, bg, border, title, items }]) => (
             <div key={key} className={`${bg} border ${border} rounded-xl p-3.5 space-y-2`}>
               <div className={`text-[10px] font-black ${title} uppercase tracking-wider`}>{label}</div>
               <ul className="space-y-1 text-[11px] font-medium text-gray-600">

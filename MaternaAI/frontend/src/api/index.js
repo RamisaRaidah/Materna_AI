@@ -1,7 +1,12 @@
 import axios from 'axios';
 
+const resolvedBaseURL = import.meta.env.VITE_API_URL || '';
+if (!import.meta.env.VITE_API_URL) {
+  console.warn('[API] VITE_API_URL is not set — using relative requests. Ensure dev proxy or backend is running.');
+}
+
 const api = axios.create({
-  baseURL: import.meta.env.VITE_API_URL,
+  baseURL: resolvedBaseURL,
   timeout: 60000,
   headers: {
     'Content-Type': 'application/json',
@@ -30,6 +35,9 @@ api.interceptors.response.use(
       // Clear token on token expiration or invalidity
       localStorage.removeItem('token');
       localStorage.removeItem('user');
+    }
+    if (error.response && error.response.status >= 500) {
+      console.error('[API] Server error:', error.response.status, error.response.statusText);
     }
     return Promise.reject(error);
   }
@@ -133,6 +141,22 @@ export const healthAPI = {
   },
   generateCarePlan: async (vitalsData) => {
     const response = await api.post('/api/health/care-plan', vitalsData);
+    return response.data;
+  },
+  logFeed: async ({ feed_type = 'breast' } = {}) => {
+    const response = await api.post('/api/health/newborn/feed', { feed_type });
+    return response.data;
+  },
+  logSleep: async (durationMins = null) => {
+    const response = await api.post('/api/health/newborn/sleep', { duration_mins: durationMins });
+    return response.data;
+  },
+  logDiaper: async () => {
+    const response = await api.post('/api/health/newborn/diaper');
+    return response.data;
+  },
+  getNewbornToday: async () => {
+    const response = await api.get('/api/health/newborn/today');
     return response.data;
   },
 };

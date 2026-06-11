@@ -273,7 +273,7 @@ def group_members(group_id):
         conn = get_db()
         cur = conn.cursor()
         cur.execute("""
-            SELECT u.id, u.name, u.role, gm.joined_at
+            SELECT u.id, u.name, u.role, gm.joined_at, u.profile_image
             FROM group_members gm
             JOIN users u ON u.id = gm.user_id
             WHERE gm.group_id = %s
@@ -282,7 +282,7 @@ def group_members(group_id):
         rows = cur.fetchall()
         cur.close()
         return jsonify([
-            {"id": r[0], "name": r[1], "role": r[2], "joined_at": r[3].isoformat() if r[3] else None}
+            {"id": r[0], "name": r[1], "role": r[2], "joined_at": r[3].isoformat() if r[3] else None, "profile_image": r[4]}
             for r in rows
         ])
     except Exception as e:
@@ -315,7 +315,8 @@ def list_posts(group_id):
                    p.is_anonymous, p.is_flagged, p.likes, p.created_at,
                    CASE WHEN p.is_anonymous THEN 'Anonymous' ELSE u.name END as author_name,
                    COALESCE(p.moderation_status, 'approved') as moderation_status,
-                   p.moderation_reason
+                   p.moderation_reason,
+                   CASE WHEN p.is_anonymous THEN NULL ELSE u.profile_image END as author_image
             FROM posts p
             LEFT JOIN users u ON u.id = p.user_id
             WHERE p.group_id = %s
@@ -366,18 +367,38 @@ def create_post(group_id):
     try:
         conn = get_db()
         cur = conn.cursor()
+        # Insert the post first
         cur.execute("""
-            INSERT INTO posts (group_id, user_id, content, is_anonymous,
-                               moderation_status, moderation_reason)
-            VALUES (%s, %s, %s, %s, %s, %s)
-            RETURNING id, group_id, user_id, content,
-                      is_anonymous, is_flagged, likes, created_at,
-                      NULL as author_name,
-                      COALESCE(moderation_status, 'approved'),
-                      moderation_reason
-        """, (group_id, user_id, content, data.get("is_anonymous", False),
-               moderation_status, moderation_reason))
-        row = cur.fetchone()
+            INSERT INTO posts (group_id, user_id, content, is_anonymous)
+            VALUES (%s, %s, %s, %s)
+            RETURNING id, group_id, user_id, content, is_anonymous, is_flagged, likes, created_at
+        """, (group_id, user_id, content, data.get("is_anonymous", False)))
+        inserted = cur.fetchone()
+
+        # Fetch author details separately to avoid long-running joined statements during insert
+        author_name = None
+        author_image = None
+        if inserted and not inserted[4]:  # not anonymous
+            cur.execute("SELECT name, profile_image FROM users WHERE id = %s", (inserted[2],))
+            urow = cur.fetchone()
+            if urow:
+                author_name = urow[0]
+                author_image = urow[1]
+
+        # Compose the returned row in the same order expected by _row_to_post
+        row = (
+            inserted[0],  # id
+            inserted[1],  # group_id
+            inserted[2],  # user_id
+            inserted[3],  # content
+            inserted[4],  # is_anonymous
+            inserted[5],  # is_flagged
+            inserted[6],  # likes
+            inserted[7],  # created_at
+            (author_name if not inserted[4] else 'Anonymous'),
+            (author_image if not inserted[4] else None)
+        )
+
         conn.commit()
         cur.close()
         return jsonify(_row_to_post(row)), 201
@@ -635,11 +656,13 @@ def get_inbox(user_id):
                     partner_name,
                     last_message,
                     last_sent_at,
-                    unread_count
+                    unread_count,
+                    partner_image
                 FROM (
                     SELECT
                         CASE WHEN dm.sender_id = %(uid)s THEN dm.receiver_id ELSE dm.sender_id END AS partner_id,
                         CASE WHEN dm.sender_id = %(uid)s THEN rv.name ELSE sv.name END AS partner_name,
+                        CASE WHEN dm.sender_id = %(uid)s THEN rv.profile_image ELSE sv.profile_image END AS partner_image,
                         dm.content AS last_message,
                         dm.created_at AS last_sent_at,
                         (
@@ -668,6 +691,7 @@ def get_inbox(user_id):
                 "last_message":  r[2],
                 "last_sent_at":  r[3].isoformat() if r[3] else None,
                 "unread_count":  r[4],
+                "profile_image": r[5],
             }
             for r in rows
         ])

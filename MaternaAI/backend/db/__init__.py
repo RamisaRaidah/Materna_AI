@@ -9,7 +9,7 @@ _pool = None
 def get_pool():
     global _pool
     if _pool is None:
-        _pool = pg_pool.ThreadedConnectionPool(2, 20, DATABASE_URL)
+        _pool = pg_pool.ThreadedConnectionPool(1, 10, DATABASE_URL)
     return _pool
 
 def get_conn():
@@ -47,6 +47,7 @@ def query(sql, params=None, fetch="all"):
     cur = None
     try:
         cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        
         cur.execute(sql, params or ())
         conn.commit()
         if fetch == "all":

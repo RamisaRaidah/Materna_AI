@@ -608,7 +608,7 @@ const Chat = () => {
                         ? 'bg-primary-mauve text-white' 
                         : `bg-${msgIntentDetails.colorClass}/10 border border-${msgIntentDetails.colorClass}/20 ${msgIntentDetails.textClass}`
                     }`}>
-                      {isUser ? '🤰' : '🤖'}
+                      {isUser ? (user?.is_postpartum ? '🤱' : '🤰') : '🤖'}
                     </div>
 
                     {/* Speech Bubble */}
