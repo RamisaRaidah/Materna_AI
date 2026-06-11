@@ -10,10 +10,7 @@ import re
 
 import google.generativeai as genai
 
-_GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
-genai.configure(api_key=_GEMINI_API_KEY)
-
-_MODEL = genai.GenerativeModel("gemini-2.0-flash")
+from llm_client import get_gemini_model, mark_exhausted, is_quota_error, GeminiKeysExhausted
 
 _SYSTEM_PROMPT = """You are a maternal health safety moderator for a community platform used by pregnant women and new mothers in Bangladesh.
 
@@ -164,11 +161,13 @@ def check_for_misinfo(content: str) -> dict:
     if not content or not content.strip():
         return default_safe
 
-    # Attempt Gemini check first if key is available
-    if _GEMINI_API_KEY:
+    # Attempt Gemini check first, rotating through available keys
+    prompt = f"{_SYSTEM_PROMPT}\n\nCommunity post to check:\n\"\"\"\n{content.strip()}\n\"\"\""
+    key = None
+    while True:
         try:
-            prompt = f"{_SYSTEM_PROMPT}\n\nCommunity post to check:\n\"\"\"\n{content.strip()}\n\"\"\""
-            response = _MODEL.generate_content(
+            model, key = get_gemini_model("gemini-2.0-flash")
+            response = model.generate_content(
                 prompt,
                 generation_config=genai.types.GenerationConfig(
                     temperature=0.1,
@@ -177,35 +176,32 @@ def check_for_misinfo(content: str) -> dict:
             )
 
             raw = response.text.strip()
-
-            # Strip markdown code fences if present
             raw = re.sub(r"^```(?:json)?\s*", "", raw)
             raw = re.sub(r"\s*```$", "", raw)
 
             result = json.loads(raw)
 
-            # Validate and sanitise the response
             is_misinfo = bool(result.get("is_misinfo", False))
             confidence = result.get("confidence", "low")
             if confidence not in ("high", "medium", "low"):
                 confidence = "medium"
             reason = str(result.get("reason", "")).strip()
 
-            # Only flag if confidence is medium or high
             if is_misinfo and confidence == "low":
                 is_misinfo = False
                 reason = ""
 
-            return {
-                "is_misinfo": is_misinfo,
-                "confidence": confidence,
-                "reason": reason,
-            }
+            return {"is_misinfo": is_misinfo, "confidence": confidence, "reason": reason}
 
+        except GeminiKeysExhausted:
+            print("[MisInfo] All Gemini keys exhausted. Trying OpenRouter fallback...")
+            break
         except Exception as exc:
+            if is_quota_error(exc):
+                mark_exhausted(key)
+                continue  # try next key
             print(f"[MisInfo] Gemini check failed: {exc}. Trying OpenRouter fallback...")
-    else:
-        print("[MisInfo] No GEMINI_API_KEY set. Trying OpenRouter fallback...")
+            break
 
     # Fallback to OpenRouter
     openrouter_res = _check_with_openrouter(content)

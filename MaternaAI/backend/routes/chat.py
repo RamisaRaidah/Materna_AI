@@ -406,32 +406,36 @@ def speak():
 
     # 2. Server-side Gemini transcription as fallback
     if not transcribed_text:
+        from llm_client import get_gemini_model, mark_exhausted, is_quota_error, GeminiKeysExhausted
         import google.generativeai as genai
-        from config import GEMINI_API_KEY
-        
-        try:
-            if GEMINI_API_KEY:
-                genai.configure(api_key=GEMINI_API_KEY)
-                model = genai.GenerativeModel("gemini-2.5-flash")
-                prompt = (
-                    "You are an expert audio transcriber. Transcribe this audio recording precisely. "
-                    "If the audio is in Bengali (or its local spoken dialects), write the transcription entirely in standard Bengali script. "
-                    "If the audio is in English, transcribe it in English. "
-                    "Do not translate. Just transcribe the exact words spoken. "
-                    "Return ONLY the plain text transcript. Do not include any introductory or conversational text, and do not wrap it in quotes or markdown formatting. "
-                    "If the audio is completely silent or contains no clear speech, return '[অডিও অস্পষ্ট - Audio unclear]'."
-                )
+        prompt = (
+            "You are an expert audio transcriber. Transcribe this audio recording precisely. "
+            "If the audio is in Bengali (or its local spoken dialects), write the transcription entirely in standard Bengali script. "
+            "If the audio is in English, transcribe it in English. "
+            "Do not translate. Just transcribe the exact words spoken. "
+            "Return ONLY the plain text transcript. Do not include any introductory or conversational text, and do not wrap it in quotes or markdown formatting. "
+            "If the audio is completely silent or contains no clear speech, return '[অডিও অস্পষ্ট - Audio unclear]'."
+        )
+        key = None
+        while True:
+            try:
+                model, key = get_gemini_model("gemini-2.5-flash")
                 response = model.generate_content([
-                    {
-                        "mime_type": mime_type,
-                        "data": audio_bytes
-                    },
+                    {"mime_type": mime_type, "data": audio_bytes},
                     prompt
                 ])
                 if response and response.text:
                     transcribed_text = response.text.strip()
-        except Exception as e:
-            print(f"Server-side Gemini transcription failed: {str(e)}")
+                break
+            except GeminiKeysExhausted:
+                print("Gemini transcription — all keys exhausted.")
+                break
+            except Exception as e:
+                if is_quota_error(e):
+                    mark_exhausted(key)
+                    continue  # try next key
+                print(f"Server-side Gemini transcription failed: {str(e)}")
+                break
 
     if not transcribed_text:
         transcribed_text = "[অডিও অস্পষ্ট - Audio unclear]"

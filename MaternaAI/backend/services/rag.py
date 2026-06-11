@@ -3,15 +3,13 @@ from pgvector.psycopg2 import register_vector
 import openai
 import cohere
 import google.generativeai as genai
-from config import DATABASE_URL, OPENROUTER_API_KEY, COHERE_API_KEY, GEMINI_API_KEY
+from config import DATABASE_URL, OPENROUTER_API_KEY, COHERE_API_KEY
+from llm_client import get_gemini_model, mark_exhausted, is_quota_error, GeminiKeysExhausted
 import json
 import re
 
 
 
-
-if GEMINI_API_KEY:
-    genai.configure(api_key=GEMINI_API_KEY)
 
 or_client = openai.OpenAI(
     base_url="https://openrouter.ai/api/v1",
@@ -408,15 +406,17 @@ def clinician_rag_query(
         messages.append({"role": "user", "content": user_input})
 
         # ── 4. Call LLM (Gemini primary → OpenRouter fallback) ────────────
-        if GEMINI_API_KEY:
+        gemini_contents = [
+            {
+                "role": "user" if m["role"] == "user" else "model",
+                "parts": [m["content"]]
+            }
+            for m in messages if m["role"] != "system"
+        ]
+        key = None
+        while True:
             try:
-                gemini_contents = [
-                    {
-                        "role": "user" if m["role"] == "user" else "model",
-                        "parts": [m["content"]]
-                    }
-                    for m in messages if m["role"] != "system"
-                ]
+                genai_model, key = get_gemini_model("gemini-2.5-flash")
                 genai_model = genai.GenerativeModel(
                     model_name="gemini-2.5-flash",
                     system_instruction=system_content
@@ -428,8 +428,16 @@ def clinician_rag_query(
                 if response_text:
                     print(f"Clinician RAG ({mode}) — Gemini OK")
                     return response_text
+                break  # empty response — fall through to OpenRouter
+            except GeminiKeysExhausted:
+                print("Clinician RAG — all Gemini keys exhausted, using OpenRouter.")
+                break
             except Exception as gemini_err:
+                if is_quota_error(gemini_err):
+                    mark_exhausted(key)
+                    continue  # try next key
                 print(f"Clinician RAG — Gemini failed: {gemini_err}")
+                break
 
         # OpenRouter fallback
         model_queue = [
@@ -529,7 +537,6 @@ def extract_nutrition_metrics(user_input: str, assistant_response: str) -> dict:
     """
     
     model_queue = [
-        "google/gemini-2.5-flash",
         "qwen/qwen-2.5-72b-instruct",
         "meta-llama/llama-3.3-70b-instruct",
         "meta-llama/llama-3.1-8b-instruct:free"
@@ -537,21 +544,45 @@ def extract_nutrition_metrics(user_input: str, assistant_response: str) -> dict:
 
     parsed_data = None
 
-    for model_name in model_queue:
+    # Try Gemini first with key rotation
+    key = None
+    while True:
         try:
-            print(f"Trying nutrition extraction with: {model_name}")
+            print("Trying nutrition extraction with: gemini-2.5-flash")
+            model, key = get_gemini_model("gemini-2.5-flash")
+            extraction_res = model.generate_content(
+                extraction_prompt,
+                generation_config={
+                    "response_mime_type": "application/json",
+                    "temperature": 0.1
+                }
+            )
+            raw_text = extraction_res.text
+            if raw_text:
+                raw_text = raw_text.strip()
+                if raw_text.startswith("```"):
+                    raw_text = re.sub(r"^```(?:json)?|```$", "", raw_text, flags=re.MULTILINE).strip()
+                parsed_data = json.loads(raw_text)
+                print("Nutrition extraction succeeded with gemini-2.5-flash")
+            break
+        except GeminiKeysExhausted:
+            print("Nutrition extraction — all Gemini keys exhausted, trying OpenRouter.")
+            break
+        except json.JSONDecodeError as e:
+            print(f"Gemini returned invalid JSON for nutrition extraction: {e}")
+            break
+        except Exception as e:
+            if is_quota_error(e):
+                mark_exhausted(key)
+                continue  # try next key
+            print(f"Nutrition extraction failed for gemini-2.5-flash: {e}")
+            break
 
-            if model_name == "google/gemini-2.5-flash" and GEMINI_API_KEY:
-                model = genai.GenerativeModel("gemini-2.5-flash")
-                extraction_res = model.generate_content(
-                    extraction_prompt,
-                    generation_config={
-                        "response_mime_type": "application/json",
-                        "temperature": 0.1
-                    }
-                )
-                raw_text = extraction_res.text
-            else:
+    # OpenRouter fallback queue
+    if not parsed_data:
+        for model_name in model_queue:
+            try:
+                print(f"Trying nutrition extraction with: {model_name}")
                 response = or_client.chat.completions.create(
                     model=model_name,
                     messages=[{"role": "user", "content": extraction_prompt}],
@@ -559,38 +590,26 @@ def extract_nutrition_metrics(user_input: str, assistant_response: str) -> dict:
                     temperature=0.1
                 )
                 raw_text = response.choices[0].message.content
-            
-            if not raw_text:
-                print(f"{model_name} returned empty response")
+
+                if not raw_text:
+                    print(f"{model_name} returned empty response")
+                    continue
+
+                raw_text = raw_text.strip()
+                if raw_text.startswith("```"):
+                    raw_text = re.sub(r"^```(?:json)?|```$", "", raw_text, flags=re.MULTILINE).strip()
+
+                parsed_data = json.loads(raw_text)
+                print(f"Nutrition extraction succeeded with {model_name}")
+                break
+
+            except json.JSONDecodeError as e:
+                print(f"{model_name} returned invalid JSON. Trying next model. Error: {e}")
                 continue
 
-            raw_text = raw_text.strip()
-
-            # Remove accidental markdown fences
-            if raw_text.startswith("```"):
-                raw_text = re.sub(
-                    r"^```(?:json)?|```$",
-                    "",
-                    raw_text,
-                    flags=re.MULTILINE
-                ).strip()
-
-            parsed_data = json.loads(raw_text)
-
-            print(f"Nutrition extraction succeeded with {model_name}")
-
-            break
-
-        except json.JSONDecodeError as e:
-            print(
-                f"{model_name} returned invalid JSON. "
-                f"Trying next model. Error: {e}"
-            )
-            continue
-
-        except Exception as e:
-            print(f"Nutrition extraction failed for {model_name}: {e}")
-            continue
+            except Exception as e:
+                print(f"Nutrition extraction failed for {model_name}: {e}")
+                continue
 
     if not parsed_data:
         print("All nutrition extraction models failed.")
@@ -639,19 +658,16 @@ def rag_query(user_input: str, user_profile: dict, mode: str = "danger", detecte
         messages.append({"role": "user", "content": tagged_input})
 
         # -------------------------------------------------------------
-        # 1. Direct Google Gemini API (Primary high-priority method)
+        # 1. Direct Google Gemini API (Primary — key rotation)
         # -------------------------------------------------------------
-        if GEMINI_API_KEY:
+        gemini_contents = [
+            {"role": "user" if msg["role"] == "user" else "model", "parts": [msg["content"]]}
+            for msg in messages if msg["role"] != "system"
+        ]
+        key = None
+        while True:
             try:
-                # Map standard message format to genai content format
-                # contents expects: [{"role": "user"|"model", "parts": [str]}]
-                gemini_contents = []
-                for msg in messages:
-                    if msg["role"] == "system":
-                        continue
-                    role = "user" if msg["role"] == "user" else "model"
-                    gemini_contents.append({"role": role, "parts": [msg["content"]]})
-                
+                genai_model, key = get_gemini_model("gemini-2.5-flash")
                 genai_model = genai.GenerativeModel(
                     model_name="gemini-2.5-flash",
                     system_instruction=system_content
@@ -660,12 +676,19 @@ def rag_query(user_input: str, user_profile: dict, mode: str = "danger", detecte
                     gemini_contents,
                     generation_config={"max_output_tokens": 500}
                 ).text
-                
                 if response_text:
                     print("Direct Gemini API call succeeded!")
                     return response_text
+                break  # empty response — fall through to OpenRouter
+            except GeminiKeysExhausted:
+                print("RAG — all Gemini keys exhausted, using OpenRouter.")
+                break
             except Exception as gemini_err:
+                if is_quota_error(gemini_err):
+                    mark_exhausted(key)
+                    continue  # try next key
                 print(f"Direct Gemini API failed (trying OpenRouter fallback): {str(gemini_err)}")
+                break
 
         # -------------------------------------------------------------
         # 2. OpenRouter API Fallback
