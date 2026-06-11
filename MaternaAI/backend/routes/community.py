@@ -314,12 +314,9 @@ def list_posts(group_id):
             SELECT p.id, p.group_id, p.user_id, p.content,
                    p.is_anonymous, p.is_flagged, p.likes, p.created_at,
                    CASE WHEN p.is_anonymous THEN 'Anonymous' ELSE u.name END as author_name,
-<<<<<<< Updated upstream
                    COALESCE(p.moderation_status, 'approved') as moderation_status,
-                   p.moderation_reason
-=======
+                   p.moderation_reason,
                    CASE WHEN p.is_anonymous THEN NULL ELSE u.profile_image END as author_image
->>>>>>> Stashed changes
             FROM posts p
             LEFT JOIN users u ON u.id = p.user_id
             WHERE p.group_id = %s
