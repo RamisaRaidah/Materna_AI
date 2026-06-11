@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState, useRef } from 'react';
 import { MessageCircle, MessageSquare, Search, ShieldCheck, Users } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
-import { communityAPI } from '../api';
+import { communityAPI, smsAPI } from '../api';
 import { db } from '../api/firebase';
 import { useSmartChatScroll } from '../hooks/useSmartChatScroll';
 import AutoResizeTextarea from '../components/chat/AutoResizeTextarea';
@@ -436,14 +436,10 @@ const ClinicianCommunity = () => {
 
         if (navigator.onLine && contact.phone) {
           try {
-            await fetch('/api/sms/send_offline_notify', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                sender_name: user.name,
-                recipient_phone: contact.phone,
-                message_content: text
-              })
+            await smsAPI.sendOfflineNotify({
+              sender_name: user.name,
+              recipient_phone: contact.phone,
+              message_content: text
             });
           } catch (smsErr) {
             console.warn("Simulated SMS gateway failed:", smsErr);

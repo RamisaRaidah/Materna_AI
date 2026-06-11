@@ -1,6 +1,6 @@
 import React, { useMemo, useState, useEffect, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { communityAPI } from '../api';
+import { communityAPI, smsAPI } from '../api';
 import { db } from '../api/firebase';
 import {
   collection,
@@ -711,14 +711,10 @@ const Community = () => {
       }
       if (phoneNum) {
         try {
-          await fetch('/api/sms/send_offline_notify', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              sender_name: user.name,
-              recipient_phone: phoneNum,
-              message_content: text
-            })
+          await smsAPI.sendOfflineNotify({
+            sender_name: user.name,
+            recipient_phone: phoneNum,
+            message_content: text
           });
         } catch (smsErr) {
           console.warn("Simulated SMS gateway failed:", smsErr);

@@ -4,7 +4,7 @@ import {
   Mail, MapPin, Phone, UserRound, KeyRound, Edit2, CheckCircle2, AlertCircle, Save, Trash2, Calendar
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
-import { clinicianAPI } from '../api';
+import { clinicianAPI, authAPI } from '../api';
 
 const STORAGE_KEY = 'clinicianProfile';
 
@@ -193,21 +193,12 @@ const ClinicianProfile = () => {
 
     setIsSubmitting(true);
     try {
-      const response = await fetch('/auth/me/password', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('token')}` },
-        body: JSON.stringify({ currentPassword, newPassword })
-      });
-      const data = await response.json();
-      if (response.ok) {
-        setMsg({ text: 'Security credentials updated successfully.', type: 'success' });
-        setSecurityData({ currentPassword: '', newPassword: '', confirmPassword: '' });
-        setShowSecurityFields(false);
-      } else {
-        setMsg({ text: data.error || 'Incorrect original password verification.', type: 'danger' });
-      }
+      await authAPI.changePassword({ currentPassword, newPassword });
+      setMsg({ text: 'Security credentials updated successfully.', type: 'success' });
+      setSecurityData({ currentPassword: '', newPassword: '', confirmPassword: '' });
+      setShowSecurityFields(false);
     } catch (err) {
-      setMsg({ text: 'Failed to connect to security server node.', type: 'danger' });
+      setMsg({ text: err.response?.data?.error || 'Failed to connect to security server node.', type: 'danger' });
     } finally {
       setIsSubmitting(false);
     }
@@ -224,20 +215,12 @@ const ClinicianProfile = () => {
 
     setIsSubmitting(true);
     try {
-      const response = await fetch('/auth/me', {
-        method: 'DELETE',
-        headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
-      });
-      if (response.ok) {
-        alert("Account wiped successfully.");
-        logout();
-        navigate('/login');
-      } else {
-        const data = await response.json();
-        setMsg({ text: data.error || 'Failed to request data purging.', type: 'danger' });
-      }
+      await authAPI.deleteAccount();
+      alert("Account wiped successfully.");
+      logout();
+      navigate('/login');
     } catch (err) {
-      setMsg({ text: 'Network exception during secure delete execution.', type: 'danger' });
+      setMsg({ text: err.response?.data?.error || 'Network exception during secure delete execution.', type: 'danger' });
     } finally {
       setIsSubmitting(false);
     }
