@@ -149,12 +149,13 @@ const Chat = () => {
   };
 
   const playTTS = (text, messageKey) => {
-    // If clicking on already playing audio, stop it
+    // If clicking on already playing audio, stop it (toggle off)
     if (currentPlaybackMessageId === messageKey) {
       stopTTS();
       return;
     }
 
+    // Stop any currently playing audio first
     stopTTS();
 
     try {
@@ -163,22 +164,34 @@ const Chat = () => {
       const audioUrl = `/api/chat/tts?text=${encodeURIComponent(text)}&lang=${lang}`;
       const audio = new Audio(audioUrl);
       activeAudioRef.current = audio;
-      setCurrentPlaybackMessageId(messageKey);
 
+      // Only mark as playing once the audio successfully starts
+      audio.oncanplay = () => {
+        setCurrentPlaybackMessageId(messageKey);
+      };
       audio.onended = () => {
+        activeAudioRef.current = null;
         setCurrentPlaybackMessageId(null);
       };
       audio.onerror = (e) => {
         console.error("Audio playback error:", e);
+        activeAudioRef.current = null;
         setCurrentPlaybackMessageId(null);
       };
 
-      audio.play().catch(err => {
-        console.warn("Failed to autoplay audio. User interaction required:", err);
-        setCurrentPlaybackMessageId(null);
-      });
+      audio.play()
+        .then(() => {
+          // Ensure state is set even if oncanplay fired late
+          setCurrentPlaybackMessageId(messageKey);
+        })
+        .catch(err => {
+          console.warn("Failed to autoplay audio. User interaction required:", err);
+          activeAudioRef.current = null;
+          setCurrentPlaybackMessageId(null);
+        });
     } catch (e) {
       console.error(e);
+      activeAudioRef.current = null;
       setCurrentPlaybackMessageId(null);
     }
   };
@@ -595,7 +608,7 @@ const Chat = () => {
                 const isUser = msg.role === 'user';
                 const isBangla = msg.language === 'bn' || /[\u0980-\u09FF]/.test(msg.content);
                 const msgIntentDetails = modes[msg.intent] || modes.general;
-                const msgKey = msg.created_at + '-' + msg.role;
+                const msgKey = `msg-${index}-${msg.role}`;
 
                 return (
                   <div 
