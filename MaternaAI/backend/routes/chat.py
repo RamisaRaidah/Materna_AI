@@ -282,6 +282,7 @@ def analyze():
             )
         else:
             response = rag_query(user_input, user_profile, mode, detected_lang=lang, user_id=user_id)
+            print(f"FULL RESPONSE: {repr(response)}")
     except Exception as e:
         print("RAG failed:", e)
         response = "দুঃখিত, এখন উত্তর দিতে সমস্যা হচ্ছে। পরে আবার চেষ্টা করুন।"
