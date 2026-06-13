@@ -1,16 +1,3 @@
-"""
-rag.py
-------
-LangGraph-powered RAG layer for MaternaAI.
-
-Two compiled graphs:
-  - patient_graph   : powers rag_query()
-  - clinician_graph : powers clinician_rag_query()
-
-Gemini key rotation via llm_client, Cohere embed + rerank,
-OpenRouter fallback queue, hardcoded last-resort strings — all preserved.
-"""
-
 import json
 import logging
 import re
@@ -45,6 +32,13 @@ or_client = openai.OpenAI(
     api_key=OPENROUTER_API_KEY,
 )
 co = cohere.Client(api_key=COHERE_API_KEY)
+
+# Ollama client — points to local server, no key needed
+ollama_client = openai.OpenAI(
+    base_url="http://localhost:11434/v1",
+    api_key="ollama",  # required by openai SDK but ignored by Ollama
+)
+OLLAMA_MODEL = "llama3"  # change to whichever model you have pulled locally
 
 # ---------------------------------------------------------------------------
 # DB / embed / rerank helpers
@@ -440,8 +434,6 @@ def patient_build_prompt(state: PatientState) -> PatientState:
 
 
 def patient_gemini(state: PatientState) -> PatientState:
-    # FIX: key is assigned inside the try block alongside get_gemini_model()
-    # so it is always valid when mark_exhausted(key) is called.
     while True:
         try:
             genai_model, key = get_gemini_model("gemini-2.5-flash")
@@ -451,7 +443,7 @@ def patient_gemini(state: PatientState) -> PatientState:
             )
             response_text = genai_model.generate_content(
                 state["gemini_contents"],
-                generation_config={"max_output_tokens": 800},
+                generation_config={"max_output_tokens":1400},
             ).text
             if response_text:
                 print("Direct Gemini API call succeeded!")
@@ -462,10 +454,10 @@ def patient_gemini(state: PatientState) -> PatientState:
             return {**state, "response": None, "error": "keys_exhausted"}
         except Exception as e:
             if is_invalid_key_error(e):
-                mark_invalid(key)   # permanent — drop from pool, try next
+                mark_invalid(key)
                 continue
             if is_quota_error(e):
-                mark_exhausted(key) # transient — retry after 1 h
+                mark_exhausted(key)
                 continue
             print(f"Direct Gemini API failed: {e}")
             return {**state, "response": None, "error": str(e)}
@@ -477,6 +469,7 @@ def patient_openrouter(state: PatientState) -> PatientState:
         "qwen/qwen-2.5-72b-instruct",
         "meta-llama/llama-3.3-70b-instruct",
         "meta-llama/llama-3.1-8b-instruct:free",
+        "mistralai/mistral-small:free",
     ]
     last_err = None
     for model in model_queue:
@@ -484,13 +477,32 @@ def patient_openrouter(state: PatientState) -> PatientState:
             response = or_client.chat.completions.create(
                 model=model,
                 messages=state["messages"],
-                max_tokens=800,
+                max_tokens=1400,
             )
             return {**state, "response": response.choices[0].message.content, "error": None}
         except Exception as e:
             print(f"Model {model} failed on OpenRouter: {e}")
             last_err = e
     return {**state, "response": None, "error": str(last_err)}
+
+
+def patient_ollama(state: PatientState) -> PatientState:
+    """Last-resort local Ollama inference before hardcoded strings."""
+    try:
+        print(f"RAG — trying local Ollama ({OLLAMA_MODEL})...")
+        response = ollama_client.chat.completions.create(
+            model=OLLAMA_MODEL,
+            messages=state["messages"],
+            max_tokens=1400,
+        )
+        text = response.choices[0].message.content
+        if text:
+            print("RAG — Ollama succeeded.")
+            return {**state, "response": text, "error": None}
+        return {**state, "response": None, "error": "ollama_empty_response"}
+    except Exception as e:
+        print(f"RAG — Ollama failed: {e}")
+        return {**state, "response": None, "error": str(e)}
 
 
 def patient_fallback(state: PatientState) -> PatientState:
@@ -533,6 +545,10 @@ def route_after_gemini(state: dict) -> str:
 
 
 def route_after_openrouter(state: dict) -> str:
+    return "success" if state.get("response") else "ollama"
+
+
+def route_after_ollama(state: dict) -> str:
     return "success" if state.get("response") else "fallback"
 
 
@@ -541,6 +557,7 @@ _patient_builder.add_node("retrieve",     patient_retrieve)
 _patient_builder.add_node("build_prompt", patient_build_prompt)
 _patient_builder.add_node("gemini",       patient_gemini)
 _patient_builder.add_node("openrouter",   patient_openrouter)
+_patient_builder.add_node("ollama",       patient_ollama)
 _patient_builder.add_node("fallback",     patient_fallback)
 
 _patient_builder.set_entry_point("retrieve")
@@ -554,6 +571,11 @@ _patient_builder.add_conditional_edges(
 _patient_builder.add_conditional_edges(
     "openrouter",
     route_after_openrouter,
+    {"success": END, "ollama": "ollama"},
+)
+_patient_builder.add_conditional_edges(
+    "ollama",
+    route_after_ollama,
     {"success": END, "fallback": "fallback"},
 )
 _patient_builder.add_edge("fallback", END)
@@ -632,8 +654,6 @@ def clinician_build_prompt(state: ClinicianState) -> ClinicianState:
 
 
 def clinician_gemini(state: ClinicianState) -> ClinicianState:
-    # FIX: key is assigned inside the try block alongside get_gemini_model()
-    # so it is always valid when mark_exhausted(key) is called.
     while True:
         try:
             genai_model, key = get_gemini_model("gemini-2.5-flash")
@@ -654,10 +674,10 @@ def clinician_gemini(state: ClinicianState) -> ClinicianState:
             return {**state, "response": None, "error": "keys_exhausted"}
         except Exception as e:
             if is_invalid_key_error(e):
-                mark_invalid(key)   # permanent — drop from pool, try next
+                mark_invalid(key)
                 continue
             if is_quota_error(e):
-                mark_exhausted(key) # transient — retry after 1 h
+                mark_exhausted(key)
                 continue
             print(f"Clinician RAG — Gemini failed: {e}")
             return {**state, "response": None, "error": str(e)}
@@ -669,6 +689,7 @@ def clinician_openrouter(state: ClinicianState) -> ClinicianState:
         "qwen/qwen-2.5-72b-instruct",
         "meta-llama/llama-3.3-70b-instruct",
         "meta-llama/llama-3.1-8b-instruct:free",
+        "mistralai/mistral-small:free",
     ]
     last_err = None
     for model in model_queue:
@@ -683,6 +704,25 @@ def clinician_openrouter(state: ClinicianState) -> ClinicianState:
             print(f"Clinician RAG — OpenRouter model {model} failed: {e}")
             last_err = e
     return {**state, "response": None, "error": str(last_err)}
+
+
+def clinician_ollama(state: ClinicianState) -> ClinicianState:
+    """Last-resort local Ollama inference before hardcoded strings."""
+    try:
+        print(f"Clinician RAG — trying local Ollama ({OLLAMA_MODEL})...")
+        response = ollama_client.chat.completions.create(
+            model=OLLAMA_MODEL,
+            messages=state["messages"],
+            max_tokens=1500,
+        )
+        text = response.choices[0].message.content
+        if text:
+            print("Clinician RAG — Ollama succeeded.")
+            return {**state, "response": text, "error": None}
+        return {**state, "response": None, "error": "ollama_empty_response"}
+    except Exception as e:
+        print(f"Clinician RAG — Ollama failed: {e}")
+        return {**state, "response": None, "error": str(e)}
 
 
 def clinician_fallback(state: ClinicianState) -> ClinicianState:
@@ -719,6 +759,7 @@ _clinician_builder.add_node("retrieve",     clinician_retrieve)
 _clinician_builder.add_node("build_prompt", clinician_build_prompt)
 _clinician_builder.add_node("gemini",       clinician_gemini)
 _clinician_builder.add_node("openrouter",   clinician_openrouter)
+_clinician_builder.add_node("ollama",       clinician_ollama)
 _clinician_builder.add_node("fallback",     clinician_fallback)
 
 _clinician_builder.set_entry_point("retrieve")
@@ -732,6 +773,11 @@ _clinician_builder.add_conditional_edges(
 _clinician_builder.add_conditional_edges(
     "openrouter",
     route_after_openrouter,
+    {"success": END, "ollama": "ollama"},
+)
+_clinician_builder.add_conditional_edges(
+    "ollama",
+    route_after_ollama,
     {"success": END, "fallback": "fallback"},
 )
 _clinician_builder.add_edge("fallback", END)
@@ -837,11 +883,12 @@ def extract_nutrition_metrics(user_input: str, assistant_response: str) -> dict:
         "qwen/qwen-2.5-72b-instruct",
         "meta-llama/llama-3.3-70b-instruct",
         "meta-llama/llama-3.1-8b-instruct:free",
+        "mistralai/mistral-small:free",
+        
     ]
 
     parsed_data = None
 
-    # FIX: key assigned inside try block, same as gemini nodes above
     while True:
         try:
             print("Trying nutrition extraction with: gemini-2.5-flash")
@@ -866,10 +913,10 @@ def extract_nutrition_metrics(user_input: str, assistant_response: str) -> dict:
             break
         except Exception as e:
             if is_invalid_key_error(e):
-                mark_invalid(key)   # permanent — drop from pool, try next
+                mark_invalid(key)
                 continue
             if is_quota_error(e):
-                mark_exhausted(key) # transient — retry after 1 h
+                mark_exhausted(key)
                 continue
             print(f"Nutrition extraction failed for gemini-2.5-flash: {e}")
             break
@@ -897,6 +944,27 @@ def extract_nutrition_metrics(user_input: str, assistant_response: str) -> dict:
                 print(f"{model_name} returned invalid JSON. Trying next. Error: {e}")
             except Exception as e:
                 print(f"Nutrition extraction failed for {model_name}: {e}")
+
+    # Ollama last resort for nutrition extraction
+    if not parsed_data:
+        try:
+            print(f"Nutrition extraction — trying local Ollama ({OLLAMA_MODEL})...")
+            response = ollama_client.chat.completions.create(
+                model=OLLAMA_MODEL,
+                messages=[{"role": "user", "content": extraction_prompt}],
+                max_tokens=200,
+            )
+            raw_text = response.choices[0].message.content
+            if raw_text:
+                raw_text = raw_text.strip()
+                if raw_text.startswith("```"):
+                    raw_text = re.sub(r"^```(?:json)?|```$", "", raw_text, flags=re.MULTILINE).strip()
+                parsed_data = json.loads(raw_text)
+                print("Nutrition extraction succeeded with Ollama.")
+        except json.JSONDecodeError as e:
+            print(f"Ollama returned invalid JSON for nutrition extraction: {e}")
+        except Exception as e:
+            print(f"Nutrition extraction — Ollama failed: {e}")
 
     if not parsed_data:
         print("All nutrition extraction models failed.")

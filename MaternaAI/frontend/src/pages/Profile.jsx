@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
+import { authAPI, birthPlanAPI } from '../api';
 import SavedBirthPlans from './SavedBirthPlans';
 import SafeWordPicker from '../components/SafeWordPicker';
 import {
@@ -84,13 +85,8 @@ const Profile = () => {
     const fetchUserBirthPlans = async () => {
       if (!user?.id) return;
       try {
-        const res = await fetch(`/api/birth_plan/${user.id}`, {
-          headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
-        });
-        if (res.ok) {
-          const data = await res.json();
-          setBirthPlans(data);
-        }
+        const data = await birthPlanAPI.getPlans(user.id);
+        setBirthPlans(data);
       } catch (err) {
         console.error("Failed to compile profile metrics:", err);
       } finally {
@@ -116,19 +112,12 @@ const Profile = () => {
     if (!verify) return;
 
     try {
-      const res = await fetch(`/api/birth_plan/${planId}`, {
-        method: 'DELETE',
-        headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
-      });
-      if (res.ok) {
-        setBirthPlans(prev => prev.filter(p => p.id !== planId));
-        if (expandedPlanId === planId) setExpandedPlanId(null);
-        setMsg({ text: 'Birth plan erased from clinical node networks.', type: 'success' });
-      } else {
-        setMsg({ text: 'Server rejected data mutation operations.', type: 'danger' });
-      }
+      await birthPlanAPI.deletePlan(planId);
+      setBirthPlans(prev => prev.filter(p => p.id !== planId));
+      if (expandedPlanId === planId) setExpandedPlanId(null);
+      setMsg({ text: 'Birth plan erased from clinical node networks.', type: 'success' });
     } catch (err) {
-      setMsg({ text: 'Network request error during data purging.', type: 'danger' });
+      setMsg({ text: err.response?.data?.error || 'Network request error during data purging.', type: 'danger' });
     }
   };
 
@@ -211,21 +200,12 @@ const Profile = () => {
 
     setIsSubmitting(true);
     try {
-      const response = await fetch('/auth/me/password', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('token')}` },
-        body: JSON.stringify({ currentPassword, newPassword })
-      });
-      const data = await response.json();
-      if (response.ok) {
-        setMsg({ text: 'Security credentials updated successfully.', type: 'success' });
-        setSecurityData({ currentPassword: '', newPassword: '', confirmPassword: '' });
-        setShowSecurityFields(false);
-      } else {
-        setMsg({ text: data.error || 'Incorrect original password verification.', type: 'danger' });
-      }
+      await authAPI.changePassword({ currentPassword, newPassword });
+      setMsg({ text: 'Security credentials updated successfully.', type: 'success' });
+      setSecurityData({ currentPassword: '', newPassword: '', confirmPassword: '' });
+      setShowSecurityFields(false);
     } catch (err) {
-      setMsg({ text: 'Failed to connect to security server node.', type: 'danger' });
+      setMsg({ text: err.response?.data?.error || 'Failed to connect to security server node.', type: 'danger' });
     } finally {
       setIsSubmitting(false);
     }
@@ -241,18 +221,10 @@ const Profile = () => {
 
     setIsSubmitting(true);
     try {
-      const response = await fetch('/auth/me', {
-        method: 'DELETE',
-        headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
-      });
-      if (response.ok) {
-        alert("Account wiped successfully."); logout(); navigate('/login');
-      } else {
-        const data = await response.json();
-        setMsg({ text: data.error || 'Failed to request data purging.', type: 'danger' });
-      }
+      await authAPI.deleteAccount();
+      alert("Account wiped successfully."); logout(); navigate('/login');
     } catch (err) {
-      setMsg({ text: 'Network exception during secure delete execution.', type: 'danger' });
+      setMsg({ text: err.response?.data?.error || 'Network exception during secure delete execution.', type: 'danger' });
     } finally {
       setIsSubmitting(false);
     }
@@ -265,23 +237,11 @@ const Profile = () => {
     setSafeWordGateLoading(true);
     setSafeWordGateError('')
     try {
-      const res = await fetch('/auth/me/verify-password', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        },
-        body: JSON.stringify({ password: safeWordGatePassword })
-      });
-
-      if (res.ok) {
-        setSafeWordUnlocked(true);
-        setSafeWordGateError('');
-      } else {
-        setSafeWordGateError('Incorrect password.');
-      }
+      await authAPI.verifyPassword(safeWordGatePassword);
+      setSafeWordUnlocked(true);
+      setSafeWordGateError('');
     } catch (err) {
-      setSafeWordGateError('Network error.');
+      setSafeWordGateError(err.response?.data?.error || 'Network error.');
     } finally {
       setSafeWordGateLoading(false);
       setSafeWordGatePassword('');

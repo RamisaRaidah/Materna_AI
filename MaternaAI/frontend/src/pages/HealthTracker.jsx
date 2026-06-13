@@ -253,32 +253,17 @@ const HealthTracker = () => {
 
     setIsAnalyzing(true);
     setReportResult(null);
-    const formData = new FormData();
-    formData.append('file', reportFile);
-    const token = localStorage.getItem('token');
     try {
-      const response = await fetch('/api/health/analyze-report', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`
-        },
-        body: formData
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        if (data.error === 'not_medical') {
-          setReportError('⚠️ This doesn\'t look like a medical document. Please upload a prescription, lab report, or ultrasound scan.');
-        } else {
-          setReportError(data.message || 'Failed to analyze document. Please try again.');
-        }
-        return;
-      }
-
+      const data = await healthAPI.analyzeReport(reportFile);
       setReportResult(data);
     } catch (err) {
-      setReportError(err.message || "Failed to analyze document.");
+      // Axios wraps the response in err.response
+      const errData = err.response?.data;
+      if (errData?.error === 'not_medical') {
+        setReportError('⚠️ This doesn\'t look like a medical document. Please upload a prescription, lab report, or ultrasound scan.');
+      } else {
+        setReportError(errData?.message || err.message || 'Failed to analyze document. Please try again.');
+      }
     } finally {
       setIsAnalyzing(false);
     }

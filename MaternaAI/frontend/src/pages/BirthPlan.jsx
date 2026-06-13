@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { FileText, Sparkles, Loader2, CheckCircle2, Printer, Download, RotateCcw, AlertCircle, MapPin, Users, Zap, Truck, Phone, Volume2, VolumeX, History, TrendingUp, ShieldCheck, ShieldAlert, ChevronDown } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import { birthPlanAPI } from '../api';
 
 // Data
 const FACILITIES = [
@@ -729,8 +730,8 @@ const BirthPlan = () => {
       if (stored) savedMedicalRef.current = JSON.parse(stored);
     } catch {}
     setLoadingHistory(true);
-    fetch(`/api/birth_plan/${user.id}`)
-      .then(r => r.ok ? r.json() : [])
+    birthPlanAPI.getPlans(user.id)
+      .catch(() => [])
       .then(data => {
         const plans = Array.isArray(data) ? data : [];
         setExistingPlans(plans);
@@ -1221,13 +1222,7 @@ const BirthPlan = () => {
       language: lang
     };
     try {
-      const response = await fetch('/api/birth_plan/generate', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      });
-      if (!response.ok) throw new Error(STRINGS[lang].errors.global);
-      const resData = await response.json();
+      const resData = await birthPlanAPI.generate(payload);
       setGeneratedPlanText(resData.generated_plan);
       setGeneratedMeta({
         readiness_score: resData.readiness_score ?? null,
@@ -1245,12 +1240,11 @@ const BirthPlan = () => {
       };
       savedMedicalRef.current = medSnap;
       try { localStorage.setItem(`materna_medical_${user?.id}`, JSON.stringify(medSnap)); } catch {}
-      fetch(`/api/birth_plan/${user.id}`)
-        .then(r => r.ok ? r.json() : [])
+      birthPlanAPI.getPlans(user.id)
         .then(data => setExistingPlans(Array.isArray(data) ? data : []))
         .catch(() => {});
     } catch (err) {
-      setErrors({ global: err.message });
+      setErrors({ global: err.response?.data?.error || err.message || STRINGS[lang].errors.global });
     } finally {
       setSaving(false);
     }
@@ -1381,17 +1375,7 @@ const BirthPlan = () => {
     console.log("Sending payload:", JSON.stringify(payload, null, 2));
 
     try {
-      const response = await fetch('/api/birth_plan/generate', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      });
-
-      if (!response.ok) {
-        throw new Error(STRINGS[lang].errors.global);
-      }
-
-      const resData = await response.json();
+      const resData = await birthPlanAPI.generate(payload);
       console.log("Response:", resData);
       setGeneratedPlanText(resData.generated_plan);
       setGeneratedMeta({
@@ -1413,13 +1397,12 @@ const BirthPlan = () => {
       try { localStorage.setItem(`materna_medical_${user?.id}`, JSON.stringify(medSnap)); } catch {}
       // Refresh history from API
       if (user?.id) {
-        fetch(`/api/birth_plan/${user.id}`)
-          .then(r => r.ok ? r.json() : [])
+        birthPlanAPI.getPlans(user.id)
           .then(data => setExistingPlans(Array.isArray(data) ? data : []))
           .catch(() => {});
       }
     } catch (err) {
-      setErrors({ global: err.message || STRINGS[lang].errors.global });
+      setErrors({ global: err.response?.data?.error || err.message || STRINGS[lang].errors.global });
     } finally {
       setLoading(false);
     }

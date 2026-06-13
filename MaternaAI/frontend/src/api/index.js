@@ -75,6 +75,18 @@ export const authAPI = {
   registerFCM: async (fcmToken) => {
     const response = await api.post('/auth/me/fcm', { fcmToken });
     return response.data;
+  },
+  changePassword: async (payload) => {
+    const response = await api.patch('/auth/me/password', payload);
+    return response.data;
+  },
+  deleteAccount: async () => {
+    const response = await api.delete('/auth/me');
+    return response.data;
+  },
+  verifyPassword: async (password) => {
+    const response = await api.post('/auth/me/verify-password', { password });
+    return response.data;
   }
 };
 
@@ -352,6 +364,28 @@ export const carePlanAPI = {
   },
   dismissAllBySource: async (source) => {
     const response = await api.delete('/api/care-plan/items', { data: { source } });
+    return response.data;
+  },
+};
+
+export const birthPlanAPI = {
+  generate: async (payload) => {
+    const response = await api.post('/api/birth_plan/generate', payload);
+    return response.data;
+  },
+  getPlans: async (userId) => {
+    const response = await api.get(`/api/birth_plan/${userId}`);
+    return response.data;
+  },
+  deletePlan: async (planId) => {
+    const response = await api.delete(`/api/birth_plan/${planId}`);
+    return response.data;
+  },
+};
+
+export const smsAPI = {
+  sendOfflineNotify: async (payload) => {
+    const response = await api.post('/api/sms/send_offline_notify', payload);
     return response.data;
   },
 };
