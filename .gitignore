@@ -18,3 +18,5 @@ MaternaAI/frontend/.env.production
 !MaternaAI/backend/.env.example
 !MaternaAI/frontend/.env.development.example
 !MaternaAI/frontend/.env.production.example
+
+MaternaAI/backend/serviceAccountKey.json
